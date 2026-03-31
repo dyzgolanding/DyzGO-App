@@ -1,0 +1,708 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+    Bell,
+    ChevronLeft,
+    ChevronRight,
+    Crown,
+    MapPin,
+    Ticket,
+    Users,
+    Wifi,
+    Sparkles,
+    Flame
+} from 'lucide-react-native';
+import React, { useCallback, memo, useMemo, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Image,
+    ImageBackground,
+    InteractionManager,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
+import { PressableScale } from '../../components/animated/PressableScale';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+
+import Animated, {
+    Easing,
+    Extrapolation,
+    interpolate,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue
+} from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
+
+import { supabase } from '../../lib/supabase';
+import { SkeletonBox } from '../../components/SkeletonBox';
+import { useUserLocation } from '../../lib/useUserLocation';
+import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
+import { COLORS } from '../../constants/colors';
+import { safeFormatDate, formatDayShort } from '../../utils/format';
+
+const { width, height } = Dimensions.get('window');
+const S = width / 430; // scale factor vs iPhone 15 Pro Max
+const ITEM_WIDTH = Math.round(width * 0.75); // Tarjetas de club más amplias
+const SPACING = 16;
+const FULL_SIZE = ITEM_WIDTH + SPACING;
+
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
+
+const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScrollTo }: {
+    item: any;
+    index: number;
+    scrollX: SharedValue<number>;
+    location: any;
+    onScrollTo: (index: number) => void;
+}) {
+    const router = useRouter();
+
+    const distanceText = useMemo(() => {
+        if (!location || !item.latitude || !item.longitude) return '';
+        const dist = getDistanceFromLatLonInKm(
+            location.coords.latitude,
+            location.coords.longitude,
+            item.latitude,
+            item.longitude
+        );
+        return formatDistance(dist);
+    }, [location, item.latitude, item.longitude]);
+
+    const activeEvents = useMemo(() =>
+        (item.active_events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info')),
+        [item.active_events]
+    );
+
+    const animatedStyle = useAnimatedStyle(() => {
+        const inputRange = [
+            (index - 1) * FULL_SIZE,
+            index * FULL_SIZE,
+            (index + 1) * FULL_SIZE
+        ];
+
+        const scale = interpolate(scrollX.value, inputRange, [0.9, 1, 0.9], Extrapolation.CLAMP);
+        const opacity = interpolate(scrollX.value, inputRange, [0.6, 1, 0.6], Extrapolation.CLAMP);
+        const translateY = interpolate(scrollX.value, inputRange, [15, 0, 15], Extrapolation.CLAMP);
+
+        return { transform: [{ scale }, { translateY }], opacity };
+    });
+
+    const handlePress = () => {
+        const targetX = index * FULL_SIZE;
+        if (Math.abs(scrollX.value - targetX) > FULL_SIZE * 0.4) {
+            onScrollTo(index);
+        } else {
+            router.push({ pathname: '/club-detail', params: { id: item.id, imageUrl: item.image, name: item.name } });
+        }
+    };
+
+    return (
+        <Animated.View style={[{ width: ITEM_WIDTH, marginRight: SPACING }, animatedStyle]}>
+            <PressableScale
+                scaleTo={0.97}
+                haptic="light"
+                onPress={handlePress}
+                style={styles.clubCardContainer}
+            >
+                <ImageBackground source={{ uri: item.image }} style={styles.clubImgRounded} imageStyle={{ borderRadius: 31 }}>
+                    <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.8)', '#030303']} style={styles.clubOverlay} locations={[0.3, 0.8, 1]}>
+                        <View style={styles.clubHeaderRow}>
+                            {distanceText ? (
+                                <BlurView intensity={30} tint="dark" style={styles.glassBadge}>
+                                    <MapPin size={12} color="rgba(251, 251, 251, 0.5)" />
+                                    <Text style={styles.glassBadgeText}>{distanceText}</Text>
+                                </BlurView>
+                            ) : <View />}
+                        </View>
+
+                        <View style={styles.clubInfoFooter}>
+                            <Text style={styles.clubNameTitle} numberOfLines={1}>{item.name}</Text>
+                            <Text style={styles.clubLocText} numberOfLines={1}>{item.location}</Text>
+                        </View>
+                    </LinearGradient>
+                </ImageBackground>
+            </PressableScale>
+        </Animated.View>
+    );
+});
+
+export default function HomeScreen() {
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
+    const { location } = useUserLocation();
+
+    // --- DATOS PRECARGADOS ---
+    const initialData = useMemo(() => {
+        if (params.preloadedData) {
+            try { return JSON.parse(params.preloadedData as string); }
+            catch (e) { return null; }
+        }
+        return null;
+    }, [params.preloadedData]);
+
+    const [userName, setUserName] = useState(initialData?.profile?.full_name || '');
+    const [avatarUrl, setAvatarUrl] = useState(initialData?.profile?.avatar_url || null);
+
+    const [topClubs, setTopClubs] = useState<any[]>(() => {
+        const clubs = initialData?.clubs || [];
+        return clubs.map((c: any) => ({
+            ...c, active_events: (c.active_events || []).filter((e: any) => e.is_active === true && e.status === 'active')
+        }));
+    });
+
+    const [featuredEvents, setFeaturedEvents] = useState<any[]>(
+        (initialData?.events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info') && e.image_url)
+    );
+
+    const [loading, setLoading] = useState(!initialData);
+    const [connecting, setConnecting] = useState(false);
+    const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true); // Controla el puntito magenta
+
+    const flatListRef = useRef<FlatList>(null);
+    const featuredScrollRef = useRef<ScrollView>(null);
+    const featuredScrollX = useRef(0);
+    const hasCentered = useRef(false);
+    const scrollX = useSharedValue(0);
+
+    const onScrollHandler = useAnimatedScrollHandler((event) => {
+        scrollX.value = event.contentOffset.x;
+    });
+
+    const infiniteClubs = useMemo(() => {
+        if (!topClubs || topClubs.length === 0) return [];
+        return Array(6).fill(topClubs).flat();
+    }, [topClubs]);
+
+    const startIndex = useMemo(() => {
+        return topClubs.length > 0 ? Math.floor(infiniteClubs.length / 2) : 0;
+    }, [topClubs, infiniteClubs]);
+
+    const getItemLayout = (data: any, index: number) => ({
+        length: FULL_SIZE, offset: FULL_SIZE * index, index,
+    });
+
+    // --- CARGA DE DATOS ---
+    const fetchData = useCallback(async () => {
+        if (topClubs.length === 0 && featuredEvents.length === 0) setLoading(true);
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
+
+                if (profile) {
+                    setUserName(profile.full_name || '');
+                    setAvatarUrl(profile.avatar_url || null);
+                }
+            }
+
+            const { data: clubs } = await supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10);
+            const { data: allActiveEvents } = await supabase.from('events').select('id, title, image_url, club_id, club_name, status, is_active, date').eq('is_active', true).in('status', ['active', 'info']);
+
+            let processedClubs = clubs || [];
+            if (clubs && allActiveEvents) {
+                processedClubs = clubs.map((club: any) => {
+                    const cEvents = allActiveEvents.filter((e: any) =>
+                        e.is_active === true && (e.status === 'active' || e.status === 'info') &&
+                        (e.club_id === club.id || (e.club_name && e.club_name.trim().toLowerCase() === club.name.trim().toLowerCase()))
+                    );
+                    return { ...club, active_events: cEvents };
+                });
+            }
+            if (processedClubs) setTopClubs(processedClubs);
+
+            const { data: events } = await supabase
+                .from('events')
+                .select('*, clubs(latitude, longitude)')
+                .eq('is_active', true)
+                .in('status', ['active', 'info'])
+                .not('image_url', 'is', null)
+                .order('date', { ascending: true })
+                .limit(6);
+
+            if (events && events.length > 0) {
+                const [myFollowing, theirFollowing] = await Promise.all([
+                    user ? supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
+                    user ? supabase.from('follows').select('follower_id').eq('following_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
+                ]);
+                const iFollow = myFollowing.data?.map((f: any) => f.following_id) ?? [];
+                const theyFollow = theirFollowing.data?.map((f: any) => f.follower_id) ?? [];
+                const friendIds = iFollow.filter((id: string) => theyFollow.includes(id));
+
+                const eventIds = events.map(e => e.id);
+                const ticketQuery = supabase.from('tickets').select('event_id, user_id, profiles(avatar_url)').in('event_id', eventIds);
+
+                const { data: tickets } = friendIds.length > 0
+                    ? await ticketQuery.in('user_id', friendIds)
+                    : await ticketQuery.in('user_id', ['00000000-0000-0000-0000-000000000000']);
+
+                const eventsWithAttendees = events.map(event => {
+                    const relevantTickets = tickets?.filter((t: any) => t.event_id === event.id) || [];
+                    const uniqueAvatars = new Set();
+                    const attendeesAvatars: string[] = [];
+                    relevantTickets.forEach((t: any) => {
+                        if (user && t.user_id === user.id) return;
+                        const url = t.profiles?.avatar_url;
+                        if (url && !uniqueAvatars.has(url)) {
+                            uniqueAvatars.add(url);
+                            attendeesAvatars.push(url);
+                        }
+                    });
+                    return { ...event, attendees: attendeesAvatars };
+                });
+                setFeaturedEvents(eventsWithAttendees);
+            } else {
+                setFeaturedEvents([]);
+            }
+        } catch (error) {
+            console.error("Error Home:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            hasCentered.current = false;
+            const task = InteractionManager.runAfterInteractions(() => {
+                fetchData();
+            });
+            return () => task.cancel();
+        }, [fetchData])
+    );
+
+    const handleProximityConnect = async () => {
+        try {
+            setConnecting(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const secretToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            const { data: invite, error } = await supabase.from('friend_invites').insert({ sender_id: user.id, token: secretToken }).select().single();
+            if (error) throw error;
+            const shareUrl = Linking.createURL('/add-friend', { queryParams: { inviteId: invite.id, token: secretToken } });
+            await Share.share(
+                Platform.OS === 'ios'
+                    ? { url: shareUrl, message: `¡Conectemos en DyzGO! 🤜🤛 Acepta aquí: ${shareUrl}` }
+                    : { message: `¡Conectemos en DyzGO! 🤜🤛 Acepta aquí: ${shareUrl}` }
+            );
+        } catch (e) {
+            console.error("Error connecting:", e);
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const renderClubItem = useCallback(({ item, index }: { item: any; index: number }) => (
+        <ClubItem
+            item={item}
+            index={index}
+            scrollX={scrollX}
+            location={location}
+            onScrollTo={(idx) => {
+                flatListRef.current?.scrollToOffset({ offset: idx * FULL_SIZE, animated: true });
+            }}
+        />
+    ), [scrollX, location]);
+    return (
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+            {/* GLOW ROJO SUTIL EN EL FONDO - Luces difuminadas sin oscurecer el negro */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {/* Luz superior izquierda */}
+                <LinearGradient
+                    colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0.6, y: 0.5 }}
+                    style={StyleSheet.absoluteFill}
+                />
+                {/* Luz inferior derecha */}
+                <LinearGradient
+                    colors={['transparent', 'rgba(255, 49, 216, 0.15)']}
+                    start={{ x: 0.4, y: 0.5 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                />
+                {/* Destello muy sutil cruzado */}
+                <LinearGradient
+                    colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']}
+                    start={{ x: 1, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    locations={[0.3, 0.5, 0.7]}
+                    style={StyleSheet.absoluteFill}
+                />
+            </View>
+
+
+
+            {/* NAVBAR FLOTANTE ESTILO GLASSMORPHISM */}
+            <View style={[styles.floatingHeader, { top: insets.top + 10 }]}>
+                <BlurView intensity={50} tint="dark" style={styles.blurNavbar}>
+                    <View style={styles.brandRow}>
+                        <Text style={styles.brandText}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                        <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={() => router.push('/notifications')}>
+                            <Bell color="rgba(251, 251, 251, 0.5)" size={24} />
+                            {hasUnreadNotifs && <View style={styles.notifDot} />}
+                        </PressableScale>
+
+                        <PressableScale scaleTo={0.88} haptic="light" onPress={() => router.push('/profile')}>
+                            <View style={styles.avatarBorder}>
+                                {avatarUrl ? (
+                                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                                ) : (
+                                    <View style={styles.avatarFallback}>
+                                        <Text style={styles.avatarInitial}>{userName ? userName[0].toUpperCase() : '?'}</Text>
+                                    </View>
+                                )}
+                            </View>
+                        </PressableScale>
+                    </View>
+                </BlurView>
+            </View>
+
+            <AnimatedScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 120, paddingTop: insets.top + Math.round(80 * S) }}
+            >
+                {/* 1. HERO GREETING */}
+                <AnimatedEntry index={0} fromY={20} style={styles.heroSection}>
+                    <Text style={styles.greetingText}>
+                        Hola, {userName.split(' ')[0] || 'usuario'}
+                    </Text>
+                    <Text style={styles.heroMainText}>
+                        ¿Dónde salimos <Text style={styles.nocheText}>hoy?</Text>
+                    </Text>
+                </AnimatedEntry>
+
+                {/* 2. EVENTOS DESTACADOS IMMERSIVOS */}
+                <View style={styles.sectionMargin}>
+                    <View style={styles.sectionHeaderLine}>
+                        <Text style={styles.sectionTitle}>Próximos eventos</Text>
+                        <PressableScale scaleTo={0.92} haptic="light" onPress={() => router.push({ pathname: '/explore', params: { tab: 'Eventos' } })}>
+                            <View style={styles.seeAllBadge}>
+                                <Text style={styles.seeAllText}>Ver todos</Text>
+                            </View>
+                        </PressableScale>
+                    </View>
+
+                    {loading && featuredEvents.length === 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPadEvent}>
+                            {[1, 2].map(i => (
+                                <SkeletonBox key={i} height={width - 52} width={width - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                            ))}
+                        </ScrollView>
+                    ) : (
+                        <ScrollView
+                            ref={featuredScrollRef}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.horizontalPadEvent}
+                            snapToInterval={width - 40}
+                            decelerationRate="fast"
+                            disableIntervalMomentum
+                            onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
+                            scrollEventThrottle={16}
+                        >
+                            {featuredEvents.map((event, index) => {
+                                const targetLat = event.latitude || event.clubs?.latitude;
+                                const targetLong = event.longitude || event.clubs?.longitude;
+                                let distanceText = '';
+                                if (location && targetLat && targetLong) {
+                                    distanceText = formatDistance(getDistanceFromLatLonInKm(location.coords.latitude, location.coords.longitude, targetLat, targetLong));
+                                }
+                                const minAge = Math.min(event.min_age_men || 18, event.min_age_women || 18);
+
+                                return (
+                                    <AnimatedEntry key={event.id} index={index} fromY={32} fromScale={0.96}>
+                                        <PressableScale
+                                            scaleTo={0.97}
+                                            haptic="light"
+                                            style={styles.bigEventCard}
+                                            onPress={() => {
+                                                const FEATURED_INTERVAL = width - 40;
+                                                const targetX = index * FEATURED_INTERVAL;
+                                                if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
+                                                    featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
+                                                } else {
+                                                    router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color } });
+                                                }
+                                            }}
+                                        >
+                                            <ImageBackground source={{ uri: event.image_url }} style={styles.fullImg} imageStyle={{ borderRadius: 31 }}>
+                                                <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.7)', '#030303']} locations={[0.4, 0.8, 1]} style={styles.fullImgOverlay}>
+
+                                                    {/* Top Badges */}
+                                                    <View style={styles.eventTopRow}>
+                                                        <View style={styles.eventTopRowContent}>
+                                                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                                <BlurView intensity={30} tint="dark" style={styles.glassDateBadge}>
+                                                                    <Text style={styles.glassDateText}>{formatDayShort(event.date)}</Text>
+                                                                </BlurView>
+                                                                <BlurView intensity={30} tint="dark" style={[styles.glassDateBadge, { paddingHorizontal: 10 }]}>
+                                                                    <Text style={[styles.glassDateText]}>{minAge}+</Text>
+                                                                </BlurView>
+                                                            </View>
+                                                            {distanceText ? (
+                                                                <BlurView intensity={30} tint="dark" style={styles.glassBadge}>
+                                                                    <MapPin size={12} color="rgba(251, 251, 251, 0.5)" />
+                                                                    <Text style={styles.glassBadgeText}>{distanceText}</Text>
+                                                                </BlurView>
+                                                            ) : <View />}
+                                                        </View>
+                                                    </View>
+
+                                                    {/* Bottom Content */}
+                                                    <View>
+                                                        <Text
+                                                            style={[styles.bigEventTitle, (() => {
+                                                                const l = (event.title || '').length;
+                                                                const size = l <= 12 ? 36 : l <= 20 ? 28 : l <= 30 ? 22 : 18;
+                                                                return { fontSize: size, lineHeight: size * 1.1 };
+                                                            })()]}
+                                                            numberOfLines={3}
+                                                        >{event.title}</Text>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                                                            <Text style={styles.bigEventClub}>{event.club_name || event.location}</Text>
+                                                            {event.attendees && event.attendees.length > 0 && (
+                                                                <View style={styles.socialProofModern}>
+                                                                    <View style={styles.avatarStack}>
+                                                                        {event.attendees.slice(0, 3).map((url: string, idx: number) => (
+                                                                            <Image key={idx} source={{ uri: url }} style={[styles.stackAvatar, { transform: [{ translateX: idx * -8 }] }]} />
+                                                                        ))}
+                                                                    </View>
+                                                                    <Text style={styles.socialProofText}>
+                                                                        {event.attendees.length} amigos asisten
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                </LinearGradient>
+                                            </ImageBackground>
+                                        </PressableScale>
+                                    </AnimatedEntry>
+                                );
+                            })}
+                        </ScrollView>
+                    )}
+                </View>
+
+                {/* 3. BENTO GRID - EXPERIENCIA DYZGO */}
+                <View style={styles.sectionMargin}>
+                    <Text style={[styles.sectionTitle, { marginLeft: 24, marginBottom: 16 }]}>Explora</Text>
+
+                    <View style={{ paddingHorizontal: 24, gap: 12 }}>
+                        {/* FILA 1: Tickets y Radar */}
+                        <View style={{ flexDirection: 'row', gap: 12, height: 160 }}>
+                            {/* Tarjeta 1: Mis Tickets */}
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/my-tickets')}>
+                                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+
+                                <View style={styles.bentoIconRounded}>
+                                    <Ticket color="#FF31D8" size={24} />
+                                </View>
+                                <View style={{ marginTop: 'auto' }}>
+                                    <Text style={styles.bentoTitle}>Tus entradas</Text>
+                                    <Text style={styles.bentoSubtitle}>Accesos para hoy</Text>
+                                </View>
+                            </PressableScale>
+
+                            {/* Tarjeta 2: Radar / Amigos */}
+                            {Platform.OS === 'ios' ? (
+                                <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={handleProximityConnect} disabled={connecting}>
+                                    <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+
+                                    <View style={styles.bentoIconRounded}>
+                                        {connecting ? <ActivityIndicator color="#FF31D8" /> : <Wifi color="#FF31D8" size={24} />}
+                                    </View>
+                                    <View style={{ marginTop: 'auto' }}>
+                                        <Text style={styles.bentoTitle}>Radar</Text>
+                                        <Text style={styles.bentoSubtitle}>Conectar móvil</Text>
+                                    </View>
+                                </PressableScale>
+                            ) : (
+                                <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/my-friends')}>
+                                    <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+
+                                    <View style={styles.bentoIconRounded}>
+                                        <Users color="#FF31D8" size={24} />
+                                    </View>
+                                    <View style={{ marginTop: 'auto' }}>
+                                        <Text style={styles.bentoTitle}>Amigos</Text>
+                                        <Text style={styles.bentoSubtitle}>Tus conexiones</Text>
+                                    </View>
+                                </PressableScale>
+                            )}
+                        </View>
+
+                        {/* FILA 2: Rankings */}
+                        <View style={{ flexDirection: 'row', gap: 12, height: 110 }}>
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/rankings')}>
+                                <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                                    <View style={{ justifyContent: 'center' }}>
+                                        <Text style={[styles.bentoTitle, { fontSize: 22 }]}>Rankings</Text>
+                                        <Text style={styles.bentoSubtitle}>Descubre los tops del mes</Text>
+                                    </View>
+                                    <View style={[styles.bentoIconRounded, {}]}>
+                                        <Crown color="#FF31D8" size={26} />
+                                    </View>
+                                </View>
+                            </PressableScale>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 4. CLUBES POPULARES (CARRUSEL INFERIOR FLUIDO) */}
+                <View style={styles.sectionMargin}>
+                    <Text style={[styles.sectionTitle, { marginLeft: 24, marginBottom: 16 }]}>Clubes Top</Text>
+
+                    {loading && topClubs.length === 0 ? (
+                        <ScrollView horizontal contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 }}>
+                            {[1, 2, 3].map(i => <SkeletonBox key={i} height={200} width={ITEM_WIDTH} borderRadius={24} style={{ marginRight: SPACING }} />)}
+                        </ScrollView>
+                    ) : topClubs.length > 0 && (
+                        <AnimatedFlatList
+                            ref={flatListRef}
+                            data={infiniteClubs}
+                            keyExtractor={(item: any, index) => `${item.id}-${index}`}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            snapToInterval={FULL_SIZE}
+                            decelerationRate="fast"
+                            getItemLayout={getItemLayout}
+                            initialScrollIndex={topClubs.length > 0 ? startIndex : undefined}
+                            onLayout={() => {
+                                if (topClubs.length > 0 && flatListRef.current && !hasCentered.current) {
+                                    scrollX.value = startIndex * FULL_SIZE;
+                                    if (flatListRef.current && infiniteClubs.length > startIndex) {
+                                        flatListRef.current.scrollToIndex({ index: startIndex, animated: false, viewPosition: 0.5 });
+                                    }
+                                    hasCentered.current = true;
+                                }
+                            }}
+                            initialNumToRender={5}
+                            windowSize={5}
+                            contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 }}
+                            onScroll={onScrollHandler}
+                            scrollEventThrottle={16}
+                            renderItem={renderClubItem}
+                        />
+                    )}
+                </View>
+
+            </AnimatedScrollView>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#030303' },
+
+    floatingHeader: { position: 'absolute', zIndex: 100, left: 16, right: 16 },
+    blurNavbar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        height: 60,
+        paddingHorizontal: 16,
+        borderRadius: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(251, 251, 251, 0.05)',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        overflow: 'hidden'
+    },
+    brandRow: { flexDirection: 'row', alignItems: 'center' },
+    brandText: { color: '#FBFBFB', fontSize: Math.round(24 * S), fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 },
+
+    bellContainer: { position: 'relative', padding: 4 },
+    notifDot: { position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' },
+
+    avatarBorder: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 1.5,
+        borderColor: '#FF31D8',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden'
+    },
+    avatarImage: { width: '100%', height: '100%', borderRadius: 22 },
+    avatarFallback: { width: '100%', height: '100%', borderRadius: 22, backgroundColor: 'rgba(123, 46, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
+    avatarInitial: { color: '#FBFBFB', fontWeight: '800', fontSize: 16 },
+
+    heroSection: { paddingHorizontal: 24, marginTop: Math.round(24 * S), marginBottom: Math.round(24 * S) },
+    greetingText: { color: 'rgba(251, 251, 251, 0.6)', fontSize: Math.round(16 * S), fontWeight: '500', marginBottom: Math.round(6 * S) },
+    heroMainText: { color: '#FBFBFB', fontSize: Math.round(28 * S), fontWeight: '900', letterSpacing: -1, fontStyle: 'italic' },
+
+    sectionMargin: { marginBottom: Math.round(30 * S) },
+    sectionHeaderLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: Math.round(16 * S) },
+    sectionTitle: { color: '#FBFBFB', fontSize: Math.round(18 * S), fontWeight: '800' },
+    seeAllBadge: { backgroundColor: 'rgba(255,49,216,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,49,216,0.35)' },
+    seeAllText: { color: '#FF31D8', fontSize: 13, fontWeight: '700' },
+
+    horizontalPad: { paddingLeft: 24, paddingRight: 16 },
+    horizontalPadEvent: { paddingLeft: 26, paddingRight: 14 },
+
+    bigEventCard: { width: width - 52, height: width - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    fullImg: { flex: 1, borderRadius: 32 },
+    fullImgOverlay: { flex: 1, padding: 24, justifyContent: 'space-between' },
+
+    eventTopRow: { flexDirection: 'row' },
+    eventTopRowContent: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+    glassDateBadge: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden', borderWidth: 0, borderColor: 'transparent' },
+    glassDateText: { color: '#FBFBFB', fontWeight: '700', fontSize: 13 },
+
+    glassBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden', borderWidth: 0, borderColor: 'transparent' },
+    glassBadgeText: { color: '#FBFBFB', fontSize: 13, fontWeight: '700' },
+
+    socialProofModern: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    avatarStack: { flexDirection: 'row' },
+    stackAvatar: { width: 26, height: 26, borderRadius: 13 },
+    socialProofText: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 11, fontWeight: '500' },
+
+    bigEventTitle: { color: '#FBFBFB', fontSize: Math.round(36 * S), fontWeight: '900', fontStyle: 'italic', letterSpacing: -1, lineHeight: Math.round(42 * S) },
+    bigEventClub: { color: 'rgba(251, 251, 251, 0.6)', fontSize: Math.round(14 * S), fontWeight: '700', textTransform: 'uppercase' },
+
+    bentoContainer: { flexDirection: 'row', paddingHorizontal: 24, gap: 12, height: Math.round(160 * S) },
+    bentoBox: { flex: 1, borderRadius: 24, padding: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(251, 251, 251, 0.05)', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+
+    bentoIconRounded: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(3, 3, 3, 0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 0, borderColor: 'transparent', shadowColor: '#FF31D8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 8 },
+    bentoTitle: { color: '#FBFBFB', fontSize: 16, fontWeight: '800' },
+    bentoSubtitle: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 12, marginTop: 2, fontWeight: '500' },
+
+    clubCardContainer: { flex: 1, borderRadius: 32, overflow: 'hidden', height: Math.round(340 * S), backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    clubImgRounded: { flex: 1, borderRadius: 32 },
+    clubOverlay: { flex: 1, justifyContent: 'space-between', padding: 20 },
+    clubHeaderRow: { flexDirection: 'row', justifyContent: 'flex-end' },
+    clubInfoFooter: { gap: 6 },
+    clubNameTitle: { color: '#FBFBFB', fontSize: Math.round(24 * S), fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5 },
+    clubLocText: { color: 'rgba(251, 251, 251, 0.6)', fontSize: Math.round(13 * S), fontWeight: '500' },
+    clubEventRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    clubEventText: { color: '#FF31D8', fontSize: Math.round(13 * S), fontWeight: '700' },
+    nocheText: {
+        color: '#FF31D8',
+        fontStyle: 'italic',
+        fontWeight: '900',
+        letterSpacing: -1,
+    }
+});
