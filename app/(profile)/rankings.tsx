@@ -1,13 +1,14 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { Globe, Medal, Users, UserPlus, ChevronRight } from 'lucide-react-native';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
-  Image,
   PanResponder,
   RefreshControl,
   ScrollView,
@@ -16,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import ReAnimated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
+import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
@@ -53,7 +54,7 @@ function Avatar({ user, size, border }: { user: RankUser; size: number; border?:
       borderWidth: 2, borderColor: ringColor + '90',
       backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }}>
       {user.avatarUrl
-        ? <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size }} />
+        ? <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size }} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
         : <Text style={{ color: '#FBFBFB', fontWeight: '900', fontSize: size * 0.38, textAlign: 'center', lineHeight: size }}>
             {user.avatarChar}
           </Text>
@@ -182,7 +183,7 @@ function RankRow({ user, rank, currentUserId, onPress, showFriendBadge }: {
 
       <View style={[row.ring, { borderColor: lc + '90' }]}>
         {user.avatarUrl
-          ? <Image source={{ uri: user.avatarUrl }} style={row.avatar} />
+          ? <Image source={{ uri: user.avatarUrl }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
           : <Text style={row.initials}>{user.avatarChar}</Text>}
       </View>
 
@@ -202,8 +203,8 @@ function RankRow({ user, rank, currentUserId, onPress, showFriendBadge }: {
         </Text>
       </View>
 
-      <View style={[row.levelPill, { backgroundColor: lc + '20', borderColor: lc + '40' }]}>
-        <Text style={[row.levelText, { color: lc }]}>Nv.{user.level}</Text>
+      <View style={[row.levelPill, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)' }]}>
+        <Text style={[row.levelText, { color: '#FBFBFB' }]}>{user.points.toLocaleString()} XP</Text>
       </View>
 
       <ChevronRight color="rgba(255,255,255,0.25)" size={18} style={{ marginLeft: 6 }} />
@@ -258,8 +259,8 @@ export default function RankingsScreen() {
     if (loading) { fadeAnim.setValue(0); translateY.setValue(20); }
     else {
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 500, useNativeDriver: true })
+        Animated.timing(fadeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 100, useNativeDriver: true })
       ]).start();
     }
   }, [loading]);
@@ -417,7 +418,7 @@ export default function RankingsScreen() {
         </View>
       </View>
 
-      <ReAnimated.View entering={FadeIn.duration(300).easing(Easing.out(Easing.quad))} style={{ flex: 1, paddingHorizontal: 20 }}>
+      <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, paddingHorizontal: 20 }}>
         <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY }] }}>
             {loading ? (
               <View style={{ paddingHorizontal: 20, paddingTop: navTop + 44 }}>
@@ -455,7 +456,7 @@ export default function RankingsScreen() {
               >
                 {/* PODIO TOP 3 */}
                 {top3.length > 0 && (
-                  <ReAnimated.View entering={FadeIn.duration(350).easing(Easing.out(Easing.quad))}>
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
                     <Podium
                       top3={top3}
                       currentUserId={currentUserId}
@@ -467,19 +468,20 @@ export default function RankingsScreen() {
 
                 {/* DIVISOR */}
                 {rest.length > 0 && (
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                   <View style={s.divider}>
                     <View style={s.dividerLine} />
-                    <View style={s.dividerChip}>
-                      <Medal color={COLORS.neonPink} size={12} />
+                    <BlurView intensity={40} tint="dark" style={s.dividerChip}>
                       <Text style={s.dividerText}>CLASIFICACIÓN</Text>
-                    </View>
+                    </BlurView>
                     <View style={s.dividerLine} />
                   </View>
+                  </ReAnimated.View>
                 )}
 
                 {/* LISTA 4+ */}
                 {rest.map((user, i) => (
-                  <ReAnimated.View key={user.id} entering={FadeInDown.duration(400).delay(i * 50).easing(Easing.out(Easing.cubic))}>
+                  <ReAnimated.View key={user.id} entering={FadeInDown.duration(300).delay(i * 50).springify()}>
                     <RankRow
                       user={user}
                       rank={i + 4}
@@ -492,6 +494,7 @@ export default function RankingsScreen() {
 
                 {/* CTA INVITAR AMIGOS: Tarjeta Grande (3 o menos) */}
                 {scope === 'Amigos' && currentRankings.length <= 3 && (
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
                   <View style={s.emptyStateCard}>
                     <View style={s.emptyStateIcon}>
                       <UserPlus color={COLORS.neonPink} size={32} />
@@ -506,10 +509,12 @@ export default function RankingsScreen() {
                       <Text style={s.emptyStateBtnText}>BUSCAR AMIGOS</Text>
                     </TouchableOpacity>
                   </View>
+                  </ReAnimated.View>
                 )}
 
                 {/* CTA INVITAR AMIGOS: Banner Dinámico (4 o más) */}
                 {scope === 'Amigos' && currentRankings.length > 3 && (
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
                   <TouchableOpacity
                     style={s.smallInviteBanner}
                     onPress={() => router.push({ pathname: '/my-friends', params: { scope: 'Global' } })}
@@ -524,6 +529,7 @@ export default function RankingsScreen() {
                     </View>
                     <ChevronRight color="rgba(255,255,255,0.2)" size={18} />
                   </TouchableOpacity>
+                  </ReAnimated.View>
                 )}
 
                 {/* EMPTY STATE GLOBAL */}
@@ -547,8 +553,8 @@ const s = StyleSheet.create({
 
   divider:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   dividerLine:  { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-  dividerChip:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.35)' },
-  dividerText:  { color: COLORS.neonPink, fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  dividerChip:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  dividerText:  { color: '#FBFBFB', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
 
   // Tarjeta Grande (<= 3 amigos)
   emptyStateCard: { marginTop: 40, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', alignItems: 'center' },

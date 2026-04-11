@@ -2,7 +2,8 @@ import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation, useRouter } from 'expo-router';
+import { useNavigation } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
@@ -16,13 +17,14 @@ import {
   LogOut,
   Trash2
 } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -32,7 +34,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Linking,
 } from 'react-native';
 
 const isSmallScreen = Dimensions.get('window').width < 400;
@@ -49,7 +52,7 @@ export default function SettingsScreen() {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     useEffect(() => {
         if (!fetching) {
-            Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
         }
     }, [fetching]);
     
@@ -254,7 +257,7 @@ export default function SettingsScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
             <StatusBar barStyle="light-content" />
             
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -297,11 +300,12 @@ export default function SettingsScreen() {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 102 }]}>
                     
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
                     <View style={styles.avatarSection}>
                         <View style={styles.avatarContainer}>
-                            <LinearGradient colors={[COLORS.neonPink, COLORS.neonPink]} style={styles.avatarGradient}>
+                            <LinearGradient colors={['rgba(255,49,216,0.2)', 'rgba(255,49,216,0.2)']} style={styles.avatarGradient}>
                                 {avatarUrl ? (
-                                    <Image source={{ uri: avatarUrl }} style={styles.avatarImageReal} />
+                                    <Image source={{ uri: avatarUrl }} style={styles.avatarImageReal} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                                 ) : (
                                     <Text style={styles.avatarInitial}>{fullName ? fullName[0].toUpperCase() : '?'}</Text>
                                 )}
@@ -313,8 +317,10 @@ export default function SettingsScreen() {
                         <Text style={styles.userName}>{fullName || 'Usuario'}</Text>
                         <Text style={styles.userHandle}>@{username || 'sin_usuario'}</Text>
                     </View>
+                    </ReAnimated.View>
 
                     {/* FORMULARIO */}
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                     <Text style={styles.sectionLabel}>Cuenta</Text>
                     <View style={styles.glassCard}>
                         <SettingInput 
@@ -359,7 +365,9 @@ export default function SettingsScreen() {
                             </>
                         )}
                     </TouchableOpacity>
+                    </ReAnimated.View>
 
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(160).springify()}>
                     <Text style={styles.sectionLabel}>Privacidad</Text>
                     <View style={styles.glassCard}>
                         <SettingSwitch
@@ -370,7 +378,9 @@ export default function SettingsScreen() {
                             onValueChange={handlePrivacyToggle}
                         />
                     </View>
+                    </ReAnimated.View>
 
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
                     <Text style={styles.sectionLabel}>Preferencias</Text>
                     <View style={styles.glassCard}>
                         <SettingSwitch icon={<Bell color={COLORS.neonPink} size={18} />} title="Notificaciones Push" value={notifications} onValueChange={setNotifications} />
@@ -383,23 +393,35 @@ export default function SettingsScreen() {
                         <View style={styles.divider} />
                         <SettingNavigation icon={<CircleHelp color={COLORS.neonPink} size={18} />} title="Centro de Ayuda" onPress={() => router.push('/help')} />
                     </View>
+                    </ReAnimated.View>
 
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
+                    <View style={styles.legalRow}>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://dyzgo.com/privacy')}>
+                            <Text style={styles.legalLink}>Política de Privacidad</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.legalDot}>·</Text>
+                        <TouchableOpacity onPress={() => Linking.openURL('https://dyzgo.com/terms')}>
+                            <Text style={styles.legalLink}>Términos y Condiciones</Text>
+                        </TouchableOpacity>
+                    </View>
                     <View style={styles.footerActions}>
                         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                             <LogOut color={COLORS.textZinc} size={18} />
                             <Text style={styles.logoutText}>Cerrar Sesión</Text>
                         </TouchableOpacity>
-                        
+
                         <TouchableOpacity style={styles.deleteBtn} onPress={() => router.push('/delete-account')}>
                             <Trash2 color="#FF4444" size={16} />
                             <Text style={styles.deleteText}>Eliminar Cuenta</Text>
                         </TouchableOpacity>
                     </View>
+                    </ReAnimated.View>
 
                 </ScrollView>
             </KeyboardAvoidingView>
             </Animated.View>
-        </View>
+        </ReAnimated.View>
     );
 }
 
@@ -489,9 +511,9 @@ const styles = StyleSheet.create({
     },
 
     avatarSection: { alignItems: 'center', marginBottom: 0 },
-    avatarContainer: { position: 'relative', marginBottom: 15 },
-    avatarGradient: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-    avatarInitial: { color: 'white', fontSize: 40, fontWeight: '900' },
+    avatarContainer: { position: 'relative', marginBottom: 15, borderWidth: 2.5, borderColor: '#FF31D8', borderRadius: 50, shadowColor: '#FF31D8', shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+    avatarGradient: { width: 96, height: 96, borderRadius: 48, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    avatarInitial: { color: '#FBFBFB', fontSize: 38, fontWeight: '800' },
     avatarImageReal: { width: '100%', height: '100%', borderRadius: 50 },
     editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(10,0,20,0.9)', padding: 8, borderRadius: 20, borderWidth: 2, borderColor: 'rgba(255, 49, 216, 0.5)' },
     
@@ -530,5 +552,8 @@ const styles = StyleSheet.create({
     },
     logoutText: { color: '#FBFBFB', fontSize: 15, fontWeight: '500' },
     deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.5 },
-    deleteText: { color: '#FF4444', fontSize: 12, fontWeight: '800' }
+    deleteText: { color: '#FF4444', fontSize: 12, fontWeight: '800' },
+    legalRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 24 },
+    legalLink: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600' },
+    legalDot: { color: 'rgba(255,255,255,0.2)', fontSize: 11 },
 });

@@ -1,7 +1,10 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { X } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import ReAnimated, { FadeIn } from 'react-native-reanimated';
+import { Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SkeletonBox } from '../../components/SkeletonBox';
 import { WebView } from 'react-native-webview';
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
@@ -56,7 +59,7 @@ export default function PaymentResaleScreen() {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: COLORS.background }}>
             <StatusBar barStyle="light-content" />
             <View style={{ flex: 1 }}>
                 <WebView
@@ -74,7 +77,13 @@ export default function PaymentResaleScreen() {
                 
                 {loading && (
                     <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="large" color={COLORS.neonPink} />
+                      <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
+                        <SkeletonBox height={60} borderRadius={12} style={{ marginBottom: 20 }} />
+                        <SkeletonBox height={220} borderRadius={16} style={{ marginBottom: 16 }} />
+                        <SkeletonBox height={80} borderRadius={12} style={{ marginBottom: 12 }} />
+                        <SkeletonBox height={80} borderRadius={12} style={{ marginBottom: 20 }} />
+                        <SkeletonBox height={56} borderRadius={16} />
+                      </View>
                     </View>
                 )}
 
@@ -82,7 +91,7 @@ export default function PaymentResaleScreen() {
                     <X color="white" size={24} />
                 </TouchableOpacity>
             </View>
-        </View>
+        </ReAnimated.View>
     );
 }
 

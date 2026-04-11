@@ -16,7 +16,12 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://4bf6c6faa3e3f250af69b35b4ffc773d@o4511164637970432.ingest.us.sentry.io/4511164642164736"
       }
+
     }
   },
   "submit": {

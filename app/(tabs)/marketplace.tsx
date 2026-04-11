@@ -1,8 +1,10 @@
+import { Image as ExpoImage } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import ReAnimated, { LinearTransition, Easing, Extrapolation, FadeIn, FadeOut, FadeInDown, FadeInRight, SlideInRight, SlideInDown, SlideOutDown, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
     AlertCircle, ArrowLeft, ArrowUpDown, Calendar, Check, ChevronDown, ChevronRight, ChevronUp,
     Filter, Gavel, Ghost, Plus, ShoppingBag, Tag, Trash, Users, X,
@@ -10,7 +12,7 @@ import {
 } from 'lucide-react-native';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Alert, Dimensions, FlatList, Image,
+    ActivityIndicator, Alert, Dimensions, FlatList,
     InteractionManager, KeyboardAvoidingView, Modal, Platform,
     RefreshControl, ScrollView, StyleSheet, Text,
     TextInput, TouchableOpacity, View
@@ -91,7 +93,7 @@ const MarketCard = memo(function MarketCard({ item, index, cardH, scrollY, curre
                 {/* IMAGEN HERO */}
                 <View style={{ flex: 1, overflow: 'hidden' }}>
                     {eventImg ? (
-                        <Image source={{ uri: eventImg }} style={[StyleSheet.absoluteFill, isSold && { opacity: 0.35 }]} resizeMode="cover" />
+                        <ExpoImage source={{ uri: eventImg }} style={[StyleSheet.absoluteFill, isSold && { opacity: 0.35 }]} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                     ) : (
                         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
                             <Ticket color={COLORS.neonPink} size={48} opacity={isSold ? 0.2 : 0.4} />
@@ -265,7 +267,7 @@ export default function MarketplaceScreen() {
     };
 
     // Altura de cada tarjeta (igual que explore: menor que el contenedor para que se vea la anterior)
-    const CARD_TOP_PAD = insets.top + 194;
+    const CARD_TOP_PAD = insets.top + 155;
     const CARD_BOT_PAD = insets.bottom + 136;
     const cardSnapH = marketListH > 0 ? marketListH - CARD_TOP_PAD - CARD_BOT_PAD : 0;
 
@@ -431,7 +433,12 @@ export default function MarketplaceScreen() {
                 l.status === 'active' || (l.status === 'reserved' && l.reserved_for_user_id === currentUserId)
             ));
             if (mineRes.error) throw mineRes.error;
-            setMyListings(mineRes.data || []);
+            const sorted = (mineRes.data || []).slice().sort((a: any, b: any) => {
+                const aS = a.status === 'sold' ? 1 : 0;
+                const bS = b.status === 'sold' ? 1 : 0;
+                return aS - bS;
+            });
+            setMyListings(sorted);
             setMyBuyerOffers(offersRes.data || []);
         } catch (e: any) {
             console.error('[marketplace]', e);
@@ -765,14 +772,14 @@ export default function MarketplaceScreen() {
         const tierName = item.tickets?.ticket_tiers?.name || 'General';
 
         return (
-            <ReAnimated.View entering={FadeInDown.duration(200).delay(index * 18).easing(Easing.out(Easing.cubic))}>
+            <ReAnimated.View entering={FadeInDown.duration(300).delay(index * 18).springify()}>
                 <View style={{ overflow: 'hidden', borderRadius: 24, marginBottom: 16 }}>
                     <BlurView intensity={30} tint="dark" style={[{ backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: mine ? 'rgba(255,49,216,0.4)' : 'rgba(251, 251, 251, 0.05)' }]}>
 
                         {/* IMAGEN HERO */}
                         <View style={{ height: eventImg ? 140 : 80, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }}>
                             {eventImg ? (
-                                <Image source={{ uri: eventImg }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                                <ExpoImage source={{ uri: eventImg }} style={StyleSheet.absoluteFill} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                             ) : (
                                 <Ticket color={COLORS.neonPink} size={32} opacity={0.5} />
                             )}
@@ -839,13 +846,13 @@ export default function MarketplaceScreen() {
         const tierName = item.tickets?.ticket_tiers?.name || 'General';
 
         return (
-            <ReAnimated.View entering={FadeInDown.duration(200).delay(index * 18).easing(Easing.out(Easing.cubic))}>
+            <ReAnimated.View entering={FadeInDown.duration(300).delay(index * 18).springify()}>
                 <View style={{ overflow: 'hidden', borderRadius: 24, marginBottom: 12 }}>
                     <BlurView intensity={20} tint="dark" style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 16 }}>
 
                         <View style={{ flexDirection: 'row', gap: 16 }}>
                             {eventImg ? (
-                                <Image source={{ uri: eventImg }} style={{ width: 80, height: 80, borderRadius: 16 }} resizeMode="cover" />
+                                <ExpoImage source={{ uri: eventImg }} style={{ width: 80, height: 80, borderRadius: 16 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                             ) : (
                                 <View style={{ width: 80, height: 80, borderRadius: 16, backgroundColor: 'rgba(255,49,216,0.15)', justifyContent: 'center', alignItems: 'center' }}>
                                     <Ticket color={COLORS.neonPink} size={28} />
@@ -1077,20 +1084,25 @@ export default function MarketplaceScreen() {
                 {/* ── LISTA — ocupa toda la pantalla ── */}
                 <View style={{ flex: 1 }} onLayout={e => setMarketListH(e.nativeEvent.layout.height)}>
 
-                    {/* SKELETON — solo en carga inicial del tab market */}
+                    {/* SKELETON — imita la forma de las cards de snap vertical */}
                     {loading && listings.length === 0 && tab === 'market' && (
-                        <ScrollView style={[StyleSheet.absoluteFill, { zIndex: 1 }]} contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
-                            {[0, 1, 2, 3].map(i => (
-                                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, gap: 12 }}>
-                                    <SkeletonBox width={72} height={72} borderRadius={14} />
-                                    <View style={{ flex: 1, gap: 8 }}>
-                                        <SkeletonBox height={14} borderRadius={6} width="75%" />
-                                        <SkeletonBox height={12} borderRadius={6} width="50%" />
-                                        <SkeletonBox height={12} borderRadius={6} width="35%" />
+                        <View style={[StyleSheet.absoluteFill, { zIndex: 1, paddingTop: CARD_TOP_PAD, paddingHorizontal: 20 }]}>
+                            {[0].map(i => (
+                                <View key={i} style={{ flex: 1, borderRadius: 28, overflow: 'hidden', marginBottom: 16 }}>
+                                    {/* Área de imagen */}
+                                    <SkeletonBox height="65%" borderRadius={0} />
+                                    {/* Área de contenido */}
+                                    <View style={{ padding: 20, gap: 14, backgroundColor: 'rgba(255,255,255,0.03)' }}>
+                                        <SkeletonBox height={22} borderRadius={8} width="65%" />
+                                        <SkeletonBox height={14} borderRadius={6} width="40%" />
+                                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                                            <SkeletonBox height={52} borderRadius={16} width="48%" />
+                                            <SkeletonBox height={52} borderRadius={16} width="48%" />
+                                        </View>
                                     </View>
                                 </View>
                             ))}
-                        </ScrollView>
+                        </View>
                     )}
 
                     {/* TAB EXPLORAR — siempre montado, display toggle */}
@@ -1103,6 +1115,10 @@ export default function MarketplaceScreen() {
                                 showsVerticalScrollIndicator={false}
                                 snapToInterval={cardSnapH}
                                 decelerationRate="fast"
+                                removeClippedSubviews={true}
+                                maxToRenderPerBatch={8}
+                                windowSize={5}
+                                initialNumToRender={6}
                                 onScroll={marketScrollHandler}
                                 scrollEventThrottle={16}
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
@@ -1143,6 +1159,10 @@ export default function MarketplaceScreen() {
                                 showsVerticalScrollIndicator={false}
                                 snapToInterval={cardSnapH}
                                 decelerationRate="fast"
+                                removeClippedSubviews={true}
+                                maxToRenderPerBatch={8}
+                                windowSize={5}
+                                initialNumToRender={6}
                                 onScroll={sellScrollHandler}
                                 scrollEventThrottle={16}
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
@@ -1229,7 +1249,7 @@ export default function MarketplaceScreen() {
 
                         {/* Contenido */}
                         {activeFilterModal === null ? (
-                            <ReAnimated.View entering={FadeIn.duration(300)} style={{ width: '100%' }}>
+                            <ReAnimated.View entering={FadeIn.duration(250)} style={{ width: '100%' }}>
                                 <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.52 }} contentContainerStyle={{ paddingBottom: 30 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
                                         {activeFiltersCount > 0 && (
@@ -1344,7 +1364,7 @@ export default function MarketplaceScreen() {
                         {sellStep === 1 ? (
                             loadingTickets
                                 ? <ActivityIndicator color={COLORS.neonPink} style={{ marginVertical: 40 }} />
-                                : <ReAnimated.View entering={FadeIn.duration(300)} style={{ width: '100%' }}>
+                                : <ReAnimated.View entering={FadeIn.duration(250)} style={{ width: '100%' }}>
                                     <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.52 }} contentContainerStyle={{ paddingBottom: 30 }}>
                                     {myTickets.length === 0
                                         ? <Text style={s.noData}>No tienes tickets válidos para vender en este momento.</Text>
@@ -1358,7 +1378,7 @@ export default function MarketplaceScreen() {
                                                     activeOpacity={0.7}
                                                 >
                                                     {t.events?.image_url
-                                                        ? <Image source={{ uri: t.events.image_url }} style={{ width: 64, height: 64, borderRadius: 16, marginRight: 16 }} />
+                                                        ? <ExpoImage source={{ uri: t.events.image_url }} style={{ width: 64, height: 64, borderRadius: 16, marginRight: 16 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                                                         : <View style={[s.ticketIconBox, { width: 64, height: 64, borderRadius: 16, marginRight: 16 }]}><Ticket color={COLORS.neonPink} size={28} /></View>
                                                     }
                                                     <View style={{ flex: 1, gap: 6, paddingVertical: 2 }}>
@@ -1381,7 +1401,7 @@ export default function MarketplaceScreen() {
                             {/* Ticket mini chip */}
                             <View style={[s.selectedTicketRow, { marginBottom: 24 }]}>
                                 {ticketToSell?.events?.image_url
-                                    ? <Image source={{ uri: ticketToSell.events.image_url }} style={{ width: 44, height: 44, borderRadius: 12, marginRight: 14 }} />
+                                    ? <ExpoImage source={{ uri: ticketToSell.events.image_url }} style={{ width: 44, height: 44, borderRadius: 12, marginRight: 14 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                                     : <View style={[s.ticketIconBox, { width: 44, height: 44, borderRadius: 12, marginRight: 14 }]}><Ticket color={COLORS.neonPink} size={20} /></View>
                                 }
                                 <View style={{ flex: 1, gap: 4 }}>
@@ -1570,7 +1590,7 @@ export default function MarketplaceScreen() {
                             <TouchableOpacity style={[s.ghostBtn, { flex: 1 }]} onPress={() => { setOfferModal(false); setOfferPrice(''); }}>
                                 <Text style={s.ghostBtnText}>Cancelar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0, backgroundColor: 'white' }]} onPress={handleOffer} disabled={offering}>
+                            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0, backgroundColor: 'white' }]} activeOpacity={0.65} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleOffer(); }} disabled={offering}>
                                 {offering ? <ActivityIndicator color="#000" /> : <Text style={[s.primaryBtnText, { color: '#000' }]}>ENVIAR OFERTA</Text>}
                             </TouchableOpacity>
                         </View>
@@ -1601,10 +1621,10 @@ export default function MarketplaceScreen() {
                                         <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Oferta pendiente</Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(255,68,68,0.3)', justifyContent: 'center', alignItems: 'center' }} onPress={() => rejectOffer(item)}>
+                                        <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(255,68,68,0.3)', justifyContent: 'center', alignItems: 'center' }} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); rejectOffer(item); }}>
                                             <X size={16} color="#FF4444" />
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={s.acceptBtn} onPress={() => acceptOffer(item)}>
+                                        <TouchableOpacity style={s.acceptBtn} activeOpacity={0.65} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); acceptOffer(item); }}>
                                             <Check color="#000" size={13} />
                                             <Text style={s.acceptText}>ACEPTAR</Text>
                                         </TouchableOpacity>
@@ -1703,7 +1723,7 @@ export default function MarketplaceScreen() {
                             <TouchableOpacity style={[s.ghostBtn, { flex: 1 }]} onPress={() => setBuyModal(false)}>
                                 <Text style={s.ghostBtnText}>Cancelar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0, backgroundColor: 'white' }]} onPress={executeBuy}>
+                            <TouchableOpacity style={[s.primaryBtn, { flex: 1, marginTop: 0, backgroundColor: 'white' }]} activeOpacity={0.65} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); executeBuy(); }}>
                                 <Text style={[s.primaryBtnText, { color: '#000' }]}>IR A PAGAR</Text>
                             </TouchableOpacity>
                         </View>
@@ -1826,8 +1846,8 @@ const s = StyleSheet.create({
     modernInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 14, paddingHorizontal: 14, height: 46, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
     modernInput: { flex: 1, color: 'white', fontSize: 14, marginLeft: 12, fontWeight: '500' },
     modernDropText: { flex: 1, color: 'white', fontSize: 15, marginLeft: 14, fontWeight: '500' },
-    modernDropdown: { backgroundColor: 'rgba(15,0,25,0.95)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginTop: -6, marginBottom: 12, overflow: 'hidden' },
-    modernDropRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modernDropdown: { backgroundColor: COLORS.glassBg, borderRadius: 18, borderWidth: 1, borderColor: COLORS.glassBorder, marginTop: -6, marginBottom: 12, overflow: 'hidden' },
+    modernDropRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
     modalIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.07)', justifyContent: 'center', alignItems: 'center' },
@@ -1841,7 +1861,7 @@ const s = StyleSheet.create({
     fieldText: { color: 'white', fontSize: 15 },
     dropdown: { backgroundColor: 'rgba(20,5,35,0.98)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', marginTop: 4 },
     dropRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-    dropText: { color: 'white', fontSize: 14 },
+    dropText: { color: 'rgba(251,251,251,0.85)', fontSize: 14 },
 
     primaryBtn: { marginTop: 8, height: 56, borderRadius: 16, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
     primaryBtnGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },

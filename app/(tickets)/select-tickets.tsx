@@ -1,12 +1,14 @@
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowRight, Info, Minus, Plus, UserCheck, X } from 'lucide-react-native';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { ArrowRight, ChevronDown, ChevronUp, Info, Minus, Plus, UserCheck, X } from 'lucide-react-native';
 import React, { useCallback, useState, useEffect } from 'react';
 import {
     Alert,
     Dimensions,
-    Image,
     InteractionManager,
     Modal,
     RefreshControl,
@@ -45,10 +47,12 @@ export default function SelectTicketsScreen() {
 
     const [maxPerPerson, setMaxPerPerson] = useState(10);
     const [showNominativeInfo, setShowNominativeInfo] = useState(false);
+    const [expandedDescriptions, setExpandedDescriptions] = useState<{[key: string]: boolean}>({});
+    const [truncatedDescriptions, setTruncatedDescriptions] = useState<{[key: string]: boolean}>({});
 
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    const SERVICE_FEE_PERCENTAGE = 0.10;
+    const SERVICE_FEE_PERCENTAGE = 0.12;
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 10000);
@@ -155,7 +159,7 @@ export default function SelectTicketsScreen() {
     });
 
     const totalTickets = Object.values(cart).reduce((a, b) => a + b, 0);
-    const subtotal = visibleTiers.reduce((acc, tier) => acc + (tier.price * (cart[tier.id] || 0)), 0);
+    const subtotal = visibleTiers.reduce((acc, tier) => acc + (Number(tier.price) * (cart[tier.id] || 0)), 0);
     const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
     const totalToPay = Math.round(subtotal + serviceFee);
 
@@ -283,9 +287,12 @@ export default function SelectTicketsScreen() {
                         
                         <AnimatedEntry index={0}>
                             <View style={styles.eventHeaderRow}>
-                                <Image 
+                                <Image
                                     source={{ uri: eventDetails?.image_url || 'https://via.placeholder.com/150' }}
                                     style={[styles.eventSquareImage, { borderColor: withAlpha(accentColor, 0.5), shadowColor: accentColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10 }]}
+                                    contentFit="cover"
+                                    transition={150}
+                                    cachePolicy="memory-disk"
                                 />
                                 <View style={styles.eventHeaderTextContainer}>
                                     <Text style={styles.eventHeaderTitle} numberOfLines={2}>{eventName}</Text>
@@ -366,13 +373,51 @@ export default function SelectTicketsScreen() {
                                                             )}
                                                         </View>
                                                     )}
-                                                    {tier.description ? <Text style={styles.tierDescription} numberOfLines={2}>{tier.description}</Text> : null}
+                                                    {tier.description ? (
+                                                        <>
+                                                            {/* Texto oculto para medir líneas reales sin numberOfLines */}
+                                                            <View style={{ height: 0, overflow: 'hidden' }}>
+                                                                <Text
+                                                                    style={styles.tierDescription}
+                                                                    onTextLayout={(e) => {
+                                                                        const isTruncated = e.nativeEvent.lines.length > 2;
+                                                                        setTruncatedDescriptions(prev => {
+                                                                            if (prev[tier.id] === isTruncated) return prev;
+                                                                            return { ...prev, [tier.id]: isTruncated };
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    {tier.description}
+                                                                </Text>
+                                                            </View>
+                                                            <Text
+                                                                style={styles.tierDescription}
+                                                                numberOfLines={expandedDescriptions[tier.id] ? undefined : 2}
+                                                            >
+                                                                {tier.description}
+                                                            </Text>
+                                                        </>
+                                                    ) : null}
 
-                                                    {/* Usamos el nuevo estilo gris y tachado para el precio */}
-                                                    <Text style={[
-                                                        styles.tierPrice,
-                                                        isSoldOut && styles.tierPriceSoldOut
-                                                    ]}>${tier.price.toLocaleString()}</Text>
+                                                    {/* Precio + botón expandir inline */}
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        <Text style={[
+                                                            styles.tierPrice,
+                                                            isSoldOut && styles.tierPriceSoldOut
+                                                        ]}>${tier.price.toLocaleString()}</Text>
+                                                        {truncatedDescriptions[tier.id] && (
+                                                            <TouchableOpacity
+                                                                onPress={() => setExpandedDescriptions(prev => ({ ...prev, [tier.id]: !prev[tier.id] }))}
+                                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                                activeOpacity={0.5}
+                                                            >
+                                                                {expandedDescriptions[tier.id]
+                                                                    ? <ChevronUp color="rgba(251,251,251,0.2)" size={13} />
+                                                                    : <ChevronDown color="rgba(251,251,251,0.2)" size={13} />
+                                                                }
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
 
                                                     {!isSoldOut && remainingStock < 20 && <Text style={styles.lowStockText}>¡Quedan pocas!</Text>}
                                                 </View>
@@ -385,7 +430,7 @@ export default function SelectTicketsScreen() {
                                                 ) : (
                                                     <View style={styles.counter}>
                                                         <TouchableOpacity
-                                                            onPress={() => updateQuantity(tier.id, -1, remainingStock)}
+                                                            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); updateQuantity(tier.id, -1, remainingStock); }}
                                                             disabled={qty === 0}
                                                             style={[styles.counterBtn, qty === 0 && {backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)'}]}
                                                         >
@@ -395,7 +440,7 @@ export default function SelectTicketsScreen() {
                                                         <Text style={styles.qtyText}>{qty}</Text>
 
                                                         <TouchableOpacity
-                                                            onPress={() => updateQuantity(tier.id, 1, remainingStock)}
+                                                            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); updateQuantity(tier.id, 1, remainingStock); }}
                                                             style={[styles.counterBtn, {backgroundColor: withAlpha(accentColor, 0.15), borderColor: withAlpha(accentColor, 0.35)}]}
                                                         >
                                                             <Plus color={accentColor} size={16} />
@@ -437,8 +482,8 @@ export default function SelectTicketsScreen() {
                                 borderColor: totalTickets === 0 ? '#333' : withAlpha(accentColor, 0.35),
                             }]}
                             disabled={totalTickets === 0}
-                            onPress={handleContinue}
-                            activeOpacity={0.8}
+                            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleContinue(); }}
+                            activeOpacity={0.65}
                         >
                             <Text style={[styles.buyBtnText, { color: totalTickets === 0 ? 'rgba(251,251,251,0.4)' : accentColor }]}>
                                 {totalTickets > 0 ? 'IR A PAGAR' : 'SELECCIONA'}
@@ -455,6 +500,7 @@ export default function SelectTicketsScreen() {
                 visible={showNominativeInfo}
                 transparent
                 animationType="fade"
+                statusBarTranslucent
                 onRequestClose={() => setShowNominativeInfo(false)}
             >
                 <View style={styles.modalOverlay}>

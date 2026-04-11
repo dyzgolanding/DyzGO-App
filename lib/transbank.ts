@@ -1,14 +1,7 @@
-// lib/transbank.ts
-import { Environment, IntegrationApiKeys, IntegrationCommerceCodes, Options, WebpayPlus } from 'transbank-sdk';
-
-// Usamos las credenciales de INTEGRACIÓN (Pruebas) por defecto.
-// Cuando pases a producción, aquí pondremos tus llaves reales.
-const tx = new WebpayPlus.Transaction(
-  new Options(
-    IntegrationCommerceCodes.WEBPAY_PLUS, 
-    IntegrationApiKeys.WEBPAY, 
-    Environment.Integration
-  )
-);
-
-export default tx;
+// La lógica de Transbank/Webpay se ejecuta únicamente en el servidor
+// (supabase/functions/webpay/index.ts). El cliente solo invoca la función
+// Edge via supabase.functions.invoke('webpay', { ... }).
+//
+// Este archivo se mantiene vacío para evitar que el SDK de Transbank
+// (dependencia de Node.js) se incluya en el bundle de React Native.
+export {};

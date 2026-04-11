@@ -1,11 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  Eye,
-  EyeOff,
   KeyRound,
   Trash2
 } from 'lucide-react-native';
@@ -24,7 +22,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import Animated, { FadeIn, SlideInRight } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { supabase } from '../../lib/supabase';
 
@@ -42,7 +40,6 @@ export default function DeleteAccountScreen() {
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState('');
   const [email, setEmail] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const reasons = [
     "No lo uso lo suficiente",
@@ -55,31 +52,31 @@ export default function DeleteAccountScreen() {
   const handleRequestCode = async () => {
     if (!selectedReason) return Alert.alert("Selección", "Por favor elige un motivo.");
 
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !user.email) throw new Error("No se pudo identificar al usuario.");
       setEmail(user.email);
+      const { error } = await supabase.auth.signInWithOtp({ email: user.email });
+      if (error) throw error;
       setStep(2);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "No se pudo identificar al usuario.");
+      Alert.alert("Error", error.message || "No se pudo enviar el código.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
-    if (otpCode.length < 6) return Alert.alert("Error", "Contraseña muy corta.");
+    if (otpCode.length < 6) return Alert.alert("Error", "El código debe tener 6 dígitos.");
 
     setLoading(true);
     try {
-      // Verificar identidad con contraseña
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: otpCode,
-      });
-
-      if (error) throw error;
+      const { error } = await supabase.auth.verifyOtp({ email, token: otpCode, type: 'email' });
+      if (error) throw new Error("Código incorrecto o expirado. Inténtalo de nuevo.");
       setStep(3);
     } catch (error: any) {
-      Alert.alert("Error", "Contraseña incorrecta. Inténtalo de nuevo.");
+      Alert.alert("Error", error.message);
     } finally {
       setLoading(false);
     }
@@ -106,7 +103,7 @@ export default function DeleteAccountScreen() {
   };
 
   const renderStep1_Reason = () => (
-    <Animated.View entering={FadeIn} style={styles.stepContainer}>
+    <Animated.View entering={FadeIn.duration(250)} style={styles.stepContainer}>
       <Text style={styles.title}>¿Por qué quieres irte?</Text>
       <Text style={styles.subtitle}>Nos ayuda a mejorar saber el motivo.</Text>
       
@@ -138,32 +135,23 @@ export default function DeleteAccountScreen() {
   );
 
   const renderStep2_OTP = () => (
-    <Animated.View entering={SlideInRight} style={styles.stepContainer}>
+    <Animated.View entering={FadeInDown.duration(300).delay(80).springify()} style={styles.stepContainer}>
       <View style={styles.iconBig}><KeyRound color={COLORS.neonPink} size={40} /></View>
-      <Text style={styles.title}>Confirma tu contraseña</Text>
-      <Text style={styles.subtitle}>Ingresa tu contraseña actual para continuar</Text>
+      <Text style={styles.title}>Revisa tu email</Text>
+      <Text style={styles.subtitle}>Enviamos un código de 6 dígitos a{'\n'}{email}</Text>
 
       <View style={styles.passwordWrapper}>
         <TextInput
           style={styles.passwordInput}
-          placeholder="Ingresa tu contraseña"
+          placeholder="000000"
           placeholderTextColor="rgba(255,255,255,0.3)"
-          secureTextEntry={!showPassword}
           value={otpCode}
           onChangeText={setOtpCode}
+          keyboardType="number-pad"
+          maxLength={6}
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <TouchableOpacity
-          onPress={() => setShowPassword(v => !v)}
-          style={styles.eyeBtn}
-          activeOpacity={0.7}
-        >
-          {showPassword
-            ? <EyeOff color="rgba(255,255,255,0.5)" size={20} />
-            : <Eye color="rgba(255,255,255,0.5)" size={20} />
-          }
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.mainBtn} onPress={handleVerifyCode} disabled={loading} activeOpacity={0.8}>
@@ -173,7 +161,7 @@ export default function DeleteAccountScreen() {
   );
 
   const renderStep3_Confirm = () => (
-    <Animated.View entering={SlideInRight} style={styles.stepContainer}>
+    <Animated.View entering={FadeInDown.duration(300).delay(80).springify()} style={styles.stepContainer}>
       {/* Icono sin el borde neon rosado */}
       <View style={styles.iconBig}>
         <AlertTriangle color={COLORS.neonPink} size={40} />
@@ -186,14 +174,13 @@ export default function DeleteAccountScreen() {
 
       {/* Botón final unificado con el estilo de la aplicación y texto modificado */}
       <TouchableOpacity style={styles.mainBtn} onPress={handleDeleteFinally} disabled={loading}>
-          <LinearGradient colors={[COLORS.neonPurple, COLORS.neonPink]} style={styles.btnGradient} start={{x:0, y:0}} end={{x:1, y:0}}>
+          <LinearGradient colors={[COLORS.neonPurple, COLORS.neonPink]} style={{ ...StyleSheet.absoluteFillObject, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }} start={{x:0, y:0}} end={{x:1, y:0}}>
           {loading ? (
               <ActivityIndicator color="white" />
           ) : (
               <>
-                {/* Icono de basura ahora en blanco */}
                 <Trash2 color={'#FBFBFB'} size={20} />
-                <Text style={styles.btnText}>Sí, eliminar mi cuenta</Text>
+                <Text style={[styles.btnText, { color: '#FBFBFB' }]}>Sí, eliminar mi cuenta</Text>
               </>
           )}
           </LinearGradient>
@@ -273,20 +260,16 @@ const styles = StyleSheet.create({
       justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: COLORS.glassBorder 
   },
   
-  // Wrapper del input de contraseña con ojo de visibilidad
   passwordWrapper: {
     width: '100%', marginBottom: 30,
-    flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.glassBg,
     borderRadius: 20, borderWidth: 1, borderColor: COLORS.glassBorder,
     paddingHorizontal: 18,
   },
   passwordInput: {
-    flex: 1, paddingVertical: 16,
-    fontSize: 16, color: '#FBFBFB',
-    letterSpacing: 0,
+    width: '100%', paddingVertical: 16,
+    fontSize: 20, color: '#FBFBFB', textAlign: 'center', letterSpacing: 6,
   },
-  eyeBtn: { padding: 8 },
   
   warningText: { color: COLORS.textZinc, textAlign: 'center', fontSize: 15, lineHeight: 24, marginBottom: 40, paddingHorizontal: 10 },
   

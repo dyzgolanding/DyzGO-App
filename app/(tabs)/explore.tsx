@@ -1,6 +1,8 @@
+import { Image as ExpoImage } from 'expo-image';
+import { eventCache } from '../../lib/eventCache';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   ArrowLeft,
   ArrowRight,
@@ -180,10 +182,12 @@ const MapCarouselCard = memo(function MapCarouselCard({ item, index, scrollX, is
 });
 
 const CAT_CARD_GAP = 10;
-const CAT_BIG_H = Math.round(width * 0.8);
+const CAT_BIG_H = Math.round(width * 0.75);
 const CAT_SMALL_W = Math.floor((width - 32 - CAT_CARD_GAP) / 2);
-const CAT_SMALL_H = Math.round(CAT_SMALL_W * 1.1);
+const CAT_SMALL_H = Math.round(CAT_SMALL_W * 1.0);
 const CAT_GROUP_H = CAT_BIG_H + CAT_CARD_GAP + CAT_SMALL_H + 16; // 16 = marginBottom del grupo
+
+function opt(v: any) { return (v && v !== 'undefined') ? v : undefined; }
 
 function buildCatCardParams(item: any, isTabEv: boolean) {
   const exp = Array.isArray(item.experiences) ? item.experiences[0] : item.experiences;
@@ -210,17 +214,21 @@ function renderCatCard(item: any, isTabEv: boolean, router: any, big = true) {
       key={item.id}
       style={{ width: big ? width - 32 : CAT_SMALL_W, height: big ? CAT_BIG_H : CAT_SMALL_H, borderRadius: big ? 24 : 18, overflow: 'hidden', backgroundColor: '#0A0A0A' }}
       activeOpacity={0.92}
-      onPress={() => router.push({
-        pathname: isTabEv ? '/event-detail' : '/club-detail',
-        params: isTabEv ? {
-          id: item.id, imageUrl: item.image_url || item.image || '',
-          title: item.title || item.name, date: cleanDate, hour: item.hour,
-          clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
-          accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-          themeColorEnd: item.theme_color_end || '#0a0014', category: item.area || item.category,
-          producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url,
-        } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title },
-      })}
+      onPress={() => {
+        if (isTabEv) eventCache.set(String(item.id), item);
+        router.push({
+          pathname: isTabEv ? '/event-detail' : '/club-detail',
+          params: isTabEv ? {
+            id: item.id, imageUrl: item.image_url || item.image || '',
+            title: item.title || item.name, date: cleanDate, hour: item.hour,
+            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+            themeColorEnd: item.theme_color_end || '#0a0014',
+            category: item.category || item.area, area: item.area || item.category,
+            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+          } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: opt(item.instagram || item.instagram_url) },
+        });
+      }}
     >
       <ImageBackground source={{ uri: item.image_url || item.image }} style={{ flex: 1 }}>
         <LinearGradient colors={['transparent', 'rgba(3,3,3,0.65)', '#030303']} locations={[0.3, 0.72, 1]} style={{ flex: 1, padding: big ? 16 : 10, justifyContent: 'space-between' }}>
@@ -424,6 +432,15 @@ export default function ExploreScreen() {
 
       setEvents(evData || []);
       setClubs(clData || []);
+      (evData || []).forEach((e: any) => {
+        const cl = Array.isArray(e.clubs) ? e.clubs[0] : e.clubs;
+        const exp = Array.isArray(e.experiences) ? e.experiences[0] : e.experiences;
+        if (cl?.image) ExpoImage.prefetch(cl.image);
+        if (exp?.logo_url) ExpoImage.prefetch(exp.logo_url);
+      });
+      (clData || []).forEach((c: any) => {
+        if (c.image) ExpoImage.prefetch(c.image);
+      });
 
       if (!isRefresh) setLoading(false);
 
@@ -814,7 +831,7 @@ export default function ExploreScreen() {
       {/* HUD */}
       {(() => {
         return (
-          <Animated.View entering={FadeInDown.duration(500)} style={[styles.hudContainer, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+          <Animated.View entering={FadeInDown.duration(300).delay(80).springify()} style={[styles.hudContainer, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
 
             {/* Fila 1: Barra principal pill */}
             <View style={{ marginBottom: 10 }}>
@@ -911,6 +928,10 @@ export default function ExploreScreen() {
             showsHorizontalScrollIndicator={false}
             snapToInterval={SNAP}
             decelerationRate="fast"
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            initialNumToRender={6}
             getItemLayout={(_: any, index: number) => ({ length: SNAP, offset: (width - CARD_W) / 2 + index * SNAP, index })}
             onLayout={() => {
               if (N > 0) flatListRef.current?.scrollToOffset({ offset: N * SNAP, animated: false });
@@ -939,6 +960,7 @@ export default function ExploreScreen() {
                       animateMapToIndex(index);
                       return;
                     }
+                    if (isTabEv) eventCache.set(String(item.id), item);
                     router.push({
                       pathname: isTabEv ? '/event-detail' : '/club-detail',
                       params: isTabEv
@@ -947,10 +969,11 @@ export default function ExploreScreen() {
                           title: item.title || item.name, date: cleanDate, hour: item.hour,
                           clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
                           accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-                          themeColorEnd: item.theme_color_end || '#0a0014', category: item.area || item.category,
-                          producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url,
+                          themeColorEnd: item.theme_color_end || '#0a0014',
+                          category: item.category || item.area, area: item.area || item.category,
+                          producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
                         }
-                        : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title },
+                        : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url },
                     });
                   }}
                 />
@@ -970,7 +993,11 @@ export default function ExploreScreen() {
         scrollEventThrottle={16}
         snapToInterval={CAT_GROUP_H}
         decelerationRate="fast"
-        contentContainerStyle={{ paddingTop: insets.top + 170, paddingHorizontal: 16, paddingBottom: 140 }}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        initialNumToRender={6}
+        contentContainerStyle={{ paddingTop: insets.top + 170, paddingHorizontal: 16, paddingBottom: insets.bottom + 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF31D8" />}
         renderItem={({ item: group, index: rowIdx }: { item: any; index: number }) => (
           <CatRowFocused
@@ -1039,7 +1066,7 @@ export default function ExploreScreen() {
 
             {/* Contenido */}
             {activeFilterModal === null ? (
-              <Animated.View entering={FadeIn.duration(300)} style={{ width: '100%' }}>
+              <Animated.View entering={FadeIn.duration(250)} style={{ width: '100%' }}>
                 <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.52 }} contentContainerStyle={{ paddingBottom: 30 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
                     {activeFiltersCount > 0 && (

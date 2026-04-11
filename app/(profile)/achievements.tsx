@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { Crown, Gift, Lock, QrCode, Star, Ticket, Trophy, X, Zap } from 'lucide-react-native';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { Crown, Gift, Lock, QrCode, Star, Ticket, Trophy, Wine, X, Zap } from 'lucide-react-native';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import React, { useEffect, useState } from 'react';
 import {
@@ -13,12 +13,13 @@ import {
   View,
 } from 'react-native';
 import Animated, {
+  FadeInUp,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { SkeletonBox } from '../../components/SkeletonBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 // insets se usa solo para el paddingBottom del scroll
@@ -28,7 +29,7 @@ const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 20 * 2 - 12) / 2;
 
 const REWARDS: Record<number, { prize: string; info: string; icon: React.ComponentType<{ color: string; size: number }> }> = {
-  1:  { prize: 'Shot de Bienvenida',  info: 'Canjeable en barra.',         icon: Zap },
+  1:  { prize: '10% Primera Compra',  info: 'Se aplica automáticamente.',   icon: Zap },
   2:  { prize: '2x1 Cervezas',        info: 'Marcas nacionales.',           icon: Gift },
   3:  { prize: 'Entrada Gratis',      info: 'Cualquier evento.',            icon: Ticket },
   4:  { prize: 'Coctel Premium',      info: 'Carta seleccionada.',          icon: Star },
@@ -72,18 +73,15 @@ const bar = StyleSheet.create({
 // --- TARJETA DE MEDALLA ---
 interface MedalProps { data: typeof LEVELS[0]; isUnlocked: boolean; onPress: () => void }
 function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
-  const scale = useSharedValue(1);
   const RewardIcon = REWARDS[data.level].icon;
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const handlePress = () => {
     if (!isUnlocked) return;
-    scale.value = withSpring(0.93, {}, () => { scale.value = withSpring(1); });
     onPress();
   };
 
   return (
-    <Animated.View style={[animStyle, { width: CARD_SIZE }]}>
+    <View style={{ width: CARD_SIZE }}>
       <TouchableOpacity
         onPress={handlePress}
         activeOpacity={isUnlocked ? 0.85 : 1}
@@ -120,7 +118,7 @@ function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
           <View style={[ms.dot, { backgroundColor: data.color, shadowColor: data.color }]} />
         )}
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 }
 const ms = StyleSheet.create({
@@ -142,6 +140,7 @@ export default function AchievementsScreen() {
   const [xp, setXp] = useState(0);
   const [level, setLevel] = useState(1);
   const [modal, setModal] = useState<number | null>(null);
+  const [loadingXP, setLoadingXP] = useState(true);
 
   useEffect(() => { fetchProgress(); }, []);
 
@@ -153,6 +152,8 @@ export default function AchievementsScreen() {
       if (data) { setXp(data.xp ?? 0); setLevel(data.level ?? 1); }
     } catch (e) {
       console.error('[achievements] fetchProgress:', e);
+    } finally {
+      setLoadingXP(false);
     }
   };
 
@@ -170,25 +171,25 @@ export default function AchievementsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#030303' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <LinearGradient
-              colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0.6, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-              colors={['transparent', 'rgba(255, 49, 216, 0.15)']}
-              start={{ x: 0.4, y: 0.5 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-              colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']}
-              start={{ x: 1, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              locations={[0.3, 0.5, 0.7]}
-              style={StyleSheet.absoluteFill}
-          />
+        <LinearGradient
+          colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.6, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(255, 49, 216, 0.15)']}
+          start={{ x: 0.4, y: 0.5 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          locations={[0.3, 0.5, 0.7]}
+          style={StyleSheet.absoluteFill}
+        />
       </View>
 
       <NavBar title="LOGROS" onBack={() => router.back()} />
@@ -198,71 +199,100 @@ export default function AchievementsScreen() {
         contentContainerStyle={[s.scroll, { paddingTop: navTop, paddingBottom: insets.bottom + 40 }]}
       >
         {/* HERO CARD */}
-        <View style={[s.heroCard, { borderColor: currentLevel.color + '40' }]}>
-          <LinearGradient
-            colors={[currentLevel.color + '20', currentLevel.color + '08', 'transparent']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
-          />
-          <View style={s.heroTop}>
-            {/* Orb de nivel */}
-            <View style={[s.orb, { borderColor: currentLevel.color, shadowColor: currentLevel.color }]}>
-              <LinearGradient colors={[currentLevel.color + '30', 'transparent']} style={StyleSheet.absoluteFill} />
-              <Text style={[s.orbLvLabel, { color: currentLevel.color }]}>LVL</Text>
-              <Text style={s.orbNum}>{level}</Text>
-            </View>
-            {/* Info de rango */}
-            <View style={s.heroInfo}>
-              <Text style={[s.rankLabel, { color: currentLevel.color }]}>RANGO ACTUAL</Text>
-              <Text style={s.rankName}>{currentLevel.label.toUpperCase()}</Text>
-              <View style={[s.xpChip, { backgroundColor: currentLevel.color + '20', borderColor: currentLevel.color + '40' }]}>
-                <Star color={currentLevel.color} size={11} />
-                <Text style={[s.xpChipText, { color: currentLevel.color }]}>{xp.toLocaleString()} XP</Text>
+        {loadingXP ? (
+          <SkeletonBox height={160} borderRadius={20} />
+        ) : (
+          <Animated.View entering={FadeInUp.duration(300).delay(0).springify()}>
+            <View style={[s.heroCard, { borderColor: currentLevel.color + '40' }]}>
+              <LinearGradient
+                colors={[currentLevel.color + '20', currentLevel.color + '08', 'transparent']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
+              />
+              <View style={s.heroTop}>
+                <View style={[s.orb, { borderColor: currentLevel.color, shadowColor: currentLevel.color }]}>
+                  <LinearGradient colors={[currentLevel.color + '30', 'transparent']} style={StyleSheet.absoluteFill} />
+                  <Text style={[s.orbLvLabel, { color: currentLevel.color }]}>LVL</Text>
+                  <Text style={s.orbNum}>{level}</Text>
+                </View>
+                <View style={s.heroInfo}>
+                  <Text style={[s.rankLabel, { color: currentLevel.color }]}>RANGO ACTUAL</Text>
+                  <Text style={s.rankName}>{currentLevel.label.toUpperCase()}</Text>
+                  <View style={[s.xpChip, { backgroundColor: currentLevel.color + '20', borderColor: currentLevel.color + '40' }]}>
+                    <Star color={currentLevel.color} size={11} />
+                    <Text style={[s.xpChipText, { color: currentLevel.color }]}>{xp.toLocaleString()} XP</Text>
+                  </View>
+                </View>
+              </View>
+              <ProgressBar progress={progress} color={currentLevel.color} />
+              <View style={s.progressFooter}>
+                <Text style={s.progressLabel}>Progreso al siguiente</Text>
+                <Text style={[s.progressValue, { color: currentLevel.color }]}>
+                  {level >= 10 ? 'NIVEL MAXIMO' : `${xpLeft.toLocaleString()} XP restantes`}
+                </Text>
               </View>
             </View>
-          </View>
-          <ProgressBar progress={progress} color={currentLevel.color} />
-          <View style={s.progressFooter}>
-            <Text style={s.progressLabel}>Progreso al siguiente</Text>
-            <Text style={[s.progressValue, { color: currentLevel.color }]}>
-              {level >= 10 ? 'NIVEL MAXIMO' : `${xpLeft.toLocaleString()} XP restantes`}
-            </Text>
-          </View>
-        </View>
+          </Animated.View>
+        )}
 
         {/* COMO GANAR XP */}
-        <Text style={s.sectionTitle}>COMO GANAR XP</Text>
-        <View style={s.xpRow}>
-          {([
-            { Icon: Ticket, label: 'Comprar entrada',   value: '+50 XP' },
-            { Icon: QrCode, label: 'Asistir al evento', value: '+100 XP' },
-            { Icon: Trophy, label: 'Subir de nivel',    value: 'Recompensa' },
-          ] as const).map(({ Icon, label, value }) => (
-            <View key={label} style={s.xpPill}>
-              <Icon color={COLORS.neonPurple} size={18} />
-              <Text style={s.xpPillLabel}>{label}</Text>
-              <Text style={s.xpPillValue}>{value}</Text>
+        {loadingXP ? (
+          <View style={{ gap: 10 }}>
+            <SkeletonBox height={16} borderRadius={6} width="45%" />
+            <SkeletonBox height={52} borderRadius={12} />
+            <SkeletonBox height={52} borderRadius={12} />
+            <SkeletonBox height={52} borderRadius={12} />
+            <SkeletonBox height={52} borderRadius={12} />
+          </View>
+        ) : (
+          <Animated.View entering={FadeInUp.duration(300).delay(80).springify()}>
+            <Text style={s.sectionTitle}>COMO GANAR XP</Text>
+            <View style={s.xpRow}>
+              {([
+                { Icon: Ticket, label: 'Comprar entrada',   value: '+50 XP' },
+                { Icon: Wine,   label: 'Comprar consumo',   value: '+40 XP c/u' },
+                { Icon: QrCode, label: 'Asistir al evento', value: '+100 XP' },
+                { Icon: Trophy, label: 'Subir de nivel',    value: 'Recompensa' },
+              ] as const).map(({ Icon, label, value }) => (
+                <View key={label} style={s.xpPill}>
+                  <Icon color={COLORS.neonPurple} size={18} />
+                  <Text style={s.xpPillLabel}>{label}</Text>
+                  <Text style={s.xpPillValue}>{value}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </Animated.View>
+        )}
 
-        {/* MEDALLAS */}
-        <View style={s.sectionRow}>
-          <Crown color={COLORS.neonPink} size={16} />
-          <Text style={[s.sectionTitle, { marginLeft: 8 }]}>SALON DE LA FAMA</Text>
-        </View>
-        <Text style={s.sectionSub}>Desbloquea niveles para obtener recompensas exclusivas</Text>
-
-        <View style={s.grid}>
-          {LEVELS.map((l) => (
-            <MedalCard
-              key={l.level}
-              data={l}
-              isUnlocked={level >= l.level}
-              onPress={() => setModal(l.level)}
-            />
-          ))}
-        </View>
+        {/* SALON DE LA FAMA */}
+        {loadingXP ? (
+          <View style={{ gap: 12 }}>
+            <SkeletonBox height={16} borderRadius={6} width="55%" />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <SkeletonBox key={i} height={CARD_SIZE * 1.1} width={CARD_SIZE} borderRadius={22} />
+              ))}
+            </View>
+          </View>
+        ) : (
+          <Animated.View entering={FadeInUp.duration(300).delay(160).springify()}>
+            <View style={s.sectionRow}>
+              <Crown color={COLORS.neonPink} size={16} />
+              <Text style={[s.sectionTitle, { marginLeft: 8, marginBottom: 0 }]}>SALON DE LA FAMA</Text>
+            </View>
+            <Text style={s.sectionSub}>Desbloquea niveles para obtener recompensas exclusivas</Text>
+            <View style={s.grid}>
+              {LEVELS.map((l) => (
+                <MedalCard
+                  key={l.level}
+                  data={l}
+                  isUnlocked={level >= l.level}
+                  onPress={() => setModal(l.level)}
+                />
+              ))}
+            </View>
+          </Animated.View>
+        )}
       </ScrollView>
 
       {/* MODAL DE CANJE */}
@@ -326,9 +356,9 @@ const s = StyleSheet.create({
   progressLabel:  { color: COLORS.textZinc, fontSize: 11, fontWeight: '500' },
   progressValue:  { fontSize: 12, fontWeight: '800' },
 
-  sectionRow:     { flexDirection: 'row', alignItems: 'center' },
-  sectionTitle:   { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
-  sectionSub:     { color: COLORS.textSecondary, fontSize: 12, marginTop: -12 },
+  sectionRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  sectionTitle:   { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 },
+  sectionSub:     { color: COLORS.textSecondary, fontSize: 12, marginBottom: 14 },
   xpRow:          { gap: 10 },
   xpPill:         { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, paddingVertical: 13, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   xpPillLabel:    { flex: 1, color: COLORS.textZinc, fontSize: 13, fontWeight: '500' },

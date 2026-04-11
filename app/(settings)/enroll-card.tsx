@@ -1,6 +1,7 @@
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
+import ReAnimated, { FadeIn } from 'react-native-reanimated';
 import { ActivityIndicator, Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { COLORS } from '../../constants/colors';
@@ -118,7 +119,7 @@ export default function EnrollCardScreen() {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: COLORS.background }}>
             <StatusBar barStyle="light-content" />
             <View style={{ flex: 1 }}>
                 {enrollUrl ? (
@@ -144,7 +145,7 @@ export default function EnrollCardScreen() {
                     <X color="white" size={24} />
                 </TouchableOpacity>
             </View>
-        </View>
+        </ReAnimated.View>
     );
 }
 

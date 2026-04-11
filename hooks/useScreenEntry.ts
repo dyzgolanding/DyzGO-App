@@ -26,7 +26,6 @@
 
 import { useEffect } from 'react';
 import {
-  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -47,7 +46,6 @@ export function useScreenEntry(): ReturnType<typeof useAnimatedStyle> {
 
   return useAnimatedStyle(() => ({
     flex: 1,
-    opacity:   progress.value,
-    transform: [{ translateY: interpolate(progress.value, [0, 1], [8, 0]) }],
+    opacity: progress.value,
   }));
 }

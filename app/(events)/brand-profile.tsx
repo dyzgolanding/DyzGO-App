@@ -1,13 +1,16 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   ArrowLeft, Calendar, Clock,
   Globe, Instagram, Layers, MapPin, Share2, UserCheck
 } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
+import ReAnimated from 'react-native-reanimated';
 import {
-  Animated, Dimensions, FlatList, Image, ImageBackground, Linking,
+  Animated, Dimensions, FlatList, ImageBackground, InteractionManager, Linking,
   Share, StatusBar, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,9 +19,10 @@ import { useSaved } from '../../context/SavedContext';
 import { supabase } from '../../lib/supabase';
 import { useUserLocation } from '../../lib/useUserLocation';
 import { getDistanceFromLatLonInKm, formatDistance } from '../../utils/location';
+import { SkeletonBox } from '../../components/SkeletonBox';
 
 const { width } = Dimensions.get('window');
-const BANNER_H = 310;
+const BANNER_H = Math.round((width / 3) * 1.5);
 
 const isEventFinished = (evt: any) => {
   if (!evt) return false;
@@ -51,25 +55,30 @@ const formatDateTimeFull = (dateStr: string, timeStr: string) => {
 export default function BrandProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams();
+  const { id, name: paramName, logoUrl: paramLogo } = useLocalSearchParams();
   const experienceId = Array.isArray(id) ? id[0] : id as string;
+  const cachedName = Array.isArray(paramName) ? paramName[0] : paramName as string | undefined;
+  const cachedLogo = Array.isArray(paramLogo) ? paramLogo[0] : paramLogo as string | undefined;
+  const hasCachedParams = !!(cachedName);
 
   const { isBrandSaved, toggleSaveBrand } = useSaved();
   const { location } = useUserLocation();
   const followed = isBrandSaved(experienceId);
 
-  const [loading, setLoading] = useState(true);
-  const [brand, setBrand] = useState<any>(null);
+  const [loading, setLoading] = useState(!hasCachedParams);
+  const [fetchingEvents, setFetchingEvents] = useState(true);
+  const [brand, setBrand] = useState<any>(hasCachedParams ? { name: cachedName, logo_url: cachedLogo } : null);
   const [events, setEvents] = useState<any[]>([]);
   const [pastEvents, setPastEvents] = useState<any[]>([]);
+  const eventsOpacity = useRef(new Animated.Value(0)).current;
 
   const headerBgAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { if (id) fetchBrandData(); }, [id]);
   useEffect(() => {
-    if (!loading && brand) Animated.timing(fadeAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-  }, [loading, brand]);
+    if (!id) return;
+    const task = InteractionManager.runAfterInteractions(() => { fetchBrandData(); });
+    return () => task.cancel();
+  }, [id]);
 
   const handleShare = async () => {
     if (!brand) return;
@@ -84,47 +93,61 @@ export default function BrandProfileScreen() {
       name: brand.name,
       logo_url: brand.logo_url ?? null,
       banner_url: brand.banner_url ?? null,
+      primary_color: brand.primary_color ?? null,
     });
   };
 
   const fetchBrandData = async () => {
     try {
-      setLoading(true);
-      const { data: brandData, error: brandError } = await supabase.from('experiences').select('*').eq('id', id).single();
-      if (brandError) throw brandError;
-      setBrand(brandData);
-
-      const [{ data: upcomingData }, { data: pastData }] = await Promise.all([
-        supabase.from('events').select('*, clubs(name, latitude, longitude)')
+      if (!hasCachedParams) setLoading(true);
+      const [
+        { data: brandData, error: brandError },
+        { data: upcomingData },
+        { data: pastData },
+      ] = await Promise.all([
+        supabase.from('experiences').select('*').eq('id', id).single(),
+        supabase.from('events').select('*, clubs(name, image, latitude, longitude)')
           .eq('experience_id', id)
-          .eq('status', 'active')
+          .in('status', ['active', 'info'])
           .eq('is_active', true),
-        supabase.from('events').select('*, clubs(name)')
+        supabase.from('events').select('*, clubs(name, image)')
           .eq('experience_id', id)
           .neq('status', 'draft')
           .or('status.eq.finished,status.eq.inactive,is_active.eq.false'),
       ]);
 
+      if (brandError) throw brandError;
+
       const upcoming = (upcomingData || []).filter(e =>
-        e.image_url && !isEventFinished(e)
+        (e.image_url || e.status === 'info') && !isEventFinished(e)
       ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       const past = (pastData || []).filter(e =>
         e.image_url && isEventFinished(e)
       ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+      setBrand(brandData);
       setEvents(upcoming);
       setPastEvents(past);
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
+      setFetchingEvents(false);
+      Animated.timing(eventsOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     }
   };
 
   const openInstagram = () => {
     if (brand?.instagram_handle) {
-      Linking.openURL(`https://instagram.com/${brand.instagram_handle.replace('@', '').trim()}`).catch(() => {});
+      // Sanitizar el handle: solo letras, números, _ y . son válidos en Instagram
+      const handle = brand.instagram_handle
+        .replace('@', '')
+        .trim()
+        .replace(/[^a-zA-Z0-9_.]/g, '');
+      if (handle) {
+        Linking.openURL(`https://instagram.com/${handle}`).catch(() => {});
+      }
     }
   };
 
@@ -146,17 +169,32 @@ export default function BrandProfileScreen() {
   const upcomingScrollX = useRef(0);
   const pastScrollX = useRef(0);
 
-  const UPCOMING_W = width - 48;
+  const UPCOMING_W = width - 52;
   const UPCOMING_GAP = 12;
   const UPCOMING_SNAP = UPCOMING_W + UPCOMING_GAP;
 
-  const handleUpcomingPress = (index: number, id: string) => {
+  const handleUpcomingPress = (index: number, event: any) => {
     const targetOffset = index * UPCOMING_SNAP;
     const currentOffset = upcomingScrollX.current;
     if (Math.abs(currentOffset - targetOffset) > UPCOMING_SNAP / 2) {
       upcomingListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: { id } });
+      router.push({ pathname: '/event-detail', params: {
+        id: event.id,
+        status: event.status,
+        imageUrl: event.image_url,
+        title: event.title,
+        date: event.date,
+        hour: event.hour,
+        accentColor: event.accent_color,
+        category: event.category,
+        clubName: event.club_name || event.clubs?.name,
+        clubImage: event.clubs?.image,
+        producerName: brand?.name,
+        producerLogo: brand?.logo_url,
+        producerId: brand?.id,
+        instagramUrl: event.instagram_url,
+      }});
     }
   };
 
@@ -164,18 +202,33 @@ export default function BrandProfileScreen() {
   const PAST_GAP = 14;
   const PAST_SNAP = PAST_W + PAST_GAP;
 
-  const handlePastPress = (index: number, id: string) => {
+  const handlePastPress = (index: number, event: any) => {
     const targetOffset = index * PAST_SNAP;
     const currentOffset = pastScrollX.current;
     if (Math.abs(currentOffset - targetOffset) > PAST_SNAP / 2) {
       pastListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: { id } });
+      router.push({ pathname: '/event-detail', params: {
+        id: event.id,
+        status: event.status,
+        imageUrl: event.image_url,
+        title: event.title,
+        date: event.date,
+        hour: event.hour,
+        accentColor: event.accent_color,
+        category: event.category,
+        clubName: event.club_name || event.clubs?.name,
+        clubImage: event.clubs?.image,
+        producerName: brand?.name,
+        producerLogo: brand?.logo_url,
+        producerId: brand?.id,
+        instagramUrl: event.instagram_url,
+      }});
     }
   };
 
   return (
-    <View style={s.root}>
+    <ReAnimated.View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Ambient background */}
@@ -198,36 +251,49 @@ export default function BrandProfileScreen() {
       </View>
 
       {/* ── MAIN SCROLL ── */}
-      {brand ? (
-        <Animated.ScrollView
-          style={{ flex: 1, opacity: fadeAnim }}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            headerBgAnim.setValue(Math.min(1, y / 150));
-          }}
-          scrollEventThrottle={16}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* 1. BANNER */}
+      <Animated.ScrollView
+        style={{ flex: 1 }}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          headerBgAnim.setValue(Math.min(1, y / 150));
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 60 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. BANNER */}
+        {loading ? (
+          <SkeletonBox height={BANNER_H} width="100%" borderRadius={0} />
+        ) : (
           <View style={s.banner}>
-            {brand.banner_url
-              ? <Image source={{ uri: brand.banner_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            {brand?.banner_url
+              ? <Image source={{ uri: brand.banner_url }} style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} contentFit="fill" transition={150} cachePolicy="memory-disk" />
               : <LinearGradient colors={['rgba(255,49,216,0.25)', 'rgba(138,43,226,0.25)', 'transparent']} style={StyleSheet.absoluteFill} />}
             <LinearGradient
-              colors={['rgba(3,3,3,0.15)', 'transparent', COLORS.background]}
-              locations={[0, 0.45, 1]}
+              colors={['rgba(3,3,3,0.15)', 'transparent', 'transparent', COLORS.background]}
+              locations={[0, 0.3, 0.6, 1]}
               style={StyleSheet.absoluteFill}
             />
           </View>
+        )}
 
-          {/* 2. LOGO + PROFILE INFO (centrado) */}
+        {/* 2. LOGO + PROFILE INFO */}
+        {loading ? (
+          <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 14, alignItems: 'center' }}>
+            <SkeletonBox width={124} height={124} borderRadius={62} />
+            <SkeletonBox height={28} width="50%" borderRadius={8} />
+            <SkeletonBox height={32} width={100} borderRadius={16} />
+            <SkeletonBox height={13} width="90%" borderRadius={5} />
+            <SkeletonBox height={13} width="75%" borderRadius={5} />
+            <SkeletonBox height={13} width="55%" borderRadius={5} />
+          </View>
+        ) : (
+          <View>
           <View style={s.profileSection}>
-            {/* Logo centrado sobre el banner */}
             <View style={[s.logoRing, { shadowColor: pColor }]}>
               <View style={s.logoContainer}>
-                {brand.logo_url
-                  ? <Image source={{ uri: brand.logo_url }} style={s.logoImg} resizeMode="cover" />
+                {brand?.logo_url
+                  ? <Image source={{ uri: brand.logo_url }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                   : (
                     <LinearGradient colors={[pColor, '#bc1888']} style={s.logoImg}>
                       <Layers color="white" size={38} />
@@ -236,10 +302,8 @@ export default function BrandProfileScreen() {
               </View>
             </View>
 
-            {/* Nombre */}
-            <Text style={s.brandName}>{brand.name}</Text>
+            <Text style={s.brandName}>{brand?.name}</Text>
 
-            {/* Follow pill */}
             <TouchableOpacity
               onPress={handleFollow}
               activeOpacity={0.8}
@@ -254,14 +318,21 @@ export default function BrandProfileScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Descripción */}
-            {brand.description ? (
+            {brand?.description ? (
               <Text style={s.brandDesc} numberOfLines={4}>{brand.description}</Text>
             ) : null}
           </View>
+          </View>
+        )}
 
-          {/* 3. LINKS */}
-          {(brand.instagram_handle || brand.website_url) && (
+        {/* 3. LINKS */}
+        {loading ? (
+          <View style={{ paddingHorizontal: 20, marginTop: 20, flexDirection: 'row', justifyContent: 'center', gap: 10 }}>
+            <SkeletonBox height={40} width={110} borderRadius={20} />
+            <SkeletonBox height={40} width={110} borderRadius={20} />
+          </View>
+        ) : (brand?.instagram_handle || brand?.website_url) ? (
+          <View>
             <View style={s.actionsContainer}>
               <View style={s.socialRow}>
                 {brand.instagram_handle && (
@@ -278,31 +349,48 @@ export default function BrandProfileScreen() {
                 )}
               </View>
             </View>
-          )}
-
-          {/* 4. PRÓXIMOS EVENTOS — carousel horizontal */}
-          <View style={s.sectionHeader}>
-            <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
-              <Calendar color={pColor} size={15} />
-            </View>
-            <Text style={s.sectionTitle}>Próximos eventos</Text>
-            <View style={s.sectionLine} />
           </View>
+        ) : null}
 
-          {events.length === 0 ? (
-            <View style={s.emptyEvents}>
-              <Text style={s.emptyEventsText}>Sin eventos próximos</Text>
+        <Animated.View style={{ opacity: hasCachedParams ? eventsOpacity : 1 }}>
+        {/* 4. PRÓXIMOS EVENTOS */}
+        {loading ? (
+          <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
+            <SkeletonBox height={14} width={140} borderRadius={5} />
+            <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
+          </View>
+        ) : (
+          <View>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
+                <Calendar color={pColor} size={15} />
+              </View>
+              <Text style={s.sectionTitle}>Próximos eventos</Text>
+              <View style={s.sectionLine} />
             </View>
-          ) : (
+
+            {fetchingEvents ? (
+              <View style={{ paddingHorizontal: 26, marginTop: 4 }}>
+                <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
+              </View>
+            ) : events.length === 0 ? (
+              <View style={s.emptyEvents}>
+                <Text style={s.emptyEventsText}>Sin eventos próximos</Text>
+              </View>
+            ) : (
             <FlatList
               ref={upcomingListRef}
               horizontal
               data={events}
               keyExtractor={item => item.id}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 24, paddingRight: 24, gap: UPCOMING_GAP }}
+              contentContainerStyle={{ paddingLeft: 26, paddingRight: 14, gap: UPCOMING_GAP }}
               snapToInterval={UPCOMING_SNAP}
               decelerationRate="fast"
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              initialNumToRender={6}
               onScroll={e => upcomingScrollX.current = e.nativeEvent.contentOffset.x}
               scrollEventThrottle={16}
               renderItem={({ item, index }) => {
@@ -312,11 +400,11 @@ export default function BrandProfileScreen() {
                   <TouchableOpacity
                     style={s.eventCard}
                     activeOpacity={0.9}
-                    onPress={() => handleUpcomingPress(index, item.id)}
+                    onPress={() => handleUpcomingPress(index, item)}
                   >
-                    <ImageBackground source={{ uri: item.image_url }} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
+                    <ImageBackground source={item.image_url ? { uri: item.image_url } : undefined} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
                       <LinearGradient
-                        colors={['transparent', 'rgba(3,3,3,0.7)', '#030303']}
+                        colors={item.image_url ? ['transparent', 'rgba(3,3,3,0.7)', '#030303'] : [pColor + '44', 'rgba(3,3,3,0.85)', '#030303']}
                         locations={[0.4, 0.8, 1]}
                         style={s.eventCardOverlay}
                       >
@@ -359,68 +447,77 @@ export default function BrandProfileScreen() {
               }}
             />
           )}
+          </View>
+        )}
 
-          {/* 5. EVENTOS PASADOS — carousel horizontal */}
-          {pastEvents.length > 0 && (
-            <View style={{ marginTop: 16 }}>
-              <View style={s.sectionHeader}>
-                <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
-                  <Clock color={pColor} size={15} />
-                </View>
-                <Text style={s.sectionTitle}>Eventos pasados</Text>
-                <View style={s.sectionLine} />
-              </View>
-
-              <FlatList
-                ref={pastListRef}
-                horizontal
-                data={pastEvents}
-                keyExtractor={item => item.id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingLeft: 24, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
-                snapToInterval={PAST_SNAP}
-                decelerationRate="fast"
-                onScroll={e => pastScrollX.current = e.nativeEvent.contentOffset.x}
-                scrollEventThrottle={16}
-                renderItem={({ item, index }) => {
-                  const { day, month } = formatDateBadge(item.date);
-                  return (
-                    <TouchableOpacity
-                      style={s.pastCard}
-                      activeOpacity={0.85}
-                      onPress={() => handlePastPress(index, item.id)}
-                    >
-                      <View style={s.pastImgWrap}>
-                        <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                        <View style={s.pastOverlay} />
-                        <BlurView intensity={30} tint="dark" style={s.pastDateBadge}>
-                          <Text style={s.pastDateDay}>{day}</Text>
-                          <Text style={s.pastDateMonth}>{month}</Text>
-                        </BlurView>
-                      </View>
-                      <View style={s.pastInfo}>
-                        <Text style={s.pastTitle} numberOfLines={2}>{item.title}</Text>
-                        <Text style={[s.pastSub, { color: pColor }]}>Ver detalles →</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-              />
+        {/* 5. EVENTOS PASADOS */}
+        {loading ? (
+          <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
+            <SkeletonBox height={14} width={130} borderRadius={5} />
+            <View style={{ flexDirection: 'row', gap: 14 }}>
+              <SkeletonBox height={310} width={255} borderRadius={26} />
+              <SkeletonBox height={310} width={255} borderRadius={26} />
             </View>
-          )}
-        </Animated.ScrollView>
-      ) : (
-        <View style={s.loadingWrap}>
-          {/* loading state vacío — fadeAnim empieza en 0 así que nada se ve */}
-        </View>
-      )}
-    </View>
+          </View>
+        ) : fetchingEvents ? null : pastEvents.length > 0 ? (
+          <View style={{ marginTop: 16 }}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
+                <Clock color={pColor} size={15} />
+              </View>
+              <Text style={s.sectionTitle}>Eventos pasados</Text>
+              <View style={s.sectionLine} />
+            </View>
+
+            <FlatList
+              ref={pastListRef}
+              horizontal
+              data={pastEvents}
+              keyExtractor={item => item.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 24, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
+              snapToInterval={PAST_SNAP}
+              decelerationRate="fast"
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={8}
+              windowSize={5}
+              initialNumToRender={6}
+              onScroll={e => pastScrollX.current = e.nativeEvent.contentOffset.x}
+              scrollEventThrottle={16}
+              renderItem={({ item, index }) => {
+                const { day, month } = formatDateBadge(item.date);
+                return (
+                  <TouchableOpacity
+                    style={s.pastCard}
+                    activeOpacity={0.85}
+                    onPress={() => handlePastPress(index, item)}
+                  >
+                    <View style={s.pastImgWrap}>
+                      <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                      <View style={s.pastOverlay} />
+                      <BlurView intensity={30} tint="dark" style={s.pastDateBadge}>
+                        <Text style={s.pastDateDay}>{day}</Text>
+                        <Text style={s.pastDateMonth}>{month}</Text>
+                      </BlurView>
+                    </View>
+                    <View style={s.pastInfo}>
+                      <Text style={s.pastTitle} numberOfLines={2}>{item.title}</Text>
+                      <Text style={[s.pastSub, { color: pColor }]}>Ver detalles →</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        ) : null}
+        </Animated.View>
+      </Animated.ScrollView>
+    </ReAnimated.View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
-  loadingWrap: { flex: 1 },
 
   // ── Fixed nav ──
   fixedHeader: {
@@ -510,7 +607,7 @@ const s = StyleSheet.create({
 
   // ── Event card (próximos) — mismo estilo que home ──
   eventCard: {
-    width: width - 48, height: 420,
+    width: width - 52, height: width - 52,
     borderRadius: 32, overflow: 'hidden',
     backgroundColor: '#0A0A0A',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',

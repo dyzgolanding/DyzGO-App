@@ -42,14 +42,24 @@ serve(async (req) => {
         }
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('email, full_name')
-      .eq('id', ticket.user_id)
-      .single()
+    let userEmail = ticket.guest_email || null;
+    let userName = ticket.guest_name || null;
 
-    if (!profile?.email || !event) {
-      throw new Error("Faltan datos críticos para enviar el correo")
+    if (ticket.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', ticket.user_id)
+          .single()
+          
+        if (profile) {
+            if (!userEmail) userEmail = profile.email;
+            if (!userName) userName = profile.full_name;
+        }
+    }
+
+    if (!userEmail || !event) {
+      throw new Error("Faltan datos críticos (email o evento) para enviar el correo")
     }
 
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=210x210&margin=0&data=${encodeURIComponent(ticket.qr_hash)}`
@@ -104,7 +114,7 @@ serve(async (req) => {
 		</tr>
 		<tr>
 		  <td bgcolor="#FFFFFF" style="padding:20px 60px; border-bottom:1px dotted #ccc;">
-												<h2>${profile.full_name}, ¡Compra realizada con éxito!</h2>
+												<h2>${userName || 'Invitado'}, ¡Aquí tienes tus entradas!</h2>
 									  </td>
 		</tr>
 		<tr>
@@ -195,7 +205,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'DyzGO. <tickets@dyzgo.com>',
-        to: profile.email,
+        to: userEmail,
         subject: `🎟️ Tus eTickets DyzGO.`,
         html: html,
       }),

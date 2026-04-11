@@ -12,7 +12,8 @@ import { timing } from '../../lib/animation';
 import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
     ArrowLeft,
     Calendar,
@@ -24,13 +25,13 @@ import {
     Navigation,
     Share2
 } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     FlatList,
-    Image,
     InteractionManager,
     Linking,
     Platform,
@@ -137,8 +138,9 @@ export default function ClubDetailScreen() {
     const { toggleSave, savedItems } = useSaved();
 
     // ── Optimistic UI: datos visuales pasados por parámetro ──
-    const optImageUrl = params.imageUrl as string | undefined;
-    const optName     = params.name as string | undefined;
+    const optImageUrl     = params.imageUrl as string | undefined;
+    const optName         = params.name as string | undefined;
+    const optInstagramUrl = params.instagramUrl as string | undefined;
     const hasOptimisticData = !!(optImageUrl || optName);
 
     const insets = useSafeAreaInsets();
@@ -210,7 +212,7 @@ export default function ClubDetailScreen() {
 
             const { data: eventsData, error: eventsError } = await supabase
                 .from('events')
-                .select('*, ticket_tiers(*)') 
+                .select('*, ticket_tiers(*), experiences(id, name, logo_url)') 
                 .eq('club_name', clubData.name)
                 .gte('end_date', today) 
                 .order('date', { ascending: true });
@@ -300,7 +302,7 @@ export default function ClubDetailScreen() {
         }
     };
 
-    const instagramLink = club?.instagram || club?.instagram_url;
+    const instagramLink = club?.instagram || club?.instagram_url || optInstagramUrl;
 
     return (
         <View style={styles.container}>
@@ -366,7 +368,10 @@ export default function ClubDetailScreen() {
                             <Image
                                 source={{ uri: club?.image || optImageUrl }}
                                 style={styles.squareImage}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                transition={150}
+                                cachePolicy="memory-disk"
+                                placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
                             />
                         ) : (
                             <View style={[styles.squareImage, { backgroundColor: '#111' }]} />
@@ -466,6 +471,7 @@ export default function ClubDetailScreen() {
                                     contentContainerStyle={styles.horizontalEventsContainer}
                                     data={relatedEvents}
                                     keyExtractor={(item: any) => item.id.toString()}
+                                    removeClippedSubviews={true}
                                     initialNumToRender={3}
                                     maxToRenderPerBatch={3}
                                     windowSize={5}
@@ -476,14 +482,17 @@ export default function ClubDetailScreen() {
                                                 scaleTo={0.96}
                                                 haptic="light"
                                                 style={styles.glassEventCard}
-                                                onPress={() => router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date } })}
+                                                onPress={() => { const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, category: event.area || event.category, hour: event.hour, clubName: club?.name, clubImage: club?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }}
                                             >
                                                 <View style={styles.glassEventImgWrap}>
                                                     {event?.image_url ? (
                                                         <Image
                                                             source={{ uri: event.image_url }}
                                                             style={StyleSheet.absoluteFill}
-                                                            resizeMode="cover"
+                                                            contentFit="cover"
+                                                            transition={150}
+                                                            cachePolicy="memory-disk"
+                                                            placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }}
                                                         />
                                                     ) : (
                                                         <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: '#111' }} />

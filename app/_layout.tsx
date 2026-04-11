@@ -7,14 +7,16 @@ import { withLayoutContext, useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Easing, StatusBar, View } from 'react-native';
+import { Easing, StatusBar, View } from 'react-native';
+import { Bell } from 'lucide-react-native';
 import { AppDataProvider, useAppData } from '../context/AppDataContext';
 import { SavedProvider } from '../context/SavedContext';
 import { OnboardingContext } from '../context/OnboardingContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { PermissionModal } from '../components/PermissionModal';
 import { registerForPushNotificationsAsync } from '../lib/push';
 import { supabase } from '../lib/supabase';
-import { ShakeBugReporter } from '../components/ShakeBugReporter'; // <-- IMPORTAMOS EL COMPONENTE
+
 
 const { Navigator, Screen: StackScreen } = createStackNavigator();
 const Stack = withLayoutContext(Navigator);
@@ -26,13 +28,13 @@ const NAV_EASING       = Easing.bezier(0.25, 0.46, 0.45, 0.94); // ease-out-quad
 const NAV_BACK_EASING  = Easing.bezier(0.55, 0, 0.45, 1);       // ease-in-out-quad
 
 const pushTransitionSpec = {
-  open:  { animation: 'timing' as const, config: { duration: 300, easing: NAV_EASING      } },
-  close: { animation: 'timing' as const, config: { duration: 220, easing: NAV_BACK_EASING } },
+  open:  { animation: 'timing' as const, config: { duration: 120, easing: NAV_EASING      } },
+  close: { animation: 'timing' as const, config: { duration: 100, easing: NAV_BACK_EASING } },
 };
 
 const modalTransitionSpec = {
-  open:  { animation: 'timing' as const, config: { duration: 340, easing: NAV_EASING      } },
-  close: { animation: 'timing' as const, config: { duration: 260, easing: NAV_BACK_EASING } },
+  open:  { animation: 'timing' as const, config: { duration: 200, easing: NAV_EASING      } },
+  close: { animation: 'timing' as const, config: { duration: 160, easing: NAV_BACK_EASING } },
 };
 
 // Lightweight interpolator: 100% horizontal slide only.
@@ -88,12 +90,16 @@ const PureBlackTheme = {
   },
 };
 
-export default function RootLayout() {
+function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [isBiometricAuthorized, setIsBiometricAuthorized] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+
+  // Modal de permisos push — se muestra antes del diálogo de iOS
+  const [showPushModal, setShowPushModal] = useState(false);
+  const pendingPushUserId = useRef<string | null>(null);
 
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
@@ -109,7 +115,7 @@ export default function RootLayout() {
       if (session) {
         checkOnboardingStatus(session.user.id);
         handleBiometricCheck();
-        registerForPushNotificationsAsync(session.user.id).catch(console.error);
+        checkAndRequestPush(session.user.id);
       } else {
         setNeedsOnboarding(false);
         setIsBiometricAuthorized(true);
@@ -128,7 +134,7 @@ export default function RootLayout() {
 
       if (event === 'SIGNED_IN' && session) {
         checkOnboardingStatus(session.user.id);
-        registerForPushNotificationsAsync(session.user.id).catch(console.error);
+        checkAndRequestPush(session.user.id);
       }
     });
 
@@ -146,6 +152,24 @@ export default function RootLayout() {
       responseListener.current?.remove();
     };
   }, []);
+
+  // Verifica el estado del permiso push ANTES de pedirlo al sistema.
+  // Si ya fue decidido (granted/denied), no mostramos nuestro modal.
+  // Si es 'undetermined', mostramos nuestra explicación primero.
+  const checkAndRequestPush = async (userId: string) => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status === 'undetermined') {
+        pendingPushUserId.current = userId;
+        setShowPushModal(true);
+      } else {
+        registerForPushNotificationsAsync(userId).catch(() => {});
+      }
+    } catch {
+      // Si falla la verificación, intentamos igual de forma silenciosa
+      registerForPushNotificationsAsync(userId).catch(() => {});
+    }
+  };
 
   const checkOnboardingStatus = async (userId: string) => {
     try {
@@ -200,11 +224,7 @@ export default function RootLayout() {
   }, [session, segments, isReady, isRecoveryMode, isBiometricAuthorized, needsOnboarding]);
 
   if (!isReady || !isBiometricAuthorized) {
-    return (
-      <View style={{flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center'}}>
-        <ActivityIndicator size="large" color="#FF31D8" />
-      </View>
-    );
+    return <View style={{flex: 1, backgroundColor: '#030303'}} />;
   }
 
   return (
@@ -215,10 +235,29 @@ export default function RootLayout() {
         <SavedProvider>
           <ThemeProvider value={PureBlackTheme}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
+
+            {/* Modal de permisos push — aparece antes del diálogo del sistema iOS */}
+            <PermissionModal
+              visible={showPushModal}
+              icon={<Bell color="#FF31D8" size={36} />}
+              title="Mantente al día"
+              description="Activa las notificaciones para enterarte primero de nuevos eventos, preventas y actualizaciones de tus tickets."
+              allowLabel="Activar notificaciones"
+              denyLabel="Ahora no"
+              onAllow={() => {
+                setShowPushModal(false);
+                if (pendingPushUserId.current) {
+                  registerForPushNotificationsAsync(pendingPushUserId.current).catch(() => {});
+                  pendingPushUserId.current = null;
+                }
+              }}
+              onDeny={() => {
+                setShowPushModal(false);
+                pendingPushUserId.current = null;
+              }}
+            />
             
-            {/* MAGIA: Envolvemos TODO el Stack con el ShakeBugReporter */}
-            <ShakeBugReporter>
-                <Stack
+            <Stack
                   screenOptions={{
                     headerShown: false,
                     cardStyle: { backgroundColor: '#000000' },
@@ -250,7 +289,6 @@ export default function RootLayout() {
                 <StackScreen name="(settings)" />
                 <StackScreen name="(staff)" />
               </Stack>
-            </ShakeBugReporter>
 
           </ThemeProvider>
         </SavedProvider>
@@ -259,3 +297,5 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+export default RootLayout;

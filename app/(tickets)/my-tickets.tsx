@@ -1,8 +1,13 @@
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { Calendar, Ghost, MapPin } from 'lucide-react-native';
+import { useFocusEffect } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { Calendar, Ghost, MapPin, Ticket, Wine, GlassWater, Clock, Zap, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { FlatList, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SkeletonBox } from '../../components/SkeletonBox';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -53,6 +58,14 @@ const formatCardDateTime = (dateStr: string, timeStr: string) => {
   return `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}${timeString}`;
 };
 
+const CONSUMO_STATUS: Record<string, { label: string; color: string; icon: any }> = {
+  inactive:  { label: 'Sin Activar',  color: '#71717a', icon: GlassWater },
+  queued:    { label: 'En Cola',      color: '#f59e0b', icon: Clock },
+  preparing: { label: '¡Preparando!', color: '#f97316', icon: Zap },
+  delivered: { label: 'Entregado',    color: '#22c55e', icon: CheckCircle2 },
+  expired:   { label: 'Expirado',     color: '#ef4444', icon: AlertTriangle },
+};
+
 // --- HELPER ACTUALIZADO: Verificar si el evento finalizó con fecha y hora exacta ---
 const isEventFinished = (evt: any) => {
   if (!evt) return false;
@@ -74,8 +87,12 @@ export default function MyTicketsScreen() {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'tickets' | 'consumos'>('tickets');
+  const [consumoItems, setConsumoItems] = useState<any[]>([]);
+  const [consumosLoading, setConsumosLoading] = useState(false);
   const router = useRouter();
   const navTop = useNavBarPaddingTop();
+  const insets = useSafeAreaInsets();
   const fadeAnim = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fadeAnim.value }));
 
@@ -88,8 +105,41 @@ export default function MyTicketsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadTickets();
+      loadConsumos();
     }, [])
   );
+
+  const loadConsumos = async () => {
+    setConsumosLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: orders } = await supabase
+        .from('consumption_orders')
+        .select(`
+          id, total_amount, created_at,
+          events(title, image_url),
+          consumption_order_items(id, status)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'paid')
+        .order('created_at', { ascending: false });
+      setConsumoItems(orders || []);
+    } catch (e) {
+      console.error('[loadConsumos]', e);
+    } finally {
+      setConsumosLoading(false);
+    }
+  };
+
+  const getOrderStatus = (items: { status: string }[]) => {
+    if (!items?.length) return 'inactive';
+    if (items.some(i => i.status === 'preparing')) return 'preparing';
+    if (items.some(i => i.status === 'queued')) return 'queued';
+    if (items.every(i => i.status === 'delivered')) return 'delivered';
+    if (items.every(i => i.status === 'expired')) return 'expired';
+    return 'inactive';
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -253,7 +303,9 @@ export default function MyTicketsScreen() {
                   <Image
                     source={{ uri: item.events.image_url }}
                     style={styles.eventImage}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    transition={150}
+                    cachePolicy="memory-disk"
                   />
                   {isPast && <View style={styles.pastImageOverlay} />}
                 </>
@@ -319,39 +371,149 @@ export default function MyTicketsScreen() {
       </View>
 
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-        <NavBar title="MIS TICKETS" onBack={() => router.back()} />
 
-        <SectionList
-          style={{ flex: 1 }}
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={renderTicket}
-          renderSectionHeader={renderHeader}
-          contentContainerStyle={[styles.list, { paddingTop: navTop }]}
-          stickySectionHeadersEnabled={false} 
-          refreshControl={
-            <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={onRefresh} 
-                tintColor={COLORS.neonPink} 
+        {activeTab === 'tickets' ? (
+          <SectionList
+            style={{ flex: 1 }}
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            renderItem={renderTicket}
+            renderSectionHeader={renderHeader}
+            contentContainerStyle={[styles.list, { paddingTop: navTop + 52 }]}
+            stickySectionHeadersEnabled={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.neonPink}
                 colors={[COLORS.neonPink, COLORS.neonPink]}
                 progressBackgroundColor="#111"
-            />
-          }
-          ListEmptyComponent={
-            !loading ? (
-                <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIconCircle}>
-                        <Ghost color={COLORS.neonPink} size={40} />
+              />
+            }
+            ListEmptyComponent={
+              loading ? (
+                <View style={{ paddingHorizontal: 16, gap: 12 }}>
+                  {[0, 1, 2].map(i => (
+                    <View key={i} style={{ flexDirection: 'row', gap: 14, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' }}>
+                      <SkeletonBox width={56} height={64} borderRadius={12} />
+                      <View style={{ flex: 1, gap: 8 }}>
+                        <SkeletonBox height={14} width="70%" borderRadius={6} />
+                        <SkeletonBox height={12} width="45%" borderRadius={6} />
+                        <SkeletonBox height={12} width="55%" borderRadius={6} />
+                      </View>
+                      <SkeletonBox width={44} height={44} borderRadius={10} />
                     </View>
-                    <Text style={styles.emptyTitle}>No tienes tickets disponibles</Text>
-                    <Text style={styles.emptySubtitle}>
-                        Tus próximas entradas aparecerán aquí.
-                    </Text>
+                  ))}
                 </View>
-            ) : null
-          }
-        />
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <View style={styles.emptyIconCircle}>
+                    <Ghost color={COLORS.neonPink} size={40} />
+                  </View>
+                  <Text style={styles.emptyTitle}>No tienes tickets disponibles</Text>
+                  <Text style={styles.emptySubtitle}>Tus próximas entradas aparecerán aquí.</Text>
+                </View>
+              )
+            }
+          />
+        ) : (
+          <FlatList
+            data={consumoItems}
+            keyExtractor={order => order.id}
+            contentContainerStyle={[styles.list, { paddingTop: navTop + 52 }]}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            initialNumToRender={6}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={consumosLoading} onRefresh={loadConsumos} tintColor="#a78bfa" colors={['#a78bfa']} progressBackgroundColor="#111" />
+            }
+            renderItem={({ item: order }) => {
+              const items = order.consumption_order_items ?? [];
+              const dominantStatus = getOrderStatus(items);
+              const cfg = CONSUMO_STATUS[dominantStatus] ?? CONSUMO_STATUS.inactive;
+              const StatusIcon = cfg.icon;
+              const eventData = order.events;
+              const inactive = items.filter((i: any) => i.status === 'inactive').length;
+              const inQueue = items.filter((i: any) => i.status === 'queued' || i.status === 'preparing').length;
+              const delivered = items.filter((i: any) => i.status === 'delivered').length;
+              return (
+                <TouchableOpacity
+                  onPress={() => router.push({ pathname: '/(consumption)/consumption-order' as any, params: { orderId: order.id } })}
+                  style={[styles.ticketCard, { borderColor: cfg.color + '30' }]}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardContent}>
+                    <View style={styles.leftSection}>
+                      <Text style={styles.eventName} numberOfLines={1}>{eventData?.title ?? 'Evento'}</Text>
+                      <Text style={{ color: '#a78bfa', fontSize: 12, fontWeight: '900', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                        {items.length} {items.length === 1 ? 'ítem' : 'ítems'} · ${order.total_amount?.toLocaleString('es-CL')}
+                      </Text>
+                      <View style={[styles.badge, { backgroundColor: cfg.color + '15', borderColor: cfg.color + '40' }]}>
+                        <StatusIcon size={10} color={cfg.color} style={{ marginRight: 4 }} />
+                        <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        {inactive > 0 && <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '700' }}>{inactive} sin activar</Text>}
+                        {inQueue > 0 && <Text style={{ color: '#f59e0b', fontSize: 11, fontWeight: '700' }}>{inQueue} en cola</Text>}
+                        {delivered > 0 && <Text style={{ color: '#22c55e', fontSize: 11, fontWeight: '700' }}>{delivered} entregado{delivered !== 1 ? 's' : ''}</Text>}
+                      </View>
+                    </View>
+                    <View style={[styles.rightSection, { alignItems: 'center', justifyContent: 'center' }]}>
+                      <View style={[styles.eventImageContainer, { backgroundColor: cfg.color + '15', justifyContent: 'center', alignItems: 'center' }]}>
+                        {eventData?.image_url
+                          ? <Image source={{ uri: eventData.image_url }} style={styles.eventImage} contentFit="cover" transition={150} cachePolicy="memory-disk" />
+                          : <StatusIcon size={36} color={cfg.color} />
+                        }
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              !consumosLoading ? (
+                <View style={styles.emptyContainer}>
+                  <View style={[styles.emptyIconCircle, { borderColor: 'rgba(139,92,246,0.3)', backgroundColor: 'rgba(139,92,246,0.05)' }]}>
+                    <Wine color="#a78bfa" size={40} />
+                  </View>
+                  <Text style={styles.emptyTitle}>Sin consumos por ahora</Text>
+                  <Text style={styles.emptySubtitle}>Compra bebidas desde la carta de tu evento favorito.</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
+
+        <NavBar title="MIS TICKETS" onBack={() => router.back()} />
+
+        {/* Tabs flotando */}
+        <View style={[styles.tabRow, { top: insets.top + 82 }]}>
+          <View style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
+            <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+              <TouchableOpacity
+                onPress={() => setActiveTab('tickets')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: activeTab === 'tickets' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                activeOpacity={0.8}
+              >
+                <Ticket size={14} color={activeTab === 'tickets' ? COLORS.neonPink : 'rgba(251,251,251,0.45)'} />
+                <Text style={{ color: activeTab === 'tickets' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: activeTab === 'tickets' ? '800' : '600', fontSize: 13 }}>Tickets</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setActiveTab('consumos')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: activeTab === 'consumos' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                activeOpacity={0.8}
+              >
+                <Wine size={14} color={activeTab === 'consumos' ? COLORS.neonPink : 'rgba(251,251,251,0.45)'} />
+                <Text style={{ color: activeTab === 'consumos' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: activeTab === 'consumos' ? '800' : '600', fontSize: 13 }}>
+                  Consumos{consumoItems.length > 0 ? ` (${consumoItems.length})` : ''}
+                </Text>
+              </TouchableOpacity>
+            </BlurView>
+          </View>
+        </View>
+
       </Animated.View>
     </View>
   );
@@ -392,5 +554,8 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   emptyIconCircle: { width: 86, height: 86, borderRadius: 43, backgroundColor: 'rgba(138, 43, 226, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(138, 43, 226, 0.3)' },
   emptyTitle: { color: '#FBFBFB', fontSize: 20, fontWeight: '900', fontStyle: 'italic', marginBottom: 8, textAlign: 'center', letterSpacing: -1 },
-  emptySubtitle: { color: COLORS.textZinc, fontSize: 14, textAlign: 'center', lineHeight: 22, fontWeight: '400' }
+  emptySubtitle: { color: COLORS.textZinc, fontSize: 14, textAlign: 'center', lineHeight: 22, fontWeight: '400' },
+
+  // Tabs
+  tabRow: { position: 'absolute', left: 0, right: 0, zIndex: 10, alignItems: 'center' },
 });

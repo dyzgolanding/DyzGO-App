@@ -1,21 +1,25 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import {
   Check, ChevronRight, Instagram, Star,
   UserCheck, UserMinus, UserPlus, X,
 } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import React, { useEffect, useState } from 'react';
+import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
-  Alert, Animated,
-  Dimensions, Image, ScrollView, StatusBar,
+  Alert,
+  Dimensions, ScrollView, StatusBar,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
+import { SkeletonBox } from '../../components/SkeletonBox';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +41,7 @@ export default function UserProfileScreen() {
   const navTop = useNavBarPaddingTop();
   const { id: profileId, name: initialName } = useLocalSearchParams<{ id: string; name: string }>();
 
+  const [loading, setLoading] = useState(true);
   const [friendState, setFriendState] = useState<FriendState>('none');
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [mutualCount, setMutualCount] = useState(0);
@@ -51,12 +56,11 @@ export default function UserProfileScreen() {
     instagram_username: null as string | null,
   });
 
-  const btnScale = useRef(new Animated.Value(1)).current;
-
   useEffect(() => { if (profileId) loadAll(); }, [profileId]);
 
   async function loadAll() {
     await Promise.all([fetchProfile(), checkFriendship(), fetchMutualFriends()]);
+    setLoading(false);
   }
 
   async function fetchMutualFriends() {
@@ -120,13 +124,6 @@ export default function UserProfileScreen() {
     }
   }
 
-  const pulsBtn = () => {
-    Animated.sequence([
-      Animated.timing(btnScale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
-      Animated.spring(btnScale, { toValue: 1, friction: 4, useNativeDriver: true }),
-    ]).start();
-  };
-
   // Función para manejar las acciones principales (Agregar, Cancelar, Aceptar)
   const handleAction = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -149,7 +146,7 @@ export default function UserProfileScreen() {
             sendPushNotification(target.expo_push_token, 'Solicitud de Amistad', `Alguien quiere conectar contigo en DyzGO`, { url: '/notifications' }).catch(console.error);
           }
           setFriendState('request_sent');
-          pulsBtn();
+
         }
       } else if (friendState === 'request_sent') {
         await supabase.from('follows').delete().match({ follower_id: user.id, following_id: profileId });
@@ -167,7 +164,7 @@ export default function UserProfileScreen() {
         ]);
         if (!e1.error && !e2.error) {
           setFriendState('friends');
-          pulsBtn();
+
           await supabase.from('notifications').insert({ user_id: profileId, related_id: user.id, type: 'new_friend', title: '¡Solicitud Aceptada!', message: 'aceptó tu solicitud de amistad.', is_read: false });
           // Push al que envió la solicitud original
           const { data: requester } = await supabase.from('profiles').select('expo_push_token').eq('id', profileId).single();
@@ -176,8 +173,7 @@ export default function UserProfileScreen() {
           }
         }
       } else if (friendState === 'friends') {
-        // Si ya son amigos y tocan el botón principal, solo hacemos el efecto visual
-        pulsBtn();
+        // Ya son amigos
       }
     } catch (e) {
       console.error('[user-profile] action:', e);
@@ -219,7 +215,7 @@ export default function UserProfileScreen() {
   }[friendState];
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#030303' }}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: '#030303' }}>
       <StatusBar barStyle="light-content" />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
@@ -245,16 +241,25 @@ export default function UserProfileScreen() {
 
       <NavBar onBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40, paddingTop: navTop }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40, paddingTop: navTop, flexGrow: 1, justifyContent: 'center' }]} showsVerticalScrollIndicator={false}>
 
         {/* AVATAR + NOMBRE */}
+        {loading ? (
+          <View style={[s.heroSection, { gap: 14 }]}>
+            <SkeletonBox width={96} height={96} borderRadius={48} />
+            <SkeletonBox height={22} width={160} borderRadius={7} />
+            <SkeletonBox height={14} width={100} borderRadius={5} />
+            <SkeletonBox height={26} width={130} borderRadius={13} />
+          </View>
+        ) : (
+        <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
         <View style={s.heroSection}>
           {/* Anillo del avatar con color de nivel */}
           <View style={[s.avatarOuter, { borderColor: lc, shadowColor: lc }]}>
             <LinearGradient colors={[lc + '50', lc + '15', 'transparent']} style={StyleSheet.absoluteFill} />
             <View style={s.avatarInner}>
               {profile.avatar_url
-                ? <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} />
+                ? <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 : <Text style={s.avatarChar}>{initials}</Text>
               }
             </View>
@@ -269,9 +274,12 @@ export default function UserProfileScreen() {
             <Text style={[s.rankText, { color: lc }]}>NIVEL {profile.level} · {LEVEL_LABELS[profile.level] ?? 'Novato'}</Text>
           </View>
         </View>
+        </ReAnimated.View>
+        )}
 
         {/* AMIGOS EN COMÚN */}
         {!isOwnProfile && mutualCount > 0 && (
+          <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
           <View style={s.mutualRow}>
             <View style={s.mutualAvatars}>
               {mutualAvatars.slice(0, 3).map((url, i) => (
@@ -279,6 +287,9 @@ export default function UserProfileScreen() {
                   key={i}
                   source={{ uri: url }}
                   style={[s.mutualAvatar, { marginLeft: i === 0 ? 0 : -8, zIndex: 3 - i }]}
+                  contentFit="cover"
+                  transition={150}
+                  cachePolicy="memory-disk"
                 />
               ))}
             </View>
@@ -286,13 +297,21 @@ export default function UserProfileScreen() {
               {mutualCount === 1 ? '1 amigo en común' : `${mutualCount} amigos en común`}
             </Text>
           </View>
+          </ReAnimated.View>
         )}
 
         {/* INSTAGRAM */}
         {profile.instagram_username && (
+          <ReAnimated.View entering={FadeInUp.duration(300).delay(160).springify()}>
           <TouchableOpacity
             style={s.igPill}
-            onPress={() => Linking.openURL(`https://instagram.com/${profile.instagram_username}`)}
+            onPress={() => {
+              const handle = (profile.instagram_username ?? '')
+                .replace('@', '')
+                .trim()
+                .replace(/[^a-zA-Z0-9_.]/g, '');
+              if (handle) Linking.openURL(`https://instagram.com/${handle}`);
+            }}
             activeOpacity={0.8}
           >
             <Instagram color={COLORS.neonPink} size={18} />
@@ -301,11 +320,13 @@ export default function UserProfileScreen() {
               <ChevronRight color={COLORS.textSecondary} size={14} />
             </View>
           </TouchableOpacity>
+          </ReAnimated.View>
         )}
 
         {/* BOTÓN DE AMISTAD */}
         {!isOwnProfile && (
-          <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+          <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
+          <View>
             <TouchableOpacity
               style={[s.actionBtn, { backgroundColor: BTN_CONFIG.bg ?? 'transparent', borderColor: BTN_CONFIG.border ?? 'transparent' }]}
               onPress={handleAction}
@@ -321,7 +342,8 @@ export default function UserProfileScreen() {
               <BTN_CONFIG.Icon color={BTN_CONFIG.textColor} size={20} />
               <Text style={[s.actionText, { color: BTN_CONFIG.textColor }]}>{BTN_CONFIG.label}</Text>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
+          </ReAnimated.View>
         )}
 
         {/* Ya somos amigos – botón eliminar secundario */}
@@ -333,7 +355,7 @@ export default function UserProfileScreen() {
         )}
 
       </ScrollView>
-    </View>
+    </ReAnimated.View>
   );
 }
 

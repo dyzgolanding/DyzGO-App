@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../hooks/useNavRouter';
 import {
     ArrowRight,
     BellRing,
@@ -17,6 +17,7 @@ import {
     X
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import {
     Alert,
     Animated,
@@ -47,6 +48,9 @@ export default function NotificationsScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current; 
 
+  const isMounted = useRef(true);
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -60,8 +64,8 @@ export default function NotificationsScreen() {
   useEffect(() => {
     if (!loading) {
         Animated.parallel([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-            Animated.timing(translateY, { toValue: 0, duration: 500, useNativeDriver: true })
+            Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+            Animated.timing(translateY, { toValue: 0, duration: 250, useNativeDriver: true })
         ]).start();
     }
   }, [loading]);
@@ -124,8 +128,8 @@ export default function NotificationsScreen() {
           setOlderNotifications(older);
       }
       
-    } catch (e) { 
-      console.error("Error fetching notifications:", e); 
+    } catch (_e) {
+      // Error silencioso: el usuario verá la lista vacía y puede hacer pull-to-refresh
     } finally { 
       if (!refreshing) setTimeout(() => setLoading(false), 50);
       else setLoading(false);
@@ -168,7 +172,7 @@ export default function NotificationsScreen() {
 
             if (error2) throw error2;
 
-            Alert.alert("¡Conectados!", "Ahora son amigos.");
+            if (isMounted.current) Alert.alert("¡Conectados!", "Ahora son amigos.");
         } else {
             // Rechazar: Borramos la solicitud de follows
             await supabase
@@ -176,17 +180,16 @@ export default function NotificationsScreen() {
                 .delete()
                 .eq('follower_id', requesterId)
                 .eq('following_id', user.id);
-                
-            Alert.alert("Solicitud eliminada", "Has rechazado la solicitud.");
+
+            if (isMounted.current) Alert.alert("Solicitud eliminada", "Has rechazado la solicitud.");
         }
 
         // Marcar notificación como leída
         await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
         updateLocalNotification(notification.id, { is_read: true });
 
-    } catch (e) {
-        console.error("Error friend request:", e);
-        Alert.alert("Error", "No se pudo procesar la solicitud.");
+    } catch (_e) {
+        if (isMounted.current) Alert.alert("Error", "No se pudo procesar la solicitud.");
     }
   };
 
@@ -216,7 +219,27 @@ export default function NotificationsScreen() {
         case 'event_reminder':
         case 'new_event_in_club':
           if (notification.related_id) {
-            router.push({ pathname: '/event-detail', params: { id: notification.related_id } });
+            const { data: ev } = await supabase
+              .from('events')
+              .select('*, clubs(name, image), experiences(name, logo_url, id)')
+              .eq('id', notification.related_id)
+              .single();
+            router.push({ pathname: '/event-detail', params: ev ? {
+              id: ev.id,
+              status: ev.status,
+              imageUrl: ev.image_url,
+              title: ev.title,
+              date: ev.date,
+              hour: ev.hour,
+              accentColor: ev.accent_color,
+              category: ev.category,
+              clubName: ev.club_name || ev.clubs?.name,
+              clubImage: ev.clubs?.image,
+              producerName: ev.experiences?.name,
+              producerLogo: ev.experiences?.logo_url,
+              producerId: ev.experiences?.id,
+              instagramUrl: ev.instagram_url,
+            } : { id: notification.related_id } });
           }
           break;
         // Marketplace → gestionar desde allí
@@ -238,8 +261,8 @@ export default function NotificationsScreen() {
           router.push('/home');
           break;
       }
-    } catch (e) {
-      console.error("Error handling notification:", e);
+    } catch (_e) {
+      // Error silencioso al navegar
     }
   };
 
@@ -338,7 +361,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -349,6 +372,7 @@ export default function NotificationsScreen() {
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100, paddingTop: navTop, flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
             <RefreshControl
                 refreshing={refreshing}
@@ -372,24 +396,28 @@ export default function NotificationsScreen() {
               
               {/* SECCIÓN 1: ÚLTIMOS 7 DÍAS */}
               {recentNotifications.length > 0 && (
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
                   <View style={styles.sectionContainer}>
                       <Text style={styles.sectionHeader}>Últimos 7 días</Text>
                       {recentNotifications.map(n => <NotificationItem key={n.id} n={n} />)}
                   </View>
+                  </ReAnimated.View>
               )}
 
               {/* SECCIÓN 2: ÚLTIMOS 30 DÍAS */}
               {olderNotifications.length > 0 && (
+                  <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                   <View style={styles.sectionContainer}>
                       <Text style={styles.sectionHeader}>Últimos 30 días</Text>
                       {olderNotifications.map(n => <NotificationItem key={n.id} n={n} />)}
                   </View>
+                  </ReAnimated.View>
               )}
 
           </Animated.View>
         )}
       </ScrollView>
-    </View>
+    </ReAnimated.View>
   );
 }
 

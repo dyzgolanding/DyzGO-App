@@ -1,11 +1,16 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { CheckCircle2 } from 'lucide-react-native';
 import React, { useEffect, useRef } from 'react';
-import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isSmallScreen = SCREEN_WIDTH < 400;
 
 export default function ConfirmationScreen() {
   const router = useRouter();
@@ -16,8 +21,8 @@ export default function ConfirmationScreen() {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 6, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start();
 
     createPurchaseNotification();
@@ -59,7 +64,7 @@ export default function ConfirmationScreen() {
   const isMultiple = count > 1;
 
   return (
-    <View style={styles.container}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -81,11 +86,13 @@ export default function ConfirmationScreen() {
           </Text>
         </Animated.View>
 
-        <TouchableOpacity style={styles.btn} activeOpacity={0.8} onPress={() => router.replace('/my-tickets')}>
-          <Text style={styles.btnText}>VER MIS ENTRADAS</Text>
-        </TouchableOpacity>
+        <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()} style={{ width: '100%', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.btn} activeOpacity={0.85} onPress={() => router.replace('/my-tickets')}>
+            <Text style={styles.btnText}>VER MIS ENTRADAS</Text>
+          </TouchableOpacity>
+        </ReAnimated.View>
       </View>
-    </View>
+    </ReAnimated.View>
   );
 }
 
@@ -134,14 +141,17 @@ const styles = StyleSheet.create({
   },
 
   btn: {
-    width: '100%',
+    width: '90%',
     maxWidth: 340,
     height: 58,
     borderRadius: 20,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255,49,216,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,49,216,0.35)',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 30,
   },
-  btnText: { color: '#000', fontWeight: '900', fontSize: 16, fontStyle: 'italic', letterSpacing: 0.5 },
+  btnText: { color: '#FF31D8', fontWeight: '900', fontSize: isSmallScreen ? 14 : 16, letterSpacing: 0.5 },
 });

@@ -1,8 +1,9 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import * as WebBrowser from 'expo-web-browser';
-import { ArrowLeft, ArrowRight, AtSign, Eye, EyeOff, KeyRound, Lock, Mail, RefreshCw, User } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, AtSign, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, User, UserPlus } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 import React, { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -13,6 +14,7 @@ import {
   Alert,
   Dimensions,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -22,7 +24,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   FadeIn,
@@ -30,7 +32,6 @@ import Animated, {
   interpolate,
   interpolateColor,
   LinearTransition,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming
@@ -39,10 +40,11 @@ import ConfirmHcaptcha from '@hcaptcha/react-native-hcaptcha'; // <-- MAGIA ANTI
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
-const TAB_WIDTH = (width - (CONTENT_PADDING * 2) - 12) / 2;
-const GAP = 15;
+const S = Math.min(height / 932, 1); // scale factor normalized to iPhone 15 Pro Max
+const GAP = Math.round(15 * S);
+const AUTH_TABS = ['Login', 'Sign up'];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -301,31 +303,39 @@ export default function AuthScreen() {
       if (error || !data.url) throw error || new Error('Error iniciando autenticación');
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type === 'success') {
-        const fragmentStr = result.url.includes('#')
-          ? result.url.split('#')[1]
-          : result.url.split('?')[1] || '';
-        const params = new URLSearchParams(fragmentStr);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token') || '';
-        if (!accessToken) throw new Error('No se recibió sesión de Google');
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (sessionError) throw sessionError;
-
-        const user = sessionData.session?.user;
-        if (user) {
-          await supabase.from('profiles').upsert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-          }, { onConflict: 'id', ignoreDuplicates: true });
-        }
-        // _layout.tsx onAuthStateChange maneja el routing automáticamente
+      // El usuario canceló o cerró el navegador — no es un error
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        return;
       }
+
+      if (result.type !== 'success') {
+        throw new Error('No se pudo completar el inicio de sesión con Google.');
+      }
+
+      const fragmentStr = result.url.includes('#')
+        ? result.url.split('#')[1]
+        : result.url.split('?')[1] || '';
+      const params = new URLSearchParams(fragmentStr);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token') || '';
+      if (!accessToken) throw new Error('No se recibió sesión de Google. Intenta nuevamente.');
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (sessionError) throw sessionError;
+
+      const user = sessionData.session?.user;
+      if (user) {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+        }, { onConflict: 'id', ignoreDuplicates: true });
+      }
+      // _layout.tsx onAuthStateChange maneja el routing automáticamente
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo iniciar sesión con Google');
     } finally {
@@ -372,32 +382,7 @@ export default function AuthScreen() {
     }
   };
 
-  // --- GESTO DE DESLIZAMIENTO ---
-  const context = useSharedValue(0);
-
-  const pan = Gesture.Pan()
-    .onStart(() => {
-      context.value = animValue.value;
-    })
-    .onUpdate((e) => {
-      const progress = e.translationX / TAB_WIDTH;
-      const newValue = context.value + progress;
-      animValue.value = Math.max(0, Math.min(1, newValue));
-    })
-    .onEnd(() => {
-      if (animValue.value > 0.5) {
-        animValue.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
-        runOnJS(setIsLogin)(false);
-        runOnJS(resetForm)();
-      } else {
-        animValue.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
-        runOnJS(setIsLogin)(true);
-        runOnJS(resetForm)();
-      }
-    });
-
   // --- ANIMACIONES ---
-  const selectorStyle = useAnimatedStyle(() => ({ transform: [{ translateX: interpolate(animValue.value, [0, 1], [0, TAB_WIDTH]) }] }));
   const animatedBarStyle = useAnimatedStyle(() => ({
     width: `${interpolate(strengthAnim.value, [0, 1, 2, 3], [0, 33, 66, 100])}%`,
     backgroundColor: interpolateColor(strengthAnim.value, [0, 1, 2, 3], ['#444', '#FF0000', '#FFFF00', '#00FF00'])
@@ -417,29 +402,34 @@ export default function AuthScreen() {
 
       <View style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]} keyboardShouldPersistTaps="handled">
 
             <Animated.View style={styles.header} layout={containerLayoutAnim}>
               <Text style={styles.logoText}>DyzGO<Text style={{ color: COLORS.neonPink }}>.</Text></Text>
-              <Text style={styles.subtitle}>
-                {isResetting ? 'Recuperación' : step === 2 ? 'Verificación' : isLogin ? 'Entrar' : 'Unirse'}
-              </Text>
             </Animated.View>
 
             {showTabs && (
-              <GestureDetector gesture={pan}>
-                <Animated.View style={styles.tabContainer} layout={containerLayoutAnim}>
-                  <Animated.View style={[styles.selector, selectorStyle]}>
-                    <LinearGradient colors={[COLORS.neonPink, COLORS.neonPink]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
-                  </Animated.View>
-                  <TouchableOpacity style={styles.tabButton} onPress={() => handleTabChange('login')} activeOpacity={1}>
-                    <Text style={[styles.tabText, isLogin ? styles.activeText : styles.inactiveText]}>ENTRAR</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.tabButton} onPress={() => handleTabChange('signup')} activeOpacity={1}>
-                    <Text style={[styles.tabText, !isLogin ? styles.activeText : styles.inactiveText]}>UNIRSE</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              </GestureDetector>
+              <Animated.View layout={containerLayoutAnim} style={styles.tabsFloating}>
+                <View style={styles.tabsOuter}>
+                  <BlurView intensity={50} tint="dark" style={styles.tabsBlur}>
+                    {AUTH_TABS.map((tab, idx) => {
+                      const active = (idx === 0 && isLogin) || (idx === 1 && !isLogin);
+                      const Icon = idx === 0 ? LogIn : UserPlus;
+                      return (
+                        <TouchableOpacity
+                          key={tab}
+                          style={[styles.glassTab, active && styles.glassTabActive]}
+                          onPress={() => handleTabChange(idx === 0 ? 'login' : 'signup')}
+                          activeOpacity={0.8}
+                        >
+                          <Icon size={14} color={active ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
+                          <Text style={[styles.glassTabText, active && styles.glassTabTextActive]}>{tab}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </BlurView>
+                </View>
+              </Animated.View>
             )}
 
             <Animated.View style={styles.formWrapper} layout={containerLayoutAnim}>
@@ -493,7 +483,7 @@ export default function AuthScreen() {
                   <Text style={styles.otpInfo}>Código enviado a{"\n"}<Text style={{ color: '#fff', fontWeight: '800' }}>{email}</Text></Text>
                   <GlassInput label="CÓDIGO" icon={<KeyRound color={COLORS.neonPink} size={20} />} placeholder="000000" value={otpCode} onChangeText={setOtpCode} keyboardType="number-pad" maxLength={6} />
                   <View style={styles.resendContainer}>
-                    <TouchableOpacity onPress={() => { setStep(1); setIsResetting(false); }} style={styles.backBtn}>
+                    <TouchableOpacity onPress={() => { setStep(1); }} style={styles.backBtn}>
                       <ArrowLeft color="#888" size={14} />
                       <Text style={styles.backBtnText}>CORREGIR</Text>
                     </TouchableOpacity>
@@ -527,6 +517,21 @@ export default function AuthScreen() {
               </TouchableOpacity>
             </Animated.View>
 
+            {step === 1 && !isResetting && !isLogin && (
+              <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut} layout={containerLayoutAnim} style={styles.termsContainer}>
+                <Text style={styles.termsText}>
+                  Al crear una cuenta aceptas nuestros{' '}
+                  <Text style={styles.termsLink} onPress={() => Linking.openURL('https://dyzgo.com/terms')}>
+                    Términos y Condiciones
+                  </Text>
+                  {' '}y la{' '}
+                  <Text style={styles.termsLink} onPress={() => Linking.openURL('https://dyzgo.com/privacy')}>
+                    Política de Privacidad
+                  </Text>
+                </Text>
+              </Animated.View>
+            )}
+
             {step === 1 && !isResetting && (
               <Animated.View layout={containerLayoutAnim} style={{ width: '100%' }}>
                 <View style={styles.divider}>
@@ -537,10 +542,10 @@ export default function AuthScreen() {
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <TouchableOpacity style={[styles.googleButton, { flex: 1 }]} onPress={handleGoogleAuth} disabled={loading} activeOpacity={0.85}>
                     <Svg width={20} height={20} viewBox="0 0 24 24">
-                      <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </Svg>
                     <Text style={styles.googleButtonText}>Google</Text>
                   </TouchableOpacity>
@@ -603,45 +608,60 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center'
   },
-  header: { alignItems: 'center', marginBottom: 40 },
-  logoText: { fontSize: 54, fontWeight: '900', color: 'white', fontStyle: 'italic', letterSpacing: -3 },
+  header: { alignItems: 'center', marginBottom: Math.round(16 * S) },
+  logoText: { fontSize: Math.round(54 * S), fontWeight: '900', color: 'white', fontStyle: 'italic', letterSpacing: -3 },
   subtitle: { color: COLORS.textZinc, fontSize: 13, fontWeight: '900', letterSpacing: 0, marginTop: 5 },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 100,
-    marginBottom: 30,
-    padding: 5,
-    height: 55,
+  tabsFloating: {
+    alignItems: 'center',
+    marginBottom: Math.round(30 * S),
     width: '100%',
+  },
+  tabsOuter: {
+    overflow: 'hidden',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    overflow: 'hidden'
+    borderColor: 'rgba(251,251,251,0.06)',
+    width: '100%',
   },
-  selector: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    width: TAB_WIDTH,
-    height: 43,
-    borderRadius: 100,
-    overflow: 'hidden'
+  tabsBlur: {
+    flexDirection: 'row',
+    height: Math.round(48 * S),
+    padding: 4,
+    gap: 2,
   },
-  tabButton: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabText: { fontWeight: '900', fontSize: 13, letterSpacing: 1 },
-  activeText: { color: 'white' },
-  inactiveText: { color: '#888' },
+  glassTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: 'transparent',
+  },
+  glassTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  glassTabText: {
+    color: 'rgba(251,251,251,0.45)',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  glassTabTextActive: {
+    color: '#FBFBFB',
+    fontWeight: '800',
+  },
   formWrapper: { width: '100%' },
-  label: { color: 'rgba(255,255,255,0.5)', marginBottom: 8, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glassBg, borderRadius: 18, height: 60, borderWidth: 1, borderColor: COLORS.glassBorder },
+  label: { color: 'rgba(255,255,255,0.5)', marginBottom: Math.round(8 * S), fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glassBg, borderRadius: 18, height: Math.round(60 * S), borderWidth: 1, borderColor: COLORS.glassBorder },
   iconBox: { width: 45, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, color: 'white', fontSize: 15, fontWeight: '700' },
   strengthBarContainer: { height: 3, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, marginTop: 10, overflow: 'hidden' },
   strengthBarFill: { height: '100%' },
   forgotText: { color: COLORS.neonPink, fontSize: 10, fontWeight: '900' },
   mainButton: {
-    height: 65,
-    marginTop: 20,
+    height: Math.round(65 * S),
+    marginTop: Math.round(20 * S),
     borderRadius: 100,
     backgroundColor: '#fff',
     width: '100%',
@@ -655,17 +675,17 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10
   },
-  buttonText: { color: '#000', fontSize: 18, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5 },
+  buttonText: { color: '#000', fontSize: Math.round(18 * S), fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5 },
   otpInfo: { color: COLORS.textZinc, marginBottom: 25, textAlign: 'center', fontSize: 14, opacity: 0.8 },
   resendContainer: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 15 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   backBtnText: { color: '#888', fontSize: 11, fontWeight: '900' },
-  backLink: { color: '#888', fontSize: 11, fontWeight: '900', textDecorationLine: 'underline' },
-  divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginTop: 20, marginBottom: 16, gap: 12 },
+  backLink: { color: '#888', fontSize: 11, fontWeight: '900' },
+  divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginTop: Math.round(20 * S), marginBottom: Math.round(16 * S), gap: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
   dividerText: { color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: '600' },
   googleButton: {
-    height: 65,
+    height: Math.round(65 * S),
     borderRadius: 100,
     backgroundColor: 'rgba(255,255,255,0.05)',
     width: '100%',
@@ -677,4 +697,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   googleButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  termsContainer: { width: '100%', alignItems: 'center', marginTop: Math.round(14 * S) },
+  termsText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '500', textAlign: 'center', lineHeight: 17 },
+  termsLink: { color: COLORS.neonPink, fontWeight: '700' },
 });

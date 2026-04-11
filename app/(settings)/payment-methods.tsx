@@ -1,9 +1,11 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { ArrowRight, CreditCard, Plus, Trash2 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import {
     ActivityIndicator,
     Alert,
@@ -91,7 +93,7 @@ export default function PaymentMethodsScreen() {
     );
 
     return (
-        <View style={styles.container}>
+        <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
             <StatusBar barStyle="light-content" />
             
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -104,19 +106,26 @@ export default function PaymentMethodsScreen() {
                 <NavBar title="MIS TARJETAS" onBack={() => router.back()} />
 
                 <View style={{ flex: 1, paddingHorizontal: 25, paddingBottom: 25, paddingTop: navTop }}>
-                    <View style={[styles.infoBox, { overflow: 'hidden' }]}>
+                    <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
+                <View style={[styles.infoBox, { overflow: 'hidden' }]}>
                         <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
                         <View style={styles.infoIcon}>
                             <CreditCard color={COLORS.neonPink} size={18} />
                         </View>
                         <Text style={styles.infoText}>Guarda tus tarjetas para comprar tickets en 1 click sin ingresar datos bancarios nuevamente.</Text>
                     </View>
+                    </ReAnimated.View>
 
                     <FlatList
                         data={cards}
                         keyExtractor={item => item.id}
                         renderItem={renderCardItem}
                         contentContainerStyle={{ paddingBottom: 100 }}
+                        removeClippedSubviews={true}
+                        maxToRenderPerBatch={8}
+                        windowSize={5}
+                        initialNumToRender={6}
+                        showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
                             loading ? null : (
                                 <View style={styles.emptyContainer}>
@@ -130,14 +139,16 @@ export default function PaymentMethodsScreen() {
                     />
                 </View>
 
+                <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                 <BlurView intensity={80} tint="dark" style={styles.footer}>
                     <TouchableOpacity style={styles.addBtnMain} onPress={() => router.push('/enroll-card')} activeOpacity={0.8}>
                         <Plus color="#FF31D8" size={18} strokeWidth={2.5} />
                         <Text style={styles.addBtnMainText}>AGREGAR NUEVA TARJETA</Text>
                     </TouchableOpacity>
                 </BlurView>
+                </ReAnimated.View>
             </View>
-        </View>
+        </ReAnimated.View>
     );
 }
 

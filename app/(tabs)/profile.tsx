@@ -1,5 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { BlurView } from 'expo-blur';
 import {
   Award,
@@ -10,10 +11,10 @@ import {
   UserCheck,
   Users
 } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
-  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -30,8 +31,10 @@ import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { PressableScale } from '../../components/animated/PressableScale';
 import { timing } from '../../lib/animation';
 import { supabase } from '../../lib/supabase';
+import { SkeletonBox } from '../../components/SkeletonBox';
 
 const { width } = Dimensions.get('window');
+const S = width / 430;
 const isSmallScreen = width < 400;
 const isLargeScreen = width >= 428;
 
@@ -53,6 +56,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const hasLoaded = React.useRef(false);
   const fadeAnim = useSharedValue(0);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fadeAnim.value }));
@@ -106,6 +110,7 @@ export default function ProfileScreen() {
       console.error("Error perfil:", error);
     } finally {
       hasLoaded.current = true;
+      setProfileReady(true);
       if (!silent) setLoading(false);
     }
   }, []);
@@ -161,6 +166,16 @@ export default function ProfileScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 80 }]}>
 
           {/* 1. HERO GREETING Y AVATAR */}
+          {!profileReady ? (
+            <View style={[styles.heroSection, { gap: 10 }]}>
+              <View style={styles.userInfo}>
+                <SkeletonBox height={28} width={180} borderRadius={8} style={{ marginBottom: 8 }} />
+                <SkeletonBox height={16} width={110} borderRadius={6} style={{ marginBottom: 10 }} />
+                <SkeletonBox height={22} width={80} borderRadius={11} />
+              </View>
+              <SkeletonBox width={80} height={80} borderRadius={40} />
+            </View>
+          ) : (
           <AnimatedEntry index={0} fromY={20}>
             <View style={styles.heroSection}>
               <View style={styles.userInfo}>
@@ -176,7 +191,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.avatarBorderBig}>
                 {profile.avatar_url ? (
-                  <Image source={{ uri: profile.avatar_url }} style={styles.avatarImageReal} />
+                  <Image source={{ uri: profile.avatar_url }} style={styles.avatarImageReal} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 ) : (
                   <View style={styles.avatarFallbackBig}>
                     <Text style={styles.avatarInitialBig}>
@@ -187,11 +202,12 @@ export default function ProfileScreen() {
               </View>
             </View>
           </AnimatedEntry>
+          )}
 
           {/* 2. MI ACTIVIDAD */}
           <AnimatedEntry index={1} fromY={24}>
             <View style={styles.sectionWrapper}>
-              <SectionLabel title="Mi actividad" />
+              <SectionLabel title="Mi Actividad" />
               <View style={styles.bentoRow}>
                 <BentoCard
                   style={{ flex: 1 }}
@@ -341,7 +357,7 @@ const styles = StyleSheet.create({
     gap: isLargeScreen ? 12 : 10,
   },
   sectionLabel: {
-    color: '#FBFBFB', fontSize: 18, fontWeight: '800',
+    color: '#FBFBFB', fontSize: Math.round(18 * S), fontWeight: '800',
     marginLeft: 8
   },
   bentoRow: {

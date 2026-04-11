@@ -1,11 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   Bell, BellOff, Building2, Ghost, MapPin, Sparkles, Trash2, UserCheck
 } from 'lucide-react-native';
-import React, { useRef, useState, useEffect } from 'react';
+import { Image } from 'expo-image';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
-  Dimensions, Image, PanResponder, ScrollView, StatusBar,
+  Dimensions, PanResponder, ScrollView, StatusBar,
   StyleSheet, Text, TouchableOpacity, View, Alert, Switch
 } from 'react-native';
 
@@ -27,12 +28,112 @@ import { NavBar } from '../../components/NavBar';
 import { StaggeredItem } from '../../components/StaggeredItem';
 import { COLORS } from '../../constants/colors';
 import { useSaved } from '../../context/SavedContext';
+import { SkeletonBox } from '../../components/SkeletonBox';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
 
 const TABS = ['Productoras', 'Clubes'];
+
+// ─── Module-level card components ────────────────────────────────────────────
+// IMPORTANT: defined outside SavedScreen so their type identity is stable across
+// parent re-renders. If defined inside, React unmounts/remounts them on every
+// state change (e.g. setPushEnabled), re-triggering the entering animation → flash.
+
+type ClubCardProps = {
+  item: any; index: number; scrollY: any;
+  onPress: () => void; onDelete: () => void;
+};
+const ClubCard = React.memo(({ item, index, scrollY, onPress, onDelete }: ClubCardProps) => {
+  const animStyle = useAnimatedStyle(() => {
+    const dist = Math.abs(scrollY.value - index * SNAP);
+    const scale = interpolate(dist, [0, SNAP], [1, 0.88], Extrapolation.CLAMP);
+    const opacity = interpolate(dist, [0, SNAP * 0.7], [1, 0.4], Extrapolation.CLAMP);
+    return { transform: [{ scale }], opacity };
+  });
+  return (
+    <ReAnimated.View style={[s.cardShadowWrap, animStyle]}>
+      <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
+        <TouchableOpacity style={s.mktCard} activeOpacity={0.88} onPress={onPress}>
+          {(item.image_url || item.image)
+            ? <Image source={{ uri: item.image_url || item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+            : <View style={s.cardPlaceholder} />}
+          <LinearGradient colors={['transparent', 'rgba(3,3,3,0.65)', '#030303']} locations={[0.3, 0.65, 1]} style={s.mktOverlay}>
+            <View style={{ alignItems: 'flex-end' }}>
+              <TouchableOpacity style={s.mktTrashBtn} onPress={onDelete}>
+                <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, s.mktTrashBlur]}>
+                  <Trash2 color="#ff4a4a" size={18} />
+                </BlurView>
+              </TouchableOpacity>
+            </View>
+            <View style={s.mktCardInfo}>
+              <BlurView intensity={30} tint="dark" style={s.followingPill}>
+                <UserCheck size={12} color={COLORS.neonPink} />
+                <Text style={s.followingPillText}>Siguiendo</Text>
+              </BlurView>
+              <Text style={s.mktCardTitle} numberOfLines={1}>{item.name}</Text>
+              {item.location && (
+                <View style={s.cardLocation}>
+                  <MapPin size={12} color={COLORS.textZinc} />
+                  <Text style={s.cardLocationText} numberOfLines={1}>{item.location}</Text>
+                </View>
+              )}
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </ReAnimated.View>
+    </ReAnimated.View>
+  );
+});
+
+type BrandCardProps = {
+  brand: any; index: number; scrollY: any;
+  onPress: () => void; onDelete: () => void;
+};
+const BrandCard = React.memo(({ brand, index, scrollY, onPress, onDelete }: BrandCardProps) => {
+  const logoColor = brand.primary_color ?? COLORS.neonPink;
+  const animStyle = useAnimatedStyle(() => {
+    const dist = Math.abs(scrollY.value - index * SNAP);
+    const scale = interpolate(dist, [0, SNAP], [1, 0.88], Extrapolation.CLAMP);
+    const opacity = interpolate(dist, [0, SNAP * 0.7], [1, 0.4], Extrapolation.CLAMP);
+    return { transform: [{ scale }], opacity };
+  });
+  return (
+    <ReAnimated.View style={[s.cardShadowWrap, animStyle]}>
+      <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
+        <TouchableOpacity style={s.mktCard} activeOpacity={0.88} onPress={onPress}>
+          {brand.banner_url
+            ? <Image source={{ uri: brand.banner_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+            : <View style={s.cardPlaceholder} />}
+          <LinearGradient colors={['rgba(0,0,0,0.18)', 'rgba(3,3,3,0.6)', '#030303']} locations={[0, 0.55, 1]} style={s.mktOverlay}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              {brand.logo_url ? (
+                <View style={[s.brandLogoRing, { backgroundColor: COLORS.background, shadowColor: logoColor }]}>
+                  <View style={s.brandLogoInner}>
+                    <Image source={{ uri: brand.logo_url }} style={s.brandLogoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                  </View>
+                </View>
+              ) : <View />}
+              <TouchableOpacity style={s.mktTrashBtn} onPress={onDelete}>
+                <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, s.mktTrashBlur]}>
+                  <Trash2 color="#ff4a4a" size={18} />
+                </BlurView>
+              </TouchableOpacity>
+            </View>
+            <View style={s.mktCardInfo}>
+              <BlurView intensity={30} tint="dark" style={s.followingPill}>
+                <UserCheck size={12} color={COLORS.neonPink} />
+                <Text style={s.followingPillText}>Siguiendo</Text>
+              </BlurView>
+              <Text style={s.mktCardTitle} numberOfLines={1}>{brand.name}</Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </ReAnimated.View>
+    </ReAnimated.View>
+  );
+});
 
 export default function SavedScreen() {
   const router = useRouter();
@@ -41,6 +142,7 @@ export default function SavedScreen() {
   const {
     savedItems, toggleSave,
     savedBrands, toggleSaveBrand, toggleBrandPush,
+    loading,
   } = useSaved();
   const [activeTab, setActiveTab] = useState(0);
 
@@ -52,13 +154,30 @@ export default function SavedScreen() {
   const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
-    const checkToken = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('profiles').select('expo_push_token').eq('id', user.id).single();
-      if (data?.expo_push_token) setPushEnabled(true);
+    const checkPushStatus = async () => {
+      try {
+        // 1. Verificar el permiso real en el sistema operativo iOS
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          // iOS tiene notificaciones apagadas — el toggle debe reflejar eso
+          setPushEnabled(false);
+          return;
+        }
+
+        // 2. Solo si iOS permite, verificar si tenemos token guardado en BD
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('profiles')
+          .select('expo_push_token')
+          .eq('id', user.id)
+          .single();
+        setPushEnabled(!!data?.expo_push_token);
+      } catch {
+        setPushEnabled(false);
+      }
     };
-    checkToken();
+    checkPushStatus();
   }, []);
 
   const toggleGlobalPush = async (val: boolean) => {
@@ -119,113 +238,17 @@ export default function SavedScreen() {
 
   // ─── EMPTY STATE ────────────────────────────────────────────
   const EmptyState = ({ label, subtitle }: { label: string; subtitle: string }) => (
-    <ReAnimated.View entering={FadeIn.duration(300)} style={s.emptyWrap}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={s.emptyWrap}>
       <View style={s.emptyIcon}>
         <Ghost color={COLORS.neonPink} size={40} strokeWidth={1.5} />
       </View>
       <Text style={s.emptyTitle}>{label}</Text>
       <Text style={s.emptySubtitle}>{subtitle}</Text>
-      <TouchableOpacity onPress={() => router.push('/')} style={s.emptyBtn}>
+      <TouchableOpacity onPress={() => router.navigate('/(tabs)/explore')} style={s.emptyBtn}>
         <Text style={s.emptyBtnText}>Explorar ahora</Text>
       </TouchableOpacity>
     </ReAnimated.View>
   );
-
-  // ─── CLUB CARD ─────────────────────────────────────────────
-  const ClubCard = ({ item, index, scrollY }: { item: any; index: number; scrollY: any }) => {
-    const animStyle = useAnimatedStyle(() => {
-      const dist = Math.abs(scrollY.value - index * SNAP);
-      const scale = interpolate(dist, [0, SNAP], [1, 0.88], Extrapolation.CLAMP);
-      const opacity = interpolate(dist, [0, SNAP * 0.7], [1, 0.4], Extrapolation.CLAMP);
-      return { transform: [{ scale }], opacity };
-    });
-    return (
-      <ReAnimated.View style={[s.cardShadowWrap, animStyle]}>
-        <ReAnimated.View entering={FadeInDown.duration(280).delay(index * 50)}>
-          <TouchableOpacity style={s.mktCard} activeOpacity={0.88}
-            onPress={() => router.push({ pathname: '/club-detail', params: { id: item.id } })}>
-            {(item.image_url || item.image)
-              ? <Image source={{ uri: item.image_url || item.image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-              : <View style={s.cardPlaceholder} />}
-
-            <LinearGradient colors={['transparent', 'rgba(3,3,3,0.65)', '#030303']} locations={[0.3, 0.65, 1]} style={s.mktOverlay}>
-              {/* Trash top-right */}
-              <View style={{ alignItems: 'flex-end' }}>
-                <TouchableOpacity style={s.mktTrashBtn} onPress={() => toggleSave(item.id, item, 'club')}>
-                  <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, s.mktTrashBlur]}>
-                    <Trash2 color="#ff4a4a" size={18} />
-                  </BlurView>
-                </TouchableOpacity>
-              </View>
-              {/* Bottom info */}
-              <View style={s.mktCardInfo}>
-                <BlurView intensity={30} tint="dark" style={s.followingPill}>
-                  <UserCheck size={12} color={COLORS.neonPink} />
-                  <Text style={s.followingPillText}>Siguiendo</Text>
-                </BlurView>
-                <Text style={s.mktCardTitle} numberOfLines={1}>{item.name}</Text>
-                {item.location && (
-                  <View style={s.cardLocation}>
-                    <MapPin size={12} color={COLORS.textZinc} />
-                    <Text style={s.cardLocationText} numberOfLines={1}>{item.location}</Text>
-                  </View>
-                )}
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </ReAnimated.View>
-      </ReAnimated.View>
-    );
-  };
-
-  // ─── BRAND CARD ──────────────────────────────────────────────
-  const BrandCard = ({ brand, index, scrollY }: { brand: any; index: number; scrollY: any }) => {
-    const logoColor = brand.primary_color ?? COLORS.neonPink;
-    const animStyle = useAnimatedStyle(() => {
-      const dist = Math.abs(scrollY.value - index * SNAP);
-      const scale = interpolate(dist, [0, SNAP], [1, 0.88], Extrapolation.CLAMP);
-      const opacity = interpolate(dist, [0, SNAP * 0.7], [1, 0.4], Extrapolation.CLAMP);
-      return { transform: [{ scale }], opacity };
-    });
-    return (
-      <ReAnimated.View style={[s.cardShadowWrap, animStyle]}>
-        <ReAnimated.View entering={FadeInDown.duration(280).delay(index * 50)}>
-          <TouchableOpacity style={s.mktCard} activeOpacity={0.88}
-            onPress={() => router.push({ pathname: '/brand-profile', params: { id: brand.experience_id } })}>
-            {brand.banner_url
-              ? <Image source={{ uri: brand.banner_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-              : <View style={s.cardPlaceholder} />}
-
-            <LinearGradient colors={['rgba(0,0,0,0.18)', 'rgba(3,3,3,0.6)', '#030303']} locations={[0, 0.55, 1]} style={s.mktOverlay}>
-              {/* Top row: logo + trash */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                {brand.logo_url ? (
-                  <View style={[s.brandLogoRing, { backgroundColor: COLORS.background, shadowColor: logoColor }]}>
-                    <View style={s.brandLogoInner}>
-                      <Image source={{ uri: brand.logo_url }} style={s.brandLogoImg} resizeMode="cover" />
-                    </View>
-                  </View>
-                ) : <View />}
-                <TouchableOpacity style={s.mktTrashBtn} onPress={() => toggleSaveBrand(brand.experience_id, { name: brand.name, logo_url: brand.logo_url, banner_url: brand.banner_url, primary_color: brand.primary_color })}>
-                  <BlurView intensity={35} tint="dark" style={[StyleSheet.absoluteFill, s.mktTrashBlur]}>
-                    <Trash2 color="#ff4a4a" size={18} />
-                  </BlurView>
-                </TouchableOpacity>
-              </View>
-              {/* Bottom info */}
-              <View style={s.mktCardInfo}>
-                <BlurView intensity={30} tint="dark" style={s.followingPill}>
-                  <UserCheck size={12} color={COLORS.neonPink} />
-                  <Text style={s.followingPillText}>Siguiendo</Text>
-                </BlurView>
-                <Text style={s.mktCardTitle} numberOfLines={1}>{brand.name}</Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </ReAnimated.View>
-      </ReAnimated.View>
-    );
-  };
 
   const HEADER_H = insets.top + 152;
   const TABS_TOP  = insets.top + 82;
@@ -262,7 +285,7 @@ export default function SavedScreen() {
             <GlobalPushToggle />
             {savedBrands.length === 0
               ? <EmptyState label="Sin productoras" subtitle="Sigue productoras desde su perfil para recibir notificaciones de nuevos eventos." />
-              : <View style={s.cardsGrid}>{savedBrands.map((brand, i) => <BrandCard key={brand.experience_id} brand={brand} index={i} scrollY={brandsScrollY} />)}</View>}
+              : <View style={s.cardsGrid}>{savedBrands.map((brand, i) => <BrandCard key={brand.experience_id} brand={brand} index={i} scrollY={brandsScrollY} onPress={() => router.push({ pathname: '/brand-profile', params: { id: brand.experience_id } })} onDelete={() => toggleSaveBrand(brand.experience_id, brand)} />)}</View>}
           </AnimatedScrollView>
         </View>
 
@@ -280,7 +303,7 @@ export default function SavedScreen() {
             <GlobalPushToggle />
             {followedClubs.length === 0
               ? <EmptyState label="Sin clubes" subtitle="Sigue tus lugares favoritos desde su perfil." />
-              : <View style={s.cardsGrid}>{followedClubs.map((item: any, i: number) => <ClubCard key={item.id} item={item} index={i} scrollY={clubsScrollY} />)}</View>}
+              : <View style={s.cardsGrid}>{followedClubs.map((item: any, i: number) => <ClubCard key={item.id} item={item} index={i} scrollY={clubsScrollY} onPress={() => router.push({ pathname: '/club-detail', params: { id: item.id } })} onDelete={() => toggleSave(item.id, 'club')} />)}</View>}
           </AnimatedScrollView>
         </View>
       </PagerView>

@@ -1,14 +1,12 @@
-import * as Clipboard from 'expo-clipboard'; // Usamos expo-clipboard que es mejor
 import { LinearGradient } from 'expo-linear-gradient';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import * as SecureStore from 'expo-secure-store';
 import {
     ChevronRight,
-    Copy,
     Fingerprint,
     KeyRound as KeyIcon,
-    KeyRound, // Alias necesario para el input del modal
+    KeyRound,
     Lock,
     Mail,
     ShieldCheck,
@@ -33,9 +31,9 @@ import {
     View
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import QRCode from 'react-native-qrcode-svg';
 import Animated, {
     Easing,
+    FadeInUp,
     interpolate,
     interpolateColor,
     runOnJS,
@@ -69,11 +67,6 @@ export default function SecurityScreen() {
     const [otpCode, setOtpCode] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-
-    // Datos 2FA
-    const [mfaSecret, setMfaSecret] = useState('');
-    const [mfaQr, setMfaQr] = useState('');
-    const [factorId, setFactorId] = useState('');
 
     // Animación Fuerza de Contraseña
     const [passStrength, setPassStrength] = useState(0);
@@ -117,11 +110,9 @@ export default function SecurityScreen() {
         const bioState = await SecureStore.getItemAsync('biometrics_enabled');
         setFaceId(bioState === 'true');
 
-        // 3. Verificar 2FA en Supabase
+        // 3. Verificar 2FA por email en metadata del usuario
         if (user) {
-            const { data: factors } = await supabase.auth.mfa.listFactors();
-            const hasVerifiedFactor = factors?.totp.some(factor => factor.status === 'verified');
-            setTwoStep(!!hasVerifiedFactor);
+            setTwoStep(!!user.user_metadata?.email_2fa_enabled);
         }
     };
 
@@ -150,29 +141,35 @@ export default function SecurityScreen() {
         }
     };
 
-    // --- LÓGICA VERIFICACIÓN EN 2 PASOS (TOTP) ---
+    // --- LÓGICA VERIFICACIÓN EN 2 PASOS (EMAIL) ---
     const toggleTwoStep = async (value: boolean) => {
         if (value) {
-            // ACTIVAR: Iniciar enrolamiento
-            setLoading(true);
-            try {
-                const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
-                if (error) throw error;
-
-                setFactorId(data.id);
-                setMfaSecret(data.totp.secret);
-                setMfaQr(data.totp.qr_code);
-
-                // Abrir Modal en paso especial 10 (QR)
-                setResetStep(10);
-                setModalVisible(true);
-            } catch (e: any) {
-                Alert.alert("Error", e.message);
-            } finally {
-                setLoading(false);
-            }
+            Alert.alert(
+                "Activar verificación por email",
+                "Al iniciar sesión recibirás un código en tu correo para confirmar tu identidad.",
+                [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                        text: "Activar",
+                        onPress: async () => {
+                            setLoading(true);
+                            try {
+                                const { error } = await supabase.auth.updateUser({
+                                    data: { email_2fa_enabled: true }
+                                });
+                                if (error) throw error;
+                                setTwoStep(true);
+                                Alert.alert("¡Listo!", "Verificación en 2 pasos activada.");
+                            } catch (e: any) {
+                                Alert.alert("Error", e.message);
+                            } finally {
+                                setLoading(false);
+                            }
+                        }
+                    }
+                ]
+            );
         } else {
-            // DESACTIVAR
             Alert.alert("Desactivar 2FA", "¿Estás seguro? Tu cuenta será menos segura.", [
                 { text: "Cancelar", style: "cancel" },
                 {
@@ -181,14 +178,12 @@ export default function SecurityScreen() {
                     onPress: async () => {
                         setLoading(true);
                         try {
-                            const { data: factors } = await supabase.auth.mfa.listFactors();
-                            const factorToUnenroll = factors?.totp.find(f => f.status === 'verified');
-
-                            if (factorToUnenroll) {
-                                await supabase.auth.mfa.unenroll({ factorId: factorToUnenroll.id });
-                                setTwoStep(false);
-                                Alert.alert("Listo", "Verificación en 2 pasos desactivada.");
-                            }
+                            const { error } = await supabase.auth.updateUser({
+                                data: { email_2fa_enabled: false }
+                            });
+                            if (error) throw error;
+                            setTwoStep(false);
+                            Alert.alert("Listo", "Verificación en 2 pasos desactivada.");
                         } catch (e: any) {
                             Alert.alert("Error", e.message);
                         } finally {
@@ -198,32 +193,6 @@ export default function SecurityScreen() {
                 }
             ]);
         }
-    };
-
-    const verifyMfaSetup = async () => {
-        if (otpCode.length < 6) return Alert.alert("Error", "Ingresa el código de 6 dígitos.");
-        setLoading(true);
-        try {
-            const { error } = await supabase.auth.mfa.challengeAndVerify({
-                factorId: factorId,
-                code: otpCode
-            });
-
-            if (error) throw error;
-
-            setTwoStep(true);
-            Alert.alert("¡Éxito!", "Verificación en 2 pasos activada correctamente.");
-            closeModal();
-        } catch (e: any) {
-            Alert.alert("Código inválido", "El código no coincide. Intenta de nuevo.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const copyToClipboard = async (text: string) => {
-        await Clipboard.setStringAsync(text);
-        Alert.alert("Copiado", "Clave secreta copiada.");
     };
 
     // --- LÓGICA DE CONTRASEÑA (TUYA ORIGINAL) ---
@@ -323,6 +292,7 @@ export default function SecurityScreen() {
             <NavBar title="SEGURIDAD" onBack={() => router.back()} />
 
             <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: navTop }]} showsVerticalScrollIndicator={false}>
+                <Animated.View entering={FadeInUp.duration(300).delay(0).springify()}>
                 <View style={styles.shieldIconContainer}>
                     <View style={styles.glowCircle}>
                         <ShieldCheck color={twoStep ? "#00FF88" : COLORS.neonPink} size={isSmallScreen ? 35 : 40} />
@@ -332,6 +302,9 @@ export default function SecurityScreen() {
                     </Text>
                 </View>
 
+                </Animated.View>
+
+                <Animated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                 <Text style={styles.sectionLabel}>Credenciales</Text>
                 <View style={styles.glassCard}>
                     <TouchableOpacity style={styles.rowItem} onPress={handleChangePassword}>
@@ -341,6 +314,9 @@ export default function SecurityScreen() {
                     </TouchableOpacity>
                 </View>
 
+                </Animated.View>
+
+                <Animated.View entering={FadeInUp.duration(300).delay(160).springify()}>
                 <Text style={styles.sectionLabel}>Acceso Biométrico</Text>
                 <View style={styles.glassCard}>
                     <View style={styles.rowItem}>
@@ -356,13 +332,16 @@ export default function SecurityScreen() {
                     </View>
                 </View>
 
+                </Animated.View>
+
+                <Animated.View entering={FadeInUp.duration(300).delay(240).springify()}>
                 <Text style={styles.sectionLabel}>Avanzado</Text>
                 <View style={styles.glassCard}>
                     <View style={styles.rowItem}>
                         <View style={styles.iconBox}><Smartphone color="#00F0FF" size={18} /></View>
                         <View style={{flex: 1}}>
                             <Text style={styles.rowTitle}>Verificación en 2 pasos</Text>
-                            <Text style={styles.rowSub}>App Autenticadora</Text>
+                            <Text style={styles.rowSub}>Código por Email</Text>
                         </View>
                         <Switch
                             value={twoStep} onValueChange={toggleTwoStep}
@@ -370,10 +349,8 @@ export default function SecurityScreen() {
                         />
                     </View>
                 </View>
+                </Animated.View>
 
-                <TouchableOpacity style={styles.sessionsBtn} onPress={() => Alert.alert("Sesiones", "Función en desarrollo")}>
-                    <Text style={styles.sessionsText}>Cerrar todas las demás sesiones</Text>
-                </TouchableOpacity>
             </ScrollView>
 
             {/* --- MODAL UNIFICADO --- */}
@@ -401,38 +378,7 @@ export default function SecurityScreen() {
 
                         <View style={styles.modalBody}>
 
-                            {/* PASO 10: MOSTRAR QR PARA 2FA (NUEVO) */}
-                            {resetStep === 10 && (
-                                <ScrollView contentContainerStyle={{alignItems: 'center', gap: 20}}>
-                                    <Text style={styles.modalSubtitle}>Escanea este código en tu App Autenticadora (Google Auth, Authy).</Text>
-
-                                    <View style={{padding: 10, backgroundColor: 'white', borderRadius: 10}}>
-                                        <QRCode value={mfaQr} size={150} />
-                                    </View>
-
-                                    <TouchableOpacity onPress={() => copyToClipboard(mfaSecret)}>
-                                        <Text style={{color: COLORS.neonPink, fontSize: 12, fontWeight: '800', marginTop: 10}}>
-                                            O COPIA LA CLAVE: {mfaSecret.substring(0,8)}... <Copy size={12} color={COLORS.neonPink}/>
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    <View style={[styles.modalGlassInput, {width: '100%'}]}>
-                                        <KeyIcon color={COLORS.neonPink} size={20} style={{marginHorizontal: 15}} />
-                                        <TextInput
-                                            placeholder="Código de 6 dígitos"
-                                            placeholderTextColor="#666"
-                                            style={styles.modalActualInput}
-                                            keyboardType="number-pad"
-                                            maxLength={6}
-                                            value={otpCode}
-                                            onChangeText={setOtpCode}
-                                        />
-                                    </View>
-                                    <ActionButton onPress={verifyMfaSetup} loading={loading} text="ACTIVAR 2FA" />
-                                </ScrollView>
-                            )}
-
-                            {/* PASO 1: SOLICITAR EMAIL (ORIGINAL) */}
+                            {/* PASO 1: SOLICITAR EMAIL */}
                             {resetStep === 1 && (
                                 <View style={{alignItems: 'center', gap: 20, paddingVertical: 20}}>
                                     <View style={styles.bigIconCircle}>
@@ -520,7 +466,7 @@ const styles = StyleSheet.create({
     shieldText: { color: COLORS.neonPink, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
 
     sectionLabel: {
-        color: COLORS.neonPink, fontSize: 11, fontWeight: '900', marginBottom: 10,
+        color: '#FBFBFB', fontSize: 11, fontWeight: '900', marginBottom: 10,
         marginTop: isSmallScreen ? 20 : 25, marginLeft: 10, textTransform: 'uppercase', letterSpacing: 1.5
     },
 

@@ -1,8 +1,13 @@
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { Check, UserCheck, UserPlus, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { SkeletonBox } from '../../components/SkeletonBox';
+import { Image } from 'expo-image';
+import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
@@ -138,20 +143,31 @@ export default function AddFriendScreen() {
   if (loading) return (
     <View style={styles.container}>
       <AmbientBg />
-      <Text style={{ color: COLORS.textZinc, fontSize: 15, fontWeight: '500' }}>Verificando...</Text>
+      <View style={{ alignItems: 'center', gap: 16, width: '100%', paddingHorizontal: 24 }}>
+        <SkeletonBox height={80} width={80} borderRadius={40} />
+        <SkeletonBox height={24} borderRadius={6} width="50%" />
+        <SkeletonBox height={16} borderRadius={6} width="35%" />
+        <SkeletonBox height={16} borderRadius={6} width="80%" style={{ marginTop: 4 }} />
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, width: '100%' }}>
+          <SkeletonBox height={52} borderRadius={16} style={{ flex: 1 }} />
+          <SkeletonBox height={52} borderRadius={16} style={{ flex: 2 }} />
+        </View>
+      </View>
     </View>
   );
 
   if (status === 'already_friends') return (
     <View style={styles.container}>
       <AmbientBg />
-      <View style={styles.iconCircle}>
-        <UserCheck color={COLORS.neonPink} size={40} />
+      <View style={styles.stateCard}>
+        <View style={styles.iconCircle}>
+          <UserCheck color={COLORS.neonPink} size={38} />
+        </View>
+        <Text style={styles.stateTitle}>Ya son amigos</Text>
+        <Text style={styles.stateSub}>No se puede ejecutar esta acción, ustedes ya están conectados.</Text>
       </View>
-      <Text style={styles.stateTitle}>Ya son amigos</Text>
-      <Text style={styles.stateSub}>No se puede ejecutar esta acción, ustedes ya están conectados.</Text>
-      <TouchableOpacity style={styles.btnSecondary} onPress={() => router.replace('/my-friends')}>
-        <Text style={styles.btnSecondaryText}>Volver a mis amigos</Text>
+      <TouchableOpacity style={styles.btn} onPress={() => router.replace('/my-friends')}>
+        <Text style={styles.btnText}>Volver a mis amigos</Text>
       </TouchableOpacity>
     </View>
   );
@@ -159,13 +175,15 @@ export default function AddFriendScreen() {
   if (status === 'error') return (
     <View style={styles.container}>
       <AmbientBg />
-      <View style={[styles.iconCircle, styles.iconCircleError]}>
-        <X color="#FF4444" size={40} />
+      <View style={styles.stateCard}>
+        <View style={[styles.iconCircle, styles.iconCircleError]}>
+          <X color="#FF4444" size={38} />
+        </View>
+        <Text style={styles.stateTitle}>Enlace inválido</Text>
+        <Text style={styles.stateSub}>Esta invitación expiró o el código es incorrecto.</Text>
       </View>
-      <Text style={styles.stateTitle}>Enlace inválido</Text>
-      <Text style={styles.stateSub}>Esta invitación expiró o el código es incorrecto.</Text>
-      <TouchableOpacity style={styles.btnSecondary} onPress={() => router.replace('/home')}>
-        <Text style={styles.btnSecondaryText}>Volver al Inicio</Text>
+      <TouchableOpacity style={styles.btn} onPress={() => router.replace('/home')}>
+        <Text style={styles.btnText}>Volver al Inicio</Text>
       </TouchableOpacity>
     </View>
   );
@@ -173,25 +191,30 @@ export default function AddFriendScreen() {
   if (status === 'success') return (
     <View style={styles.container}>
       <AmbientBg />
-      <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
-        <Check color="#00FF88" size={44} />
+      <View style={styles.stateCard}>
+        <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+          <Check color="#00FF88" size={38} />
+        </View>
+        <Text style={styles.stateTitle}>¡CONECTADOS!</Text>
+        <Text style={styles.stateSub}>Ahora tú y {sender?.full_name} son amigos.</Text>
       </View>
-      <Text style={styles.stateTitle}>¡CONECTADOS!</Text>
-      <Text style={styles.stateSub}>Ahora tú y {sender?.full_name} son amigos.</Text>
-      <TouchableOpacity style={styles.btnPrimary} onPress={() => router.replace('/my-friends')}>
-        <Text style={styles.btnPrimaryText}>Ir a Mis Amigos</Text>
+      <TouchableOpacity style={styles.btn} onPress={() => router.replace('/my-friends')}>
+        <Text style={styles.btnText}>Ir a Mis Amigos</Text>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
       <AmbientBg />
-      <View style={styles.card}>
+      <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()} style={styles.card}>
         <View style={styles.avatarContainer}>
           <Image
             source={sender?.avatar_url ? { uri: sender.avatar_url } : { uri: 'https://via.placeholder.com/150' }}
             style={styles.avatar}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
           />
           <View style={styles.badge}>
             <UserPlus color="white" size={18} />
@@ -201,18 +224,19 @@ export default function AddFriendScreen() {
         <Text style={styles.username}>@{sender?.username || 'usuario'}</Text>
         <Text style={styles.label}>Quiere conectar contigo inmediatamente.</Text>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.rejectBtn} onPress={() => router.replace('/home')}>
+          <TouchableOpacity style={styles.rejectBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.replace('/home'); }}>
             <X color={COLORS.textZinc} size={22} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.acceptBtn}
-            onPress={handleAccept}
+            activeOpacity={0.65}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAccept(); }}
           >
             <Text style={styles.acceptText}>CONECTAR</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </View>
+      </ReAnimated.View>
+    </ReAnimated.View>
   );
 }
 
@@ -260,32 +284,34 @@ const styles = StyleSheet.create({
   acceptText: { color: COLORS.neonPink, fontWeight: '900', fontSize: 14, letterSpacing: 1 },
 
   // Estado screens
+  stateCard: {
+    backgroundColor: COLORS.glassBg,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+    padding: 28,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
   iconCircle: {
-    width: 86, height: 86, borderRadius: 43,
+    width: 80, height: 80, borderRadius: 40,
     backgroundColor: 'rgba(138, 43, 226, 0.1)',
     borderWidth: 1, borderColor: 'rgba(138, 43, 226, 0.3)',
     justifyContent: 'center', alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 18,
   },
   iconCircleError: { backgroundColor: 'rgba(255,68,68,0.1)', borderColor: 'rgba(255,68,68,0.3)' },
   iconCircleSuccess: { backgroundColor: 'rgba(0,255,136,0.1)', borderColor: 'rgba(0,255,136,0.3)' },
 
-  stateTitle: { color: COLORS.textWhite, fontSize: 20, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5, textAlign: 'center' },
-  stateSub: { color: COLORS.textZinc, fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 32, lineHeight: 22, paddingHorizontal: 20 },
+  stateTitle: { color: COLORS.textWhite, fontSize: 26, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1, textAlign: 'center', marginBottom: 10 },
+  stateSub: { color: COLORS.textZinc, fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
-  btnPrimary: {
-    paddingHorizontal: 40, height: 56, borderRadius: 20,
-    backgroundColor: 'white',
-    justifyContent: 'center', alignItems: 'center',
-    minWidth: 200,
+  btn: {
+    width: '100%', height: 58, borderRadius: 20,
+    backgroundColor: 'rgba(255,49,216,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,49,216,0.35)',
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
   },
-  btnPrimaryText: { color: '#000', fontWeight: '900', fontSize: 15, fontStyle: 'italic' },
-
-  btnSecondary: {
-    paddingHorizontal: 32, height: 48, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  btnSecondaryText: { color: COLORS.textZinc, fontWeight: '700', fontSize: 14 },
+  btnText: { color: '#FF31D8', fontWeight: '900', fontSize: 15 },
 });

@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useNavRouter as useRouter } from '../hooks/useNavRouter';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -58,11 +58,11 @@ export default function SplashScreen() {
     const router = useRouter();
 
     const [animationDone, setAnimationDone] = useState(false);
-    const [dataLoaded, setDataLoaded] = useState(false);
+    const [dataLoaded, setDataLoaded]       = useState(false);
     const [preloadedData, setPreloadedData] = useState<any>(null);
-    const [hasSession, setHasSession] = useState(false);
+    const [hasSession, setHasSession]       = useState(false);
 
-    const dotScale = useSharedValue(0);
+    const dotScale       = useSharedValue(0);
     const expansionProgress = useSharedValue(0);
 
     useEffect(() => {

@@ -8,16 +8,8 @@
  * Runs entirely on the UI thread (no JS bridge = 60fps guaranteed)
  */
 
-import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { GestureResponderEvent, Pressable, StyleProp, ViewStyle } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
-import { Spring, timing } from '../../lib/animation';
 
 interface PressableScaleProps {
   onPress?: (e: GestureResponderEvent) => void;
@@ -29,54 +21,21 @@ interface PressableScaleProps {
   disabled?: boolean;
 }
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function PressableScale({
   onPress,
   onLongPress,
-  scaleTo = 0.94,
-  haptic = 'light',
   style,
   children,
   disabled,
 }: PressableScaleProps) {
-  const scale   = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity:   opacity.value,
-  }));
-
-  const handlePressIn = () => {
-    // Compress instantly (like GSAP's 0.1s snap-down)
-    scale.value   = withTiming(scaleTo, timing.fast);
-    opacity.value = withTiming(0.85,   timing.fast);
-    if (haptic !== 'none') {
-      Haptics.impactAsync(
-        haptic === 'light'  ? Haptics.ImpactFeedbackStyle.Light  :
-        haptic === 'medium' ? Haptics.ImpactFeedbackStyle.Medium :
-                              Haptics.ImpactFeedbackStyle.Heavy
-      );
-    }
-  };
-
-  const handlePressOut = () => {
-    // Release with spring — GSAP "back.out" feel
-    scale.value   = withSpring(1, Spring.snappy);
-    opacity.value = withTiming(1, timing.fast);
-  };
-
   return (
-    <AnimatedPressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+    <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={disabled}
-      style={[animStyle, style]}
+      style={style}
     >
       {children}
-    </AnimatedPressable>
+    </Pressable>
   );
 }

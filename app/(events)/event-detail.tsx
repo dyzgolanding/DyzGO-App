@@ -1,7 +1,8 @@
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ExpoLinking from 'expo-linking';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { Image } from 'expo-image';
 import {
     Activity,
@@ -19,6 +20,7 @@ import {
     Share2,
     Shirt,
     User,
+    Wine,
     Zap
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -28,7 +30,6 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    InteractionManager,
     Linking,
     Modal,
     PanResponder,
@@ -94,31 +95,40 @@ export default function EventDetailScreen() {
     const params = useLocalSearchParams();
     const router = useRouter();
 
-    const optImageUrl = params.imageUrl as string | undefined;
-    const optTitle = params.title as string | undefined;
-    const optDate = params.date as string | undefined;
-    const optHour = params.hour as string | undefined;
-    const optClubName = params.clubName as string | undefined;
-    const optClubImage = params.clubImage as string | undefined;
-    const optAccentColor = params.accentColor as string | undefined;
-    const optThemeColorEnd = params.themeColorEnd as string | undefined;
-    const optCategory = params.category as string | undefined;
-    const optProducerName = params.producerName as string | undefined;
-    const optProducerLogo = params.producerLogo as string | undefined;
-    const optProducerId = params.producerId as string | undefined;
-    const optInstagramUrl = params.instagramUrl as string | undefined; // MAGIA: AHORA LO RECIBIMOS
+    const p = (k: string) => { const v = params[k] as string | undefined; return v && v !== 'undefined' && v !== '' ? v : undefined; };
+    const optImageUrl      = p('imageUrl');
+    const optTitle         = p('title');
+    const optDate          = p('date');
+    const optHour          = p('hour');
+    const optClubName      = p('clubName');
+    const optClubImage     = p('clubImage');
+    const optAccentColor   = p('accentColor');
+    const optThemeColorEnd = p('themeColorEnd');
+    const optCategory      = p('category') || p('area');
+    const optProducerName  = p('producerName');
+    const optProducerLogo  = p('producerLogo');
+    const optProducerId    = p('producerId');
+    const optInstagramUrl  = p('instagramUrl');
+    const optStatus        = p('status');
 
     const insets = useSafeAreaInsets();
     const headerBgAnim = useRef(new Animated.Value(0)).current;
 
 
 
-    const [loading, setLoading] = useState(true);
+    const hasCachedParams = !!(optProducerName || optClubName);
+    const [loading, setLoading] = useState(!hasCachedParams);
+
+    // Prefetch de la imagen del club desde los params — empieza a descargar antes de que el fetch del evento termine
+    useEffect(() => {
+        if (optClubImage) Image.prefetch(optClubImage);
+    }, [optClubImage]);
     const [refreshing, setRefreshing] = useState(false);
     const [event, setEvent] = useState<any>(null);
     const [minPrice, setMinPrice] = useState(0);
     const [friendsGoing, setFriendsGoing] = useState<any[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
+    const [hasConsumptionMenu, setHasConsumptionMenu] = useState(false);
 
     const modalOffset = useSharedValue(height);
     const modalSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: modalOffset.value }] }));
@@ -159,12 +169,9 @@ export default function EventDetailScreen() {
             } catch (error) { }
         };
 
-        const task = InteractionManager.runAfterInteractions(() => {
-            fetchEventData();
-            fetchQueueStatus();
-            incrementView();
-        });
-        return () => task.cancel();
+        fetchEventData();
+        fetchQueueStatus();
+        incrementView();
     }, [params.id]);
 
     const onRefresh = useCallback(async () => {
@@ -182,7 +189,7 @@ export default function EventDetailScreen() {
 
     async function fetchEventData(isRefresh = false) {
         try {
-            if (!isRefresh) setLoading(true);
+            if (!isRefresh && !hasCachedParams) setLoading(true);
 
             const { data: eventData, error: eventError } = await supabase
                 .from('events')
@@ -236,6 +243,14 @@ export default function EventDetailScreen() {
 
             setEvent(eventData);
 
+            // Verificar si el evento tiene carta de consumos activa
+            const { count } = await supabase
+                .from('consumption_items')
+                .select('*', { count: 'exact', head: true })
+                .eq('event_id', params.id)
+                .eq('is_available', true);
+            setHasConsumptionMenu((count ?? 0) > 0);
+
             if (eventData.latitude && eventData.longitude) {
                 setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
             }
@@ -277,10 +292,10 @@ export default function EventDetailScreen() {
             android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`
         });
 
+        const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
         Linking.canOpenURL(url!).then(supported => {
-            if (supported) Linking.openURL(url!);
-            else Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
-        });
+            Linking.openURL(supported ? url! : fallbackMaps);
+        }).catch(() => Linking.openURL(fallbackMaps));
     };
 
     const openUber = () => {
@@ -290,17 +305,21 @@ export default function EventDetailScreen() {
         const nickName = encodeURIComponent(event.finalClubName || event.title || "Evento");
         const formattedAddress = encodeURIComponent(event.location || "Ubicación del evento");
         const uberUrl = `uber://?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
+        const fallbackUber = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
         Linking.canOpenURL(uberUrl).then(supported => {
-            if (supported) Linking.openURL(uberUrl);
-            else Linking.openURL(`https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`);
-        });
+            Linking.openURL(supported ? uberUrl : fallbackUber);
+        }).catch(() => Linking.openURL(fallbackUber));
     };
 
     const finalInstagramUrl = event?.instagram_url || optInstagramUrl;
     const openInstagram = () => {
-        if (finalInstagramUrl && finalInstagramUrl !== 'EMPTY' && finalInstagramUrl.trim() !== '') {
-            Linking.openURL(finalInstagramUrl.startsWith('http') ? finalInstagramUrl : `https://instagram.com/${finalInstagramUrl.replace('@', '')}`);
+        if (!finalInstagramUrl || finalInstagramUrl === 'EMPTY' || finalInstagramUrl.trim() === '') return;
+        const url = finalInstagramUrl.startsWith('http')
+            ? finalInstagramUrl
+            : `https://instagram.com/${finalInstagramUrl.replace('@', '')}`;
+        if (/^https?:\/\/(www\.)?instagram\.com\//.test(url)) {
+            Linking.openURL(url);
         }
     };
 
@@ -319,10 +338,12 @@ export default function EventDetailScreen() {
 
     const handleShare = async () => {
         try {
-            const clubId = event?.clubs?.id;
-            const targetPath = clubId ? '/club-detail' : '/event-detail';
-            const shareUrl = ExpoLinking.createURL(targetPath, { queryParams: { id: clubId || event?.id || params.id } });
-            await Share.share({ message: `¡Vamos a ${event?.title || optTitle}! 🚀\nEn: ${event?.finalClubName || event?.location || ''}\n\nVer más: ${shareUrl}`, url: shareUrl });
+            const eventId = event?.id || params.id;
+            const shareUrl = `https://dyzgo.com/event/${eventId}`;
+            const venue = event?.finalClubName || event?.location || '';
+            await Share.share({
+                message: `¡Vamos a ${event?.title || optTitle}! 🚀${venue ? `\nEn: ${venue}` : ''}\n\n${shareUrl}`,
+            });
         } catch (error) { }
     };
 
@@ -355,7 +376,7 @@ export default function EventDetailScreen() {
         }
     }
 
-    const isInfo = event?.status === 'info'
+    const isInfo = (event?.status ?? optStatus) === 'info'
 
     const hasValidInstagram = Boolean(
         finalInstagramUrl && typeof finalInstagramUrl === 'string' &&
@@ -373,12 +394,13 @@ export default function EventDetailScreen() {
         } catch (_e) { }
     }
 
-    const displayCategory = event?.category || optCategory;
+    const displayCategory = event?.category || event?.area || optCategory;
     const displayClubName = event?.finalClubName || optClubName || 'Ubicación';
-    const displayClubImage = event?.finalClubImage || optClubImage || 'https://via.placeholder.com/100';
-    const displayProducerName = event?.experiences?.name || optProducerName;
-    const displayProducerLogo = event?.experiences?.logo_url || optProducerLogo || 'https://via.placeholder.com/100';
-    const displayProducerId = event?.experiences?.id || optProducerId;
+    const displayClubImage = optClubImage || event?.finalClubImage || 'https://via.placeholder.com/100';
+    const expObj = Array.isArray(event?.experiences) ? event.experiences[0] : event?.experiences;
+    const displayProducerName = expObj?.name || optProducerName;
+    const displayProducerLogo = expObj?.logo_url || optProducerLogo || 'https://via.placeholder.com/100';
+    const displayProducerId = expObj?.id || optProducerId;
     const rawHour = event?.hour || optHour || '23:00';
     const displayHourFast = rawHour.substring(0, 5);
 
@@ -391,6 +413,72 @@ export default function EventDetailScreen() {
         const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
         return `${clean}${a}`;
     };
+
+    if (loading && !event) {
+        return (
+            <View style={{ flex: 1, backgroundColor: '#030303' }}>
+                <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+                    <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                </View>
+                {/* Header flotante skeleton */}
+                <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
+                    <View style={styles.iconBtn} />
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
+                    {/* Imagen hero */}
+                    <View style={[styles.imageWrapper, { paddingTop: insets.top + 64 }]}>
+                        <SkeletonBox height={width - 52} width={width - 52} borderRadius={24} style={{ alignSelf: 'center' }} />
+                    </View>
+                    {/* Content card skeleton */}
+                    <View style={styles.contentCard}>
+                        <View style={styles.titleSection}>
+                            <SkeletonBox height={12} width={80} borderRadius={6} style={{ marginBottom: 12 }} />
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                                <View style={{ flex: 1, gap: 8 }}>
+                                    <SkeletonBox height={28} width="75%" borderRadius={8} />
+                                    <SkeletonBox height={20} width="50%" borderRadius={8} />
+                                </View>
+                                <View style={{ alignItems: 'center', gap: 4 }}>
+                                    <SkeletonBox height={14} width={36} borderRadius={4} />
+                                    <SkeletonBox height={36} width={36} borderRadius={8} />
+                                </View>
+                            </View>
+                        </View>
+                        {/* Producer skeleton */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                            <SkeletonBox width={40} height={40} borderRadius={20} />
+                            <View style={{ gap: 6 }}>
+                                <SkeletonBox height={10} width={55} borderRadius={4} />
+                                <SkeletonBox height={13} width={110} borderRadius={4} />
+                            </View>
+                        </View>
+                        {/* Info card skeleton */}
+                        <View style={{ borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.04)', padding: 18, marginBottom: 16, flexDirection: 'row', gap: 16 }}>
+                            <View style={{ flex: 1, gap: 8 }}>
+                                <SkeletonBox width={44} height={44} borderRadius={13} />
+                                <SkeletonBox height={12} width="80%" borderRadius={4} />
+                                <SkeletonBox height={10} width="55%" borderRadius={4} />
+                            </View>
+                            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                            <View style={{ flex: 1, gap: 8 }}>
+                                <SkeletonBox width={44} height={44} borderRadius={13} />
+                                <SkeletonBox height={12} width="70%" borderRadius={4} />
+                                <SkeletonBox height={10} width="45%" borderRadius={4} />
+                            </View>
+                        </View>
+                        {/* Descripción skeleton */}
+                        <View style={{ gap: 8, marginBottom: 16 }}>
+                            <SkeletonBox height={14} width="90%" borderRadius={5} />
+                            <SkeletonBox height={14} width="75%" borderRadius={5} />
+                            <SkeletonBox height={14} width="60%" borderRadius={5} />
+                        </View>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -437,7 +525,7 @@ export default function EventDetailScreen() {
             <View style={{ flex: 1 }}>
                 <ScrollView
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: isInfo ? 40 : 130 }}
                     bounces={true}
                     overScrollMode="always"
                     scrollEventThrottle={16}
@@ -450,14 +538,12 @@ export default function EventDetailScreen() {
                     }
                 >
                     <View style={[styles.imageWrapper, { paddingTop: insets.top + 64 }]}>
-                        <AnimatedEntry index={0} fromScale={0.95} fromY={0}>
-                            <Image
-                                source={{ uri: event?.image_url || optImageUrl || 'https://via.placeholder.com/400' }}
-                                style={styles.squareImage}
-                                contentFit="cover"
-                                transition={0}
-                            />
-                        </AnimatedEntry>
+                        <Image
+                            source={{ uri: event?.image_url || optImageUrl || 'https://via.placeholder.com/400' }}
+                            style={styles.squareImage}
+                            contentFit="cover"
+                            transition={0}
+                        />
                     </View>
 
                     <View style={styles.contentCard}>
@@ -470,13 +556,10 @@ export default function EventDetailScreen() {
                                 </View>
                             )}
                             <View style={styles.titleRow}>
-                                <View style={{ flex: 1, paddingRight: 15 }}>
-                                    <Text style={styles.title} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.7}>
-                                        {event?.title || optTitle}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.dateBadge}>
+                                <Text style={[styles.title, { paddingRight: 90 }]} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                    {event?.title || optTitle}
+                                </Text>
+                                <View style={[styles.dateBadge, { position: 'absolute', right: 0, top: 0 }]}>
                                     <Text style={[styles.dateMonth, { fontSize: SCALE.dateMonthSize, color: activeBg1 }]}>{month || optMonth}</Text>
                                     <Text style={[styles.dateDay, { fontSize: SCALE.dateDaySize }]}>{day || optDay}</Text>
                                 </View>
@@ -491,7 +574,7 @@ export default function EventDetailScreen() {
                                     scaleTo={0.96}
                                     haptic="light"
                                     style={styles.producerPill}
-                                    onPress={() => router.push({ pathname: '/brand-profile', params: { id: displayProducerId } })}
+                                    onPress={() => router.push({ pathname: '/brand-profile', params: { id: displayProducerId, name: displayProducerName, logoUrl: displayProducerLogo } })}
                                 >
                                     <View style={styles.producerLogoRing}>
                                         <View style={styles.producerLogoWrap}>
@@ -545,13 +628,6 @@ export default function EventDetailScreen() {
                             </View>
                         </AnimatedEntry>
 
-                        {!event && (
-                            <View style={{ gap: 12, marginTop: 8, marginBottom: 20 }}>
-                                <SkeletonBox height={60} borderRadius={16} />
-                                <SkeletonBox height={120} borderRadius={20} />
-                                <SkeletonBox height={200} borderRadius={20} />
-                            </View>
-                        )}
 
                         {event && (<>
 
@@ -700,7 +776,7 @@ export default function EventDetailScreen() {
                                                 <Text style={styles.transportButtonText}>Pedir Uber</Text>
                                             </PressableScale>
                                             <PressableScale scaleTo={0.94} haptic="medium" style={styles.transportButtonHalf} onPress={openInGoogleMaps}>
-                                                <View style={styles.mapsIconBox}><Navigation size={14} color="#FBFBFB" /></View>
+                                                <View style={styles.mapsIconBox}><Navigation size={14} color="#4285F4" /></View>
                                                 <Text style={styles.transportButtonText}>Navegar</Text>
                                             </PressableScale>
                                         </View>
@@ -732,12 +808,8 @@ export default function EventDetailScreen() {
                     </View>
                 </ScrollView>
 
+                {!isInfo && (
                 <BlurView intensity={80} tint="dark" style={styles.footer}>
-                    {isInfo ? (
-                        <Text style={[styles.buyBtnText, { fontSize: SCALE.buttonTextSize, color: 'rgba(251,251,251,0.35)', flex: 1, textAlign: 'center' }]}>
-                            EVENTO INFORMATIVO
-                        </Text>
-                    ) : (
                         <>
                             <View style={styles.footerInfo}>
                                 <Text style={[styles.footerLabel, { fontSize: SCALE.labelSize }]}>Desde</Text>
@@ -758,11 +830,32 @@ export default function EventDetailScreen() {
                                 <Text style={[styles.buyBtnText, { fontSize: SCALE.buttonTextSize, color: finished ? 'rgba(251,251,251,0.5)' : activeBg1 }]}>
                                     {finished ? 'EVENTO FINALIZADO' : 'OBTENER TICKETS'}
                                 </Text>
-                                {!finished && <ArrowRight color={activeBg1} size={SCALE.buttonIconSize} />}
+                                {!finished && !hasConsumptionMenu && <ArrowRight color={activeBg1} size={SCALE.buttonIconSize} />}
                             </PressableScale>
+
+                            {hasConsumptionMenu && !finished && (
+                                <PressableScale
+                                    scaleTo={0.94}
+                                    haptic="light"
+                                    style={[styles.consumptionBtn, {
+                                        backgroundColor: withAlpha(activeBg1, 0.1),
+                                        borderColor: withAlpha(activeBg1, 0.3),
+                                    }]}
+                                    onPress={() => router.push({
+                                        pathname: '/(consumption)/consumption-menu',
+                                        params: {
+                                            eventId: String(params.id),
+                                            eventName: event?.title || optTitle || '',
+                                            accentColor: activeBg1,
+                                        },
+                                    })}
+                                >
+                                    <Wine size={22} color={activeBg1} />
+                                </PressableScale>
+                            )}
                         </>
-                    )}
                 </BlurView>
+                )}
 
                 <Modal visible={modalVisible} transparent statusBarTranslucent onRequestClose={closeAttendeeModal}>
                     <RAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }, modalOverlayStyle]}>
@@ -823,7 +916,7 @@ export default function EventDetailScreen() {
                                         <ChevronRight color={COLORS.textZinc} size={20} />
                                     </PressableScale>
                                     <PressableScale scaleTo={0.96} haptic="medium" style={styles.transportBtn} onPress={openInGoogleMaps}>
-                                        <View style={styles.transportIcon}><Navigation color="#FBFBFB" size={20} /></View>
+                                        <View style={[styles.transportIcon, { backgroundColor: 'rgba(66,133,244,0.15)', borderWidth: 1, borderColor: 'rgba(66,133,244,0.3)' }]}><Navigation color="#4285F4" size={20} /></View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.transportName}>Google Maps</Text>
                                             <Text style={styles.transportTime}>Navegación paso a paso</Text>
@@ -849,12 +942,12 @@ const styles = StyleSheet.create({
     squareImage: { width: width - 40, aspectRatio: 1, borderRadius: 32, backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
     contentCard: { flex: 1, paddingHorizontal: SCALE.padding, paddingTop: 10 },
     titleSection: { marginBottom: SCALE.sectionGap },
-    categoryCapsule: { alignSelf: 'flex-start', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 8 },
+    categoryCapsule: { alignSelf: 'flex-start', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: SCALE.sectionGap },
     categoryCapsuleText: { color: '#FBFBFB', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
     producerSection: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SCALE.sectionGap },
     mainInfoCardSection: { marginBottom: SCALE.sectionGap },
     mbSection: { marginBottom: SCALE.sectionGap },
-    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    titleRow: { position: 'relative' },
     title: { color: '#FBFBFB', fontWeight: '900', fontStyle: 'italic', fontSize: SCALE.titleSize, letterSpacing: -1 },
     producerPill: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: COLORS.glassBorder, gap: 8 },
     producerLogoRing: { width: 32, height: 32, borderRadius: 16, padding: 1.5, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
@@ -904,8 +997,8 @@ const styles = StyleSheet.create({
     transportButtonText: { color: '#FBFBFB', fontSize: 13, fontWeight: '800' },
     uberIconBox: { backgroundColor: 'rgba(3, 3, 3, 0.6)', width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 0, borderColor: 'rgba(255,255,255,0.2)' },
     uberIconText: { color: '#FBFBFB', fontWeight: '900', fontSize: 9 },
-    mapsIconBox: { backgroundColor: 'rgba(3, 3, 3, 0.6)', width: 28, height: 28, borderRadius: 8, borderWidth: 0, borderColor: 'rgba(66, 133, 244, 0.3)', justifyContent: 'center', alignItems: 'center' },
-    legalSection: { marginTop: 10, marginBottom: 30, paddingHorizontal: 10 },
+    mapsIconBox: { backgroundColor: 'rgba(66, 133, 244, 0.15)', width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(66, 133, 244, 0.3)', justifyContent: 'center', alignItems: 'center' },
+    legalSection: { marginTop: 10, marginBottom: 12, paddingHorizontal: 10 },
     legalText: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 11, textAlign: 'center', lineHeight: 16, marginBottom: 8 },
     legalTextHighlight: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 11, textAlign: 'center', fontWeight: '800' },
     footer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderTopWidth: 1, borderTopColor: 'rgba(251, 251, 251, 0.15)', paddingHorizontal: SCALE.padding, paddingVertical: SCALE.padding, paddingBottom: isSmallScreen ? 25 : 35, flexDirection: 'row', alignItems: 'center' },
@@ -915,6 +1008,7 @@ const styles = StyleSheet.create({
     buyBtnContainer: { flex: 1.4 },
     buyBtnGradient: { height: isSmallScreen ? 50 : 58, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
     buyBtnText: { color: '#FBFBFB', fontWeight: '900' },
+    consumptionBtn: { width: isSmallScreen ? 50 : 58, height: isSmallScreen ? 50 : 58, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginLeft: 8 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     modalContent: { position: 'absolute', bottom: 0, left: 0, right: 0, height: height * 0.55, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 25, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
     modalGradient: { flex: 1, padding: 25 },

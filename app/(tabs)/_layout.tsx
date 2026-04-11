@@ -1,7 +1,6 @@
 import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
-import { Bookmark, Compass, House, Store, User } from 'lucide-react-native';
+import { Compass, House, Store, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,12 +9,10 @@ import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSha
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
-// --- AQUÍ QUITÉ "decide" PARA DEJAR TUS 5 PESTAÑAS EXACTAS ---
-const ICONS: Record<string, any> = {
+const ICONS: Record<string, { icon: React.ComponentType<any>; label: string }> = {
   home: { icon: House, label: 'Home' },
   explore: { icon: Compass, label: 'Explore' },
   marketplace: { icon: Store, label: 'Shop' },
-  saved: { icon: Bookmark, label: 'Saved' },
   profile: { icon: User, label: 'Profile' },
 };
 
@@ -50,7 +47,6 @@ const TabItem = ({ route, index, state, navigation, tabWidth, leftEdge, rightEdg
     });
 
     if (!isFocused && !event.defaultPrevented) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       navigation.navigate(route.name);
     }
   };

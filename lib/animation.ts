@@ -6,7 +6,7 @@
  *  - Navigation transitions use `nav` timing (fast, predictable).
  *  - Screen content uses `enter` / `exit` (slightly slower, more expressive).
  *  - Interactive elements (buttons, cards) use springs — they feel alive.
- *  - Stagger is capped at MAX_STAGGER_DELAY so long lists never feel slow.
+ *  - Stagger is capped at MAX_STAGGER_DELAY so long lists still feel slow.
  */
 
 import { Easing } from 'react-native-reanimated';
@@ -14,28 +14,23 @@ import { Easing } from 'react-native-reanimated';
 // ─── Easing presets ────────────────────────────────────────────────────────
 // Named after GSAP equivalents for mental model consistency.
 export const Ease = {
-  // GSAP expo.out — ultra-smooth deceleration. Use for entrances.
-  expoOut: Easing.bezier(0.16, 1, 0.3, 1),
-  // GSAP power2.out — snappier, good for small movements.
-  out:     Easing.bezier(0.33, 1, 0.68, 1),
-  // GSAP power2.in — for exits (accelerates out).
-  in:      Easing.bezier(0.55, 0, 0.9, 0.1),
-  // GSAP power2.inOut — for repositioning.
-  inOut:   Easing.bezier(0.45, 0, 0.55, 1),
-  // Navigation easing — feels like native iOS push.
+  expoOut: Easing.linear,
+  out:     Easing.linear,
+  in:      Easing.linear,
+  inOut:   Easing.linear,
   nav:     Easing.bezier(0.25, 0.46, 0.45, 0.94),
   navBack: Easing.bezier(0.55, 0, 0.45, 1),
 } as const;
 
 // ─── Duration tokens (ms) ─────────────────────────────────────────────────
 export const Duration = {
-  instant:    80,
-  fast:      160,
-  normal:    240,  // default for most UI
-  enter:     260,  // screen/card entrance
-  exit:      180,  // always faster than enter
-  navOpen:   300,  // navigation push
-  navClose:  220,  // navigation pop
+  instant:    50,
+  fast:       80,
+  normal:    100,
+  enter:     100,
+  exit:       80,
+  navOpen:   180,
+  navClose:  140,
 } as const;
 
 // ─── Pre-built timing configs ─────────────────────────────────────────────

@@ -1,6 +1,8 @@
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
     Bell,
     ChevronLeft,
@@ -13,12 +15,11 @@ import {
     Sparkles,
     Flame
 } from 'lucide-react-native';
-import React, { useCallback, memo, useMemo, useRef, useState } from 'react';
+import React, { useCallback, memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
     FlatList,
-    Image,
     ImageBackground,
     InteractionManager,
     Platform,
@@ -50,9 +51,11 @@ import { useUserLocation } from '../../lib/useUserLocation';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
 import { safeFormatDate, formatDayShort } from '../../utils/format';
+import { PermissionModal } from '../../components/PermissionModal';
 
 const { width, height } = Dimensions.get('window');
 const S = width / 430; // scale factor vs iPhone 15 Pro Max
+
 const ITEM_WIDTH = Math.round(width * 0.75); // Tarjetas de club más amplias
 const SPACING = 16;
 const FULL_SIZE = ITEM_WIDTH + SPACING;
@@ -143,7 +146,13 @@ export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
-    const { location } = useUserLocation();
+    const { location, needsPermission, requestPermission } = useUserLocation();
+    const [showLocationModal, setShowLocationModal] = useState(false);
+
+    // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
+    useEffect(() => {
+        if (needsPermission) setShowLocationModal(true);
+    }, [needsPermission]);
 
     // --- DATOS PRECARGADOS ---
     const initialData = useMemo(() => {
@@ -228,7 +237,7 @@ export default function HomeScreen() {
 
             const { data: events } = await supabase
                 .from('events')
-                .select('*, clubs(latitude, longitude)')
+                .select('*, clubs(latitude, longitude, name, image), experiences(id, name, logo_url)')
                 .eq('is_active', true)
                 .in('status', ['active', 'info'])
                 .not('image_url', 'is', null)
@@ -266,6 +275,12 @@ export default function HomeScreen() {
                     return { ...event, attendees: attendeesAvatars };
                 });
                 setFeaturedEvents(eventsWithAttendees);
+                eventsWithAttendees.forEach((e: any) => {
+                    const cl = Array.isArray(e.clubs) ? e.clubs[0] : e.clubs;
+                    const exp = Array.isArray(e.experiences) ? e.experiences[0] : e.experiences;
+                    if (cl?.image) ExpoImage.prefetch(cl.image);
+                    if (exp?.logo_url) ExpoImage.prefetch(exp.logo_url);
+                });
             } else {
                 setFeaturedEvents([]);
             }
@@ -365,7 +380,7 @@ export default function HomeScreen() {
                         <PressableScale scaleTo={0.88} haptic="light" onPress={() => router.push('/profile')}>
                             <View style={styles.avatarBorder}>
                                 {avatarUrl ? (
-                                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                                    <ExpoImage source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
                                 ) : (
                                     <View style={styles.avatarFallback}>
                                         <Text style={styles.avatarInitial}>{userName ? userName[0].toUpperCase() : '?'}</Text>
@@ -441,7 +456,7 @@ export default function HomeScreen() {
                                                 if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
                                                     featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
                                                 } else {
-                                                    router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color } });
+                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
                                                 }
                                             }}
                                         >
@@ -478,21 +493,7 @@ export default function HomeScreen() {
                                                             })()]}
                                                             numberOfLines={3}
                                                         >{event.title}</Text>
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                                                            <Text style={styles.bigEventClub}>{event.club_name || event.location}</Text>
-                                                            {event.attendees && event.attendees.length > 0 && (
-                                                                <View style={styles.socialProofModern}>
-                                                                    <View style={styles.avatarStack}>
-                                                                        {event.attendees.slice(0, 3).map((url: string, idx: number) => (
-                                                                            <Image key={idx} source={{ uri: url }} style={[styles.stackAvatar, { transform: [{ translateX: idx * -8 }] }]} />
-                                                                        ))}
-                                                                    </View>
-                                                                    <Text style={styles.socialProofText}>
-                                                                        {event.attendees.length} amigos asisten
-                                                                    </Text>
-                                                                </View>
-                                                            )}
-                                                        </View>
+                                                        <Text style={[styles.bigEventClub, { marginTop: 6 }]}>{event.club_name || event.location}</Text>
                                                     </View>
                                                 </LinearGradient>
                                             </ImageBackground>
@@ -599,6 +600,8 @@ export default function HomeScreen() {
                                     hasCentered.current = true;
                                 }
                             }}
+                            removeClippedSubviews={true}
+                            maxToRenderPerBatch={8}
                             initialNumToRender={5}
                             windowSize={5}
                             contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 }}
@@ -610,6 +613,21 @@ export default function HomeScreen() {
                 </View>
 
             </AnimatedScrollView>
+
+            {/* Modal de permiso de ubicación — aparece antes del diálogo del sistema iOS */}
+            <PermissionModal
+                visible={showLocationModal}
+                icon={<MapPin color="#FF31D8" size={36} />}
+                title="¿Dónde estás?"
+                description="Necesitamos tu ubicación para mostrarte eventos cerca de ti y calcular la distancia a cada lugar."
+                allowLabel="Compartir ubicación"
+                denyLabel="Ahora no"
+                onAllow={() => {
+                    setShowLocationModal(false);
+                    requestPermission();
+                }}
+                onDeny={() => setShowLocationModal(false)}
+            />
         </View>
     );
 }
@@ -647,8 +665,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden'
     },
     avatarImage: { width: '100%', height: '100%', borderRadius: 22 },
-    avatarFallback: { width: '100%', height: '100%', borderRadius: 22, backgroundColor: 'rgba(123, 46, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
-    avatarInitial: { color: '#FBFBFB', fontWeight: '800', fontSize: 16 },
+    avatarFallback: { width: '100%', height: '100%', borderRadius: 22, backgroundColor: 'rgba(255, 49, 216, 0.2)', justifyContent: 'center', alignItems: 'center' },
+    avatarInitial: { color: '#FBFBFB', fontWeight: '800', fontSize: 18 },
 
     heroSection: { paddingHorizontal: 24, marginTop: Math.round(24 * S), marginBottom: Math.round(24 * S) },
     greetingText: { color: 'rgba(251, 251, 251, 0.6)', fontSize: Math.round(16 * S), fontWeight: '500', marginBottom: Math.round(6 * S) },

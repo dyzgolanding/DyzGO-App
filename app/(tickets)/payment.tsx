@@ -1,20 +1,24 @@
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { AlertTriangle, CheckCircle2, Clock, CreditCard, Lock, Plus, ShieldCheck, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { SkeletonBox } from '../../components/SkeletonBox';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Modal,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -25,22 +29,29 @@ import { supabase } from '../../lib/supabase';
 
 // --- DEFINICIÓN DE COLORES ---
 const COLORS = {
-    bgDark: '#030303',
-    cardBg: 'rgba(255, 255, 255, 0.05)',
-    cardBorder: 'rgba(255, 255, 255, 0.1)',
-    neonPurple: '#FF31D8',
-    textWhite: '#FBFBFB',
-    textGray: 'rgba(251, 251, 251, 0.6)',
-    success: '#22c55e',
-    warning: '#f59e0b',
-    danger: '#ef4444',
-    neonPink: '#FF31D8',
-    glassBg: 'rgba(255, 255, 255, 0.05)',
-    glassBorder: 'rgba(255, 255, 255, 0.1)',
-    textZinc: 'rgba(251, 251, 251, 0.6)',
+  bgDark: '#030303',
+  cardBg: 'rgba(255, 255, 255, 0.05)',
+  cardBorder: 'rgba(255, 255, 255, 0.1)',
+  neonPurple: '#FF31D8',
+  textWhite: '#FBFBFB',
+  textGray: 'rgba(251, 251, 251, 0.6)',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  neonPink: '#FF31D8',
+  glassBg: 'rgba(255, 255, 255, 0.05)',
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
+  textZinc: 'rgba(251, 251, 251, 0.6)',
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -51,27 +62,29 @@ export default function PaymentScreen() {
   const eventId = params.eventId as string;
   const eventName = params.eventName as string;
   const paramAccentColor = params.accentColor as string | undefined;
-  
-  const rawCart = params.cartData ? JSON.parse(params.cartData as string) : [];
-  const cart = rawCart.filter((item: any) => UUID_REGEX.test(item.id));
+
+  const rawCart: CartItem[] = params.cartData ? JSON.parse(params.cartData as string) : [];
+  const cart: CartItem[] = rawCart.filter((item) => UUID_REGEX.test(item.id));
   const hasCorruptItems = rawCart.length > cart.length;
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
-    const serviceFeeTotal = Math.round(subtotal * 0.10);
+    const subtotal = cart.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
+    const serviceFeeTotal = Math.round(subtotal * 0.12);
     const finalTotal = subtotal + serviceFeeTotal;
     return { subtotal, serviceFeeTotal, finalTotal };
   }, [cart]);
 
+  const isFreeOrder = totals.finalTotal === 0;
+
   const [loadingReservation, setLoadingReservation] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [preloadedTx, setPreloadedTx] = useState<{url: string, token: string} | null>(null);
+  const [preloadedTx, setPreloadedTx] = useState<{ url: string, token: string } | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showOneClickModal, setShowOneClickModal] = useState(false);
-  
+
   const [reservationExpiresAt, setReservationExpiresAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
@@ -79,6 +92,8 @@ export default function PaymentScreen() {
 
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string>('webpay');
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoFinalAmount, setPromoFinalAmount] = useState<number | null>(null);
 
   const webViewRef = useRef<WebView>(null);
   const commitAttempted = useRef(false);
@@ -86,42 +101,49 @@ export default function PaymentScreen() {
   const [eventDetails, setEventDetails] = useState<any>(null);
 
   useEffect(() => {
-      const fetchDetails = async () => {
-          const { data } = await supabase
-              .from('events')
-              .select('image_url, date, hour, end_time, accent_color, experiences(name)')
-              .eq('id', eventId)
-              .single();
-          if (data) setEventDetails(data);
-      };
-      fetchDetails();
+    const fetchDetails = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('events')
+          .select('image_url, date, hour, end_time, accent_color, experiences(name)')
+          .eq('id', eventId)
+          .single();
+        if (error) throw error;
+        if (data) setEventDetails(data);
+      } catch {
+        // Si falla la carga de detalles, el resumen igual se puede mostrar con los params de navegación
+      }
+    };
+    if (eventId) fetchDetails();
   }, [eventId]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-        if (success) {
-            return;
-        }
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      if (success) return;
 
-        const cleanupReservation = async () => {
-            try {
+      e.preventDefault();
+
+      Alert.alert(
+        '¿Perder tu reserva?',
+        'Si vuelves atrás, tus entradas reservadas serán liberadas.',
+        [
+          { text: 'Quedarme', style: 'cancel' },
+          {
+            text: 'Sí, salir', style: 'destructive',
+            onPress: async () => {
+              try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user && eventId) {
-                    console.log("Liberando tickets pendientes...");
-                    await supabase.functions.invoke('webpay', {
-                        body: { 
-                            action: 'cancel', 
-                            user_id: user.id, 
-                            event_id: eventId 
-                        }
-                    });
+                  await supabase.functions.invoke('webpay', {
+                    body: { action: 'cancel', user_id: user.id, event_id: eventId }
+                  });
                 }
-            } catch (err) {
-                console.log("Error limpiando reserva:", err);
+              } catch (_err) {}
+              navigation.dispatch(e.data.action);
             }
-        };
-
-        cleanupReservation();
+          }
+        ]
+      );
     });
 
     return unsubscribe;
@@ -138,16 +160,16 @@ export default function PaymentScreen() {
   );
 
   const fetchPaymentMethods = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      const { data } = await supabase
-          .from('user_payment_methods')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-      
-      if (data) setSavedCards(data);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('user_payment_methods')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (data) setSavedCards(data);
   };
 
   const extractFunctionError = async (error: any): Promise<string> => {
@@ -160,7 +182,7 @@ export default function PaymentScreen() {
       try {
         const text = await (error?.context as Response)?.text?.();
         if (text) return text;
-      } catch (_) {}
+      } catch (_) { }
     }
     return error?.message || "Error desconocido";
   };
@@ -187,9 +209,9 @@ export default function PaymentScreen() {
       const session = refreshData.session;
       const user = session.user;
 
-      const simplifiedCart = cart.map((item: any) => ({
-          tier_id: item.id,
-          quantity: item.quantity
+      const simplifiedCart = cart.map((item) => ({
+        tier_id: item.id,
+        quantity: item.quantity
       }));
 
       const { data, error } = await supabase.functions.invoke('webpay', {
@@ -207,11 +229,19 @@ export default function PaymentScreen() {
         throw new Error(msg);
       }
 
+      if (data && data.status === 'FREE_ORDER') {
+        // Orden gratuita: tickets reservados como pending, esperar confirmación del usuario
+        if (data.session_id) setCurrentSessionId(data.session_id);
+        if (data.expires_at) setReservationExpiresAt(data.expires_at);
+        return;
+      }
+
       if (data && data.url && data.token) {
         setPreloadedTx({ url: data.url, token: data.token });
         setAuthToken(data.token);
         if (data.expires_at) setReservationExpiresAt(data.expires_at);
         if (data.session_id) setCurrentSessionId(data.session_id);
+        if (data.promo_applied) { setPromoApplied(true); setPromoFinalAmount(data.final_amount ?? null); }
       } else {
         if (data?.error) throw new Error(data.error);
         throw new Error("Respuesta inválida del servidor.");
@@ -254,125 +284,177 @@ export default function PaymentScreen() {
     return () => clearInterval(interval);
   }, [reservationExpiresAt]);
 
-  const handleCancelAndExit = async () => {
-    if (success) {
-        router.back();
-        return;
-    }
-    router.back(); 
+  const handleCancelAndExit = () => {
+    router.back();
   };
 
   const handlePaymentButtonPress = () => {
-      if (selectedMethod === 'webpay') {
-          setShowConfirmationModal(true);
-      } else {
-          setShowOneClickModal(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isFreeOrder) {
+      handleConfirmFree();
+      return;
+    }
+    if (selectedMethod === 'webpay') {
+      setShowConfirmationModal(true);
+    } else {
+      setShowOneClickModal(true);
+    }
+  };
+
+  const handleConfirmFree = async () => {
+    setProcessing(true);
+    try {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        await handleInvalidSession();
+        return;
       }
+      const session = refreshData.session;
+
+      const { data, error } = await supabase.functions.invoke('webpay', {
+        body: {
+          action: 'confirm_free',
+          user_id: session.user.id,
+          event_id: eventId,
+          session_id: currentSessionId
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (error) {
+        const msg = await extractFunctionError(error);
+        throw new Error(msg);
+      }
+
+      if (data?.status === 'FREE_CONFIRMED') {
+        setSuccess(true);
+        setReservationExpiresAt(null);
+        setTimeLeft(null);
+        finishProcess();
+      } else {
+        throw new Error(data?.error || 'Error confirmando entradas gratuitas.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'No se pudieron confirmar las entradas.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleOneClickPayment = async () => {
-      setProcessing(true);
-      try {
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError || !refreshData.session) {
-              await handleInvalidSession();
-              return;
-          }
-          const session = refreshData.session;
-
-          const { data, error } = await supabase.functions.invoke('webpay', {
-              body: {
-                  action: 'authorize_oneclick',
-                  user_id: session.user.id,
-                  card_id: selectedMethod,
-                  event_id: eventId,
-                  session_id: currentSessionId
-              },
-              headers: { Authorization: `Bearer ${session.access_token}` }
-          });
-
-          if (error) throw error;
-
-          if (data.status === 'SUCCESS') {
-              setSuccess(true);
-              setReservationExpiresAt(null);
-              setTimeLeft(null);
-              finishProcess();
-          } else {
-              throw new Error(data.error || "Pago rechazado");
-          }
-
-      } catch (e: any) {
-          Alert.alert("Error en Pago", e.message || "No se pudo procesar el pago OneClick.");
-      } finally {
-          setProcessing(false);
+    setProcessing(true);
+    try {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        await handleInvalidSession();
+        return;
       }
+      const session = refreshData.session;
+
+      const { data, error } = await supabase.functions.invoke('webpay', {
+        body: {
+          action: 'authorize_oneclick',
+          user_id: session.user.id,
+          card_id: selectedMethod,
+          event_id: eventId,
+          session_id: currentSessionId
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (error) throw error;
+
+      if (data.status === 'SUCCESS') {
+        setSuccess(true);
+        setReservationExpiresAt(null);
+        setTimeLeft(null);
+        finishProcess();
+      } else {
+        throw new Error(data.error || "Pago rechazado");
+      }
+
+    } catch (e: any) {
+      Alert.alert("Error en Pago", e.message || "No se pudo procesar el pago OneClick.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleProceedToWebpay = () => {
     setShowConfirmationModal(false);
     if (!preloadedTx) {
-        Alert.alert("Error", "Reserva no lista.");
-        return;
+      Alert.alert("Error", "Reserva no lista.");
+      return;
     }
     setPaymentUrl(preloadedTx.url);
   };
 
-  const handleWebViewNavigation = async (navState: any) => {
-    const { url } = navState;
-    
+  const isCallbackUrl = (url: string): boolean => {
     const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-    if (!callbackHost) {
-      console.error('[CONFIG ERROR] EXPO_PUBLIC_CALLBACK_HOST no definida');
-      return;
+    if (!callbackHost) return false;
+    return url.includes(callbackHost) && url.includes('callback=dyzgo_final');
+  };
+
+  const commitPayment = async () => {
+    setPaymentUrl(null);
+    setProcessing(true);
+    try {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        await handleInvalidSession();
+        return;
+      }
+      const session = refreshData.session;
+      const { data, error } = await supabase.functions.invoke('webpay', {
+        body: { action: 'commit', token_ws: authToken, user_id: session.user.id },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (error) throw error;
+      if (data.db_error) {
+        Alert.alert("Atención", "Error registrando tickets.");
+        return;
+      }
+
+      if (data.status === 'AUTHORIZED' && data.response_code === 0) {
+        setSuccess(true);
+        setReservationExpiresAt(null);
+        setTimeLeft(null);
+        finishProcess();
+      } else {
+        Alert.alert("Pago Rechazado", "Transacción no autorizada.");
+      }
+    } catch (e: any) {
+      Alert.alert("Error", "Error confirmando compra.");
+    } finally {
+      setProcessing(false);
     }
-    if (url.includes(callbackHost) && url.includes('callback=dyzgo_final') && authToken) {
-        
-        if (commitAttempted.current) return;
+  };
+
+  const handleShouldStartLoadWithRequest = (request: any): boolean => {
+    if (isCallbackUrl(request.url) && authToken) {
+      if (!commitAttempted.current) {
         commitAttempted.current = true;
+        commitPayment();
+      }
+      return false;
+    }
+    return true;
+  };
 
-        if (webViewRef.current) webViewRef.current.stopLoading();
-
-        setPaymentUrl(null);
-        setProcessing(true);
-
-        try {
-            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-            if (refreshError || !refreshData.session) {
-                await handleInvalidSession();
-                return;
-            }
-            const session = refreshData.session;
-            const { data, error } = await supabase.functions.invoke('webpay', {
-                body: { action: 'commit', token_ws: authToken, user_id: session.user.id },
-                headers: { Authorization: `Bearer ${session.access_token}` }
-            });
-
-            if (error) throw error;
-            if (data.db_error) {
-                Alert.alert("Atención", "Error registrando tickets.");
-                return;
-            }
-
-            if (data.status === 'AUTHORIZED' && data.response_code === 0) {
-                setSuccess(true);
-                setReservationExpiresAt(null);
-                setTimeLeft(null);
-                finishProcess();
-            } else {
-                Alert.alert("Pago Rechazado", "Transacción no autorizada.");
-            }
-        } catch (e: any) {
-            Alert.alert("Error", "Error confirmando compra.");
-        } finally {
-            setProcessing(false);
-        }
+  const handleWebViewNavigation = (navState: any) => {
+    if (isCallbackUrl(navState.url) && authToken) {
+      if (!commitAttempted.current) {
+        commitAttempted.current = true;
+        webViewRef.current?.stopLoading();
+        commitPayment();
+      }
     }
   };
 
   const finishProcess = () => {
-    const totalQuantity = cart.reduce((acc: number, item: any) => acc + item.quantity, 0);
-    
+    const totalQuantity = cart.reduce((acc, item) => acc + item.quantity, 0);
+
     router.replace({
       pathname: '/ticket-confirmation',
       params: {
@@ -385,7 +467,7 @@ export default function PaymentScreen() {
 
   const formatEventDateTime = (evt: any) => {
     if (!evt || !evt.date) return "";
-    
+
     const [year, month, day] = evt.date.split('-');
     const d = new Date(Number(year), Number(month) - 1, Number(day));
 
@@ -393,13 +475,13 @@ export default function PaymentScreen() {
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     const formatTime = (timeStr: string) => {
-        if (!timeStr) return "";
-        const [h, m] = timeStr.split(':');
-        let hour = parseInt(h, 10);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        hour = hour % 12;
-        hour = hour ? hour : 12;
-        return `${hour.toString().padStart(2, '0')}:${m} ${ampm}`;
+      if (!timeStr) return "";
+      const [h, m] = timeStr.split(':');
+      let hour = parseInt(h, 10);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12;
+      hour = hour ? hour : 12;
+      return `${hour.toString().padStart(2, '0')}:${m} ${ampm}`;
     };
 
     const startTime = formatTime(evt.hour);
@@ -407,7 +489,7 @@ export default function PaymentScreen() {
 
     let timeString = "";
     if (startTime && endTime) {
-        timeString = `, de ${startTime} a ${endTime}`;
+      timeString = `, de ${startTime} a ${endTime}`;
     }
 
     return `${days[d.getDay()]} ${d.getDate()} de ${months[d.getMonth()]}${timeString}`;
@@ -423,282 +505,371 @@ export default function PaymentScreen() {
     return `${clean}${a}`;
   };
 
+  if (loadingReservation) return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient colors={[withAlpha(accentColor, 0.2), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', withAlpha(accentColor, 0.15)]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      </View>
+      <NavBar title="RESUMEN DE COMPRA" onBack={handleCancelAndExit} />
+      <View style={{ flex: 1, padding: 20 }}>
+        <View style={{ flexDirection: 'row', gap: 14, marginBottom: 16 }}>
+          <SkeletonBox height={80} width={80} borderRadius={12} />
+          <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
+            <SkeletonBox height={20} borderRadius={6} />
+            <SkeletonBox height={16} borderRadius={6} width="60%" />
+            <SkeletonBox height={14} borderRadius={6} width="45%" />
+          </View>
+        </View>
+        <SkeletonBox height={60} borderRadius={16} style={{ marginBottom: 16 }} />
+        <SkeletonBox height={180} borderRadius={20} style={{ marginBottom: 16 }} />
+        <SkeletonBox height={24} borderRadius={6} width="40%" style={{ marginBottom: 12 }} />
+        <SkeletonBox height={72} borderRadius={16} style={{ marginBottom: 10 }} />
+        <SkeletonBox height={72} borderRadius={16} />
+      </View>
+      <View style={{ padding: 20 }}>
+        <SkeletonBox height={56} borderRadius={16} />
+      </View>
+    </View>
+  );
+
   if (paymentUrl) {
     return (
-        <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-            <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-            <View style={{ flex: 1, position: 'relative' }}>
-                <WebView
-                    ref={webViewRef}
-                    source={{
-                        uri: paymentUrl,
-                        method: 'POST',
-                        body: `token_ws=${authToken}`,
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                    }}
-                    onNavigationStateChange={handleWebViewNavigation}
-                    style={{ flex: 1, backgroundColor: '#ffffff' }}
-                    startInLoadingState={true}
-                    renderLoading={() => <ActivityIndicator size="large" color={accentColor} style={StyleSheet.absoluteFill} />}
-                />
-                <TouchableOpacity onPress={() => setPaymentUrl(null)} style={styles.floatingCloseBtn}>
-                    <X color="#333" size={24} />
-                </TouchableOpacity>
-            </View>
+      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <View style={{ flex: 1, position: 'relative' }}>
+          <WebView
+            ref={webViewRef}
+            source={{
+              uri: paymentUrl,
+              method: 'POST',
+              body: `token_ws=${authToken}`,
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }}
+            onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+            onNavigationStateChange={handleWebViewNavigation}
+            style={{ flex: 1, backgroundColor: '#ffffff' }}
+            startInLoadingState={true}
+            renderLoading={() => <ActivityIndicator size="large" color={accentColor} style={StyleSheet.absoluteFill} />}
+          />
+          <TouchableOpacity onPress={() => setPaymentUrl(null)} style={styles.floatingCloseBtn}>
+            <X color="#333" size={24} />
+          </TouchableOpacity>
         </View>
+      </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ReAnimated.View entering={FadeInUp.duration(300).springify()} style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Fondo — 3 capas con accent_color */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <LinearGradient colors={[withAlpha(accentColor, 0.2), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={['transparent', withAlpha(accentColor, 0.15)]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient colors={['transparent', withAlpha(accentColor, 0.05), 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[withAlpha(accentColor, 0.2), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', withAlpha(accentColor, 0.15)]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', withAlpha(accentColor, 0.05), 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
       </View>
 
       <View style={{ flex: 1 }}>
         <NavBar title="RESUMEN DE COMPRA" onBack={handleCancelAndExit} />
 
-        <ScrollView contentContainerStyle={[styles.content, { paddingTop: navTop }]}>
-          <View style={styles.eventHeaderRow}>
-              <Image 
-                  source={{ uri: eventDetails?.image_url || 'https://via.placeholder.com/150' }}
-                  style={[styles.eventSquareImage, { borderColor: withAlpha(accentColor, 0.5), shadowColor: accentColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10 }]}
+        <ScrollView contentContainerStyle={[styles.content, { paddingTop: navTop }]} showsVerticalScrollIndicator={false}>
+          <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
+            <View style={styles.eventHeaderRow}>
+              <Image
+                source={{ uri: eventDetails?.image_url || 'https://via.placeholder.com/150' }}
+                style={[styles.eventSquareImage, { borderColor: withAlpha(accentColor, 0.5), shadowColor: accentColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10 }]}
+                contentFit="cover"
+                transition={150}
+                cachePolicy="memory-disk"
               />
               <View style={styles.eventHeaderTextContainer}>
-                  <Text style={styles.eventHeaderTitle} numberOfLines={2}>{eventName}</Text>
-                  
-                  {displayDate && (
-                      <View style={styles.eventHeaderSubRow}>
-                          <Text style={styles.eventHeaderText}>{displayDate}</Text>
-                      </View>
-                  )}
-                  
-                  {producerName && (
-                      <View style={styles.eventHeaderSubRow}>
-                          <Text style={styles.eventHeaderText}>
-                              Producido por <Text style={{fontWeight: '800', color: 'white'}}>{producerName}</Text>
-                          </Text>
-                      </View>
-                  )}
-              </View>
-          </View>
+                <Text style={styles.eventHeaderTitle} numberOfLines={2}>{eventName}</Text>
 
-          <View style={styles.infoBox}>
-              <ShieldCheck color={accentColor} size={20} />
-              <View style={{flex: 1}}>
+                {displayDate && (
+                  <View style={styles.eventHeaderSubRow}>
+                    <Text style={styles.eventHeaderText}>{displayDate}</Text>
+                  </View>
+                )}
+
+                {producerName && (
+                  <View style={styles.eventHeaderSubRow}>
+                    <Text style={styles.eventHeaderText}>
+                      Producido por <Text style={{ fontWeight: '800', color: 'white' }}>{producerName}</Text>
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </ReAnimated.View>
+
+          {!isFreeOrder && (
+            <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
+              <View style={styles.infoBox}>
+                <ShieldCheck color={accentColor} size={20} />
+                <View style={{ flex: 1 }}>
                   <Text style={styles.infoBoxText}>
-                      Tus entradas están <Text style={{fontWeight: '800', color: 'white'}}>reservadas temporalmente</Text>. Completa el pago antes de que el contador llegue a cero.
+                    Tus entradas están <Text style={{ fontWeight: '800', color: 'white' }}>reservadas temporalmente</Text>. Completa el pago antes de que el contador llegue a cero.
                   </Text>
+                </View>
               </View>
-          </View>
-
-          {hasCorruptItems && (
-              <View style={styles.errorBanner}>
-                  <AlertTriangle color="#ef4444" size={20} />
-                  <Text style={styles.errorText}>Algunos items no disponibles.</Text>
-              </View>
+            </ReAnimated.View>
           )}
 
-          <View style={styles.glassCard}>
-            <Text style={styles.cardTitle}>Detalle de tickets</Text>
-            {cart.map((item: any, index: number) => {
-               return (
-                <View key={index} style={styles.ticketRow}>
-                    <View style={{flex: 1}}>
-                        <Text style={styles.ticketName}>{item.quantity}x {item.name}</Text>
+          {hasCorruptItems && (
+            <View style={styles.errorBanner}>
+              <AlertTriangle color="#ef4444" size={20} />
+              <Text style={styles.errorText}>Algunos items no disponibles.</Text>
+            </View>
+          )}
+
+          <ReAnimated.View entering={FadeInUp.duration(300).delay(160).springify()}>
+            <View style={styles.glassCard}>
+              <Text style={styles.cardTitle}>Detalle de tickets</Text>
+              {cart.map((item: any, index: number) => {
+                return (
+                  <View key={index} style={styles.ticketRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ticketName}>{item.quantity}x {item.name}</Text>
                     </View>
                     <Text style={styles.ticketPrice}>${(item.price * item.quantity).toLocaleString()}</Text>
-                </View>
-               );
-            })}
-            
-            <View style={styles.divider} />
-            
-            <View style={styles.ticketRow}>
-                <Text style={styles.ticketName}>Cargo por servicio (10%)</Text>
+                  </View>
+                );
+              })}
+
+              <View style={styles.divider} />
+
+              <View style={styles.ticketRow}>
+                <Text style={styles.ticketName}>Cargo por servicio (12%)</Text>
                 <Text style={styles.ticketPrice}>${totals.serviceFeeTotal.toLocaleString()}</Text>
-            </View>
+              </View>
 
-            <View style={[styles.summaryRow, {marginTop: 15}]}>
+              {promoApplied && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' }}>
+                  <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>🎉 Descuento Nivel 1 (−10%)</Text>
+                  <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '800' }}>−${Math.round(totals.finalTotal * 0.10).toLocaleString()}</Text>
+                </View>
+              )}
+
+              <View style={[styles.summaryRow, { marginTop: 15 }]}>
                 <Text style={styles.totalLabelFinal}>Total a Pagar</Text>
-                <Text style={[styles.totalValueFinal, { color: accentColor }]}>${totals.finalTotal.toLocaleString()}</Text>
+                <Text style={[styles.totalValueFinal, { color: accentColor }]}>
+                  {promoApplied && promoFinalAmount != null
+                    ? `$${promoFinalAmount.toLocaleString()}`
+                    : `$${totals.finalTotal.toLocaleString()}`}
+                </Text>
+              </View>
             </View>
-          </View>
+          </ReAnimated.View>
 
-          <Text style={styles.sectionTitle}>Método de pago</Text>
-          
-          <TouchableOpacity 
-              activeOpacity={0.8}
-              onPress={() => setSelectedMethod('webpay')}
-              style={[styles.paymentOption, selectedMethod === 'webpay' && { borderColor: withAlpha(accentColor, 0.7), backgroundColor: withAlpha(accentColor, 0.07) }]}
-          >
-             <View style={selectedMethod === 'webpay' ? [styles.radioSelected, { borderColor: accentColor }] : styles.radioUnselected}>
-                 {selectedMethod === 'webpay' && <View style={[styles.radioInner, { backgroundColor: accentColor }]} />}
-             </View>
-             
-             <View style={{flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
-                 <View>
-                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+          {!isFreeOrder && (
+            <ReAnimated.View entering={FadeInUp.duration(300).delay(240).springify()}>
+              <>
+                <Text style={styles.sectionTitle}>Método de pago</Text>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setSelectedMethod('webpay')}
+                  style={[styles.paymentOption, selectedMethod === 'webpay' && { borderColor: withAlpha(accentColor, 0.7), backgroundColor: withAlpha(accentColor, 0.07) }]}
+                >
+                  <View style={selectedMethod === 'webpay' ? [styles.radioSelected, { borderColor: accentColor }] : styles.radioUnselected}>
+                    {selectedMethod === 'webpay' && <View style={[styles.radioInner, { backgroundColor: accentColor }]} />}
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <CreditCard color={COLORS.textWhite} size={20} />
                         <Text style={styles.paymentMethodTitle}>Webpay Plus</Text>
+                      </View>
+                      <Text style={styles.paymentMethodSubtitle}>Débito, Crédito, Prepago</Text>
                     </View>
-                    <Text style={styles.paymentMethodSubtitle}>Débito, Crédito, Prepago</Text>
-                 </View>
-                 <Image 
-                    source={{ uri: 'https://www.transbank.cl/public/img/logos/webpay-plus-white.png' }} 
-                    style={{width: 60, height: 20}} 
-                    resizeMode="contain" 
-                 />
-             </View>
-          </TouchableOpacity>
+                    <Image
+                      source={{ uri: 'https://www.transbank.cl/public/img/logos/webpay-plus-white.png' }}
+                      style={{ width: 60, height: 20 }}
+                      contentFit="contain"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                    />
+                  </View>
+                </TouchableOpacity>
 
-          {savedCards.map((card) => (
-              <TouchableOpacity 
-                  key={card.id}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedMethod(card.id)}
-                  style={[styles.paymentOption, selectedMethod === card.id && { borderColor: withAlpha(accentColor, 0.7), backgroundColor: withAlpha(accentColor, 0.07) }, {marginTop: 10}]}
-              >
-                 <View style={selectedMethod === card.id ? [styles.radioSelected, { borderColor: accentColor }] : styles.radioUnselected}>
-                     {selectedMethod === card.id && <View style={[styles.radioInner, { backgroundColor: accentColor }]} />}
-                 </View>
-                 
-                 <View style={{flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
-                     <View>
-                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
-                            <CreditCard color={accentColor} size={20} />
-                            <Text style={styles.paymentMethodTitle}>{card.card_type} •••• {card.card_number.slice(-4)}</Text>
-                            <View style={[styles.oneClickBadge, { backgroundColor: accentColor }]}>
-                                <Text style={styles.oneClickText}>1-CLICK</Text>
-                            </View>
+                {savedCards.map((card) => (
+                  <TouchableOpacity
+                    key={card.id}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedMethod(card.id)}
+                    style={[styles.paymentOption, selectedMethod === card.id && { borderColor: withAlpha(accentColor, 0.7), backgroundColor: withAlpha(accentColor, 0.07) }, { marginTop: 10 }]}
+                  >
+                    <View style={selectedMethod === card.id ? [styles.radioSelected, { borderColor: accentColor }] : styles.radioUnselected}>
+                      {selectedMethod === card.id && <View style={[styles.radioInner, { backgroundColor: accentColor }]} />}
+                    </View>
+
+                    <View style={{ flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <CreditCard color={accentColor} size={20} />
+                          <Text style={styles.paymentMethodTitle}>{card.card_type} •••• {card.card_number.slice(-4)}</Text>
+                          <View style={[styles.oneClickBadge, { backgroundColor: accentColor }]}>
+                            <Text style={styles.oneClickText}>1-CLICK</Text>
+                          </View>
                         </View>
                         <Text style={styles.paymentMethodSubtitle}>Pago rápido sin salir de la app</Text>
-                     </View>
-                     
-                     <Image 
-                        source={{ uri: card.card_type.toLowerCase().includes('visa') ? 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png' }} 
-                        style={{width: 35, height: 20}} 
-                        resizeMode="contain" 
-                     />
-                 </View>
-                 {selectedMethod === card.id && <CheckCircle2 color={COLORS.success} size={20} style={{marginLeft: 10}} />}
-              </TouchableOpacity>
-          ))}
+                      </View>
 
-          <TouchableOpacity 
-              style={styles.addCardBtn} 
-              onPress={() => router.push('/payment-methods')}
-          >
-              <Plus color={COLORS.textZinc} size={20} />
-              <Text style={styles.addCardText}>AGREGAR NUEVA TARJETA</Text>
-          </TouchableOpacity>
+                      <Image
+                        source={{ uri: card.card_type.toLowerCase().includes('visa') ? 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png' : 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png' }}
+                        style={{ width: 35, height: 20 }}
+                        contentFit="contain"
+                        transition={150}
+                        cachePolicy="memory-disk"
+                      />
+                    </View>
+                    {selectedMethod === card.id && <CheckCircle2 color={COLORS.success} size={20} style={{ marginLeft: 10 }} />}
+                  </TouchableOpacity>
+                ))}
 
-          <View style={styles.secureFooter}>
-              <Lock color={COLORS.textGray} size={14} />
-              <Text style={styles.secureFooterText}>Pagos procesados de forma segura por Transbank</Text>
-          </View>
+                <TouchableOpacity
+                  style={styles.addCardBtn}
+                  onPress={() => router.push('/payment-methods')}
+                >
+                  <Plus color={COLORS.textZinc} size={20} />
+                  <Text style={styles.addCardText}>AGREGAR NUEVA TARJETA</Text>
+                </TouchableOpacity>
+
+                <View style={styles.secureFooter}>
+                  <Lock color={COLORS.textGray} size={14} />
+                  <Text style={styles.secureFooterText}>Pagos procesados de forma segura por Transbank</Text>
+                </View>
+              </>
+            </ReAnimated.View>
+          )}
         </ScrollView>
 
-        {loadingReservation ? (
-            <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
+        {!isFreeOrder && (
+          <>
+            {loadingReservation ? (
+              <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
                 <ActivityIndicator color={accentColor} size="small" />
-                <Text style={{color: COLORS.textGray, fontSize: 12, marginLeft: 8}}>Reservando tus tickets...</Text>
-            </BlurView>
-        ) : timeLeft ? (
-            <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
+                <Text style={{ color: COLORS.textGray, fontSize: 12, marginLeft: 8 }}>Reservando tus tickets...</Text>
+              </BlurView>
+            ) : timeLeft ? (
+              <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
                 <Clock color={COLORS.warning} size={16} />
-                <Text style={styles.timerText}>Reserva expira en: <Text style={{fontWeight: '800'}}>{timeLeft}</Text></Text>
-            </BlurView>
-        ) : null}
+                <Text style={styles.timerText}>Reserva expira en: <Text style={{ fontWeight: '800' }}>{timeLeft}</Text></Text>
+              </BlurView>
+            ) : null}
 
-        <BlurView intensity={80} tint="dark" style={styles.footer}>
-            <TouchableOpacity
-                style={[styles.payBtnMain, (loadingReservation || processing || cart.length === 0) && {opacity: 0.6}, {
-                    backgroundColor: withAlpha(accentColor, 0.15),
-                    borderWidth: 1,
-                    borderColor: withAlpha(accentColor, 0.35),
+            <BlurView intensity={80} tint="dark" style={styles.footer}>
+              <TouchableOpacity
+                style={[styles.payBtnMain, (loadingReservation || processing || cart.length === 0) && { opacity: 0.6 }, {
+                  backgroundColor: withAlpha(accentColor, 0.15),
+                  borderWidth: 1,
+                  borderColor: withAlpha(accentColor, 0.35),
                 }]}
                 onPress={handlePaymentButtonPress}
                 disabled={loadingReservation || processing || cart.length === 0}
-                activeOpacity={0.8}
-            >
+                activeOpacity={0.65}
+              >
                 {processing ? (
-                    <ActivityIndicator color={accentColor} />
+                  <ActivityIndicator color={accentColor} />
                 ) : (
-                    <Text style={[styles.payBtnMainText, { color: accentColor }]}>
-                        {loadingReservation ? "CARGANDO..." : "FINALIZAR COMPRA"}
-                    </Text>
+                  <Text style={[styles.payBtnMainText, { color: accentColor }]}>
+                    {loadingReservation ? "CARGANDO..." : "FINALIZAR COMPRA"}
+                  </Text>
                 )}
+              </TouchableOpacity>
+            </BlurView>
+          </>
+        )}
+
+        {isFreeOrder && (
+          <BlurView intensity={80} tint="dark" style={styles.footer}>
+            <TouchableOpacity
+              style={[styles.payBtnMain, (loadingReservation || processing) && { opacity: 0.6 }, {
+                backgroundColor: withAlpha(accentColor, 0.15),
+                borderWidth: 1,
+                borderColor: withAlpha(accentColor, 0.35),
+              }]}
+              onPress={handlePaymentButtonPress}
+              disabled={loadingReservation || processing}
+              activeOpacity={0.65}
+            >
+              {processing ? (
+                <ActivityIndicator color={accentColor} />
+              ) : (
+                <Text style={[styles.payBtnMainText, { color: accentColor }]}>
+                  {loadingReservation ? "CARGANDO..." : "OBTENER ENTRADAS"}
+                </Text>
+              )}
             </TouchableOpacity>
-        </BlurView>
+          </BlurView>
+        )}
       </View>
 
       {/* --- MODAL ONE-CLICK REDISEÑADO --- */}
       <Modal visible={showOneClickModal} transparent={true} animationType="fade" onRequestClose={() => setShowOneClickModal(false)}>
         <View style={styles.modalOverlay}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowOneClickModal(false)} activeOpacity={1} />
-            <BlurView intensity={80} tint="dark" style={styles.modalCard}>
-                <View style={[styles.modalIconBg, { backgroundColor: withAlpha(accentColor, 0.12), borderColor: withAlpha(accentColor, 0.25) }]}>
-                    <CreditCard color={accentColor} size={28} />
-                </View>
-                <Text style={styles.modalTitle}>Confirmar Pago</Text>
-                <Text style={styles.modalSubtitle}>
-                    ¿Pagar <Text style={{color: COLORS.textWhite, fontWeight: '800'}}>${totals.finalTotal.toLocaleString()}</Text> con tu tarjeta guardada?
-                </Text>
-                <View style={styles.modalBtnRow}>
-                    <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowOneClickModal(false)}>
-                        <Text style={styles.modalBtnCancelText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.modalBtnConfirm, { backgroundColor: withAlpha(accentColor, 0.15), borderWidth: 1, borderColor: withAlpha(accentColor, 0.35) }]}
-                        onPress={() => { setShowOneClickModal(false); handleOneClickPayment(); }}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={[styles.modalBtnConfirmText, { color: accentColor }]}>PAGAR AHORA</Text>
-                    </TouchableOpacity>
-                </View>
-            </BlurView>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowOneClickModal(false)} activeOpacity={1} />
+          <BlurView intensity={80} tint="dark" style={styles.modalCard}>
+            <View style={[styles.modalIconBg, { backgroundColor: withAlpha(accentColor, 0.12), borderColor: withAlpha(accentColor, 0.25) }]}>
+              <CreditCard color={accentColor} size={28} />
+            </View>
+            <Text style={styles.modalTitle}>Confirmar Pago</Text>
+            <Text style={styles.modalSubtitle}>
+              ¿Pagar <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoApplied && promoFinalAmount != null ? promoFinalAmount : totals.finalTotal).toLocaleString()}</Text> con tu tarjeta guardada?
+            </Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowOneClickModal(false)}>
+                <Text style={styles.modalBtnCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtnConfirm, { backgroundColor: withAlpha(accentColor, 0.15), borderWidth: 1, borderColor: withAlpha(accentColor, 0.35) }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowOneClickModal(false); handleOneClickPayment(); }}
+                activeOpacity={0.65}
+              >
+                <Text style={[styles.modalBtnConfirmText, { color: accentColor }]}>PAGAR AHORA</Text>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </View>
       </Modal>
 
       {/* --- MODAL WEBPAY REDISEÑADO --- */}
       <Modal visible={showConfirmationModal} transparent={true} animationType="fade" onRequestClose={() => setShowConfirmationModal(false)}>
         <View style={styles.modalOverlay}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowConfirmationModal(false)} activeOpacity={1} />
-            <BlurView intensity={80} tint="dark" style={styles.modalCard}>
-                <View style={[styles.modalIconBg, { backgroundColor: withAlpha(accentColor, 0.12), borderColor: withAlpha(accentColor, 0.25) }]}>
-                    <Lock color={accentColor} size={28} />
-                </View>
-                <Text style={styles.modalTitle}>Ir a Webpay</Text>
-                <Text style={styles.modalSubtitle}>
-                    Serás redirigido a Webpay para completar el pago de <Text style={{color: COLORS.textWhite, fontWeight: '800'}}>${totals.finalTotal.toLocaleString()}</Text>.
-                    {timeLeft ? `\nCuentas con ${timeLeft} para finalizar.` : ''}
-                </Text>
-                <View style={styles.modalBtnRow}>
-                    <TouchableOpacity
-                        style={styles.modalBtnCancel}
-                        onPress={() => setShowConfirmationModal(false)}
-                    >
-                        <Text style={styles.modalBtnCancelText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.modalBtnConfirm, { backgroundColor: withAlpha(accentColor, 0.15), borderWidth: 1, borderColor: withAlpha(accentColor, 0.35) }]}
-                        onPress={handleProceedToWebpay}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={[styles.modalBtnConfirmText, { color: accentColor }]}>CONTINUAR</Text>
-                    </TouchableOpacity>
-                </View>
-            </BlurView>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowConfirmationModal(false)} activeOpacity={1} />
+          <BlurView intensity={80} tint="dark" style={styles.modalCard}>
+            <View style={[styles.modalIconBg, { backgroundColor: withAlpha(accentColor, 0.12), borderColor: withAlpha(accentColor, 0.25) }]}>
+              <Lock color={accentColor} size={28} />
+            </View>
+            <Text style={styles.modalTitle}>Ir a Webpay</Text>
+            <Text style={styles.modalSubtitle}>
+              Serás redirigido a Webpay para completar el pago de <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoApplied && promoFinalAmount != null ? promoFinalAmount : totals.finalTotal).toLocaleString()}</Text>.
+              {timeLeft ? `\nCuentas con ${timeLeft} para finalizar.` : ''}
+            </Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setShowConfirmationModal(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtnConfirm, { backgroundColor: withAlpha(accentColor, 0.15), borderWidth: 1, borderColor: withAlpha(accentColor, 0.35) }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleProceedToWebpay(); }}
+                activeOpacity={0.65}
+              >
+                <Text style={[styles.modalBtnConfirmText, { color: accentColor }]}>CONTINUAR</Text>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
         </View>
       </Modal>
 
-    </View>
+    </ReAnimated.View>
   );
 }
 

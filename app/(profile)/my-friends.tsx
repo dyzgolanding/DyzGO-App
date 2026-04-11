@@ -1,18 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
-import ReAnimated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
+import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   Check, ChevronRight, Globe, Search, User,
   UserPlus, Users, Wifi, X as XIcon,
 } from 'lucide-react-native';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Animated, Dimensions, FlatList,
-  Image, PanResponder, Platform, RefreshControl, ScrollView, Share,
+  PanResponder, Platform, RefreshControl, ScrollView, Share,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
@@ -70,7 +72,7 @@ function SuggestionCard({
       <View style={[sug.ring, { borderColor: lc + '80', shadowColor: lc }]}>
         <LinearGradient colors={[lc + '60', lc + '20']} style={StyleSheet.absoluteFill} />
         {item.avatar_url
-          ? <Image source={{ uri: item.avatar_url }} style={sug.avatar} />
+          ? <Image source={{ uri: item.avatar_url }} style={sug.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={sug.initials}>{initials}</Text>}
       </View>
 
@@ -118,7 +120,7 @@ function FriendRow({ item, onPress }: { item: UserItem; onPress: () => void }) {
       />
       <View style={[row.ring, { borderColor: lc + '90' }]}>
         {item.avatar_url
-          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} />
+          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
       </View>
       <View style={row.info}>
@@ -152,7 +154,7 @@ function SearchRow({
       />
       <View style={[row.ring, { borderColor: lc + '90' }]}>
         {item.avatar_url
-          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} />
+          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
       </View>
       <View style={row.info}>
@@ -195,7 +197,7 @@ function SuggestionRow({
       />
       <View style={[row.ring, { borderColor: lc + '90' }]}>
         {item.avatar_url
-          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} />
+          ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
       </View>
       <View style={row.info}>
@@ -276,8 +278,8 @@ export default function MyFriendsScreen() {
     if (loading) { fadeAnim.setValue(0); translateY.setValue(20); }
     else {
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 500, useNativeDriver: true })
+        Animated.timing(fadeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 100, useNativeDriver: true })
       ]).start();
     }
   }, [loading]);
@@ -570,7 +572,7 @@ export default function MyFriendsScreen() {
   );
 
   return (
-    <ReAnimated.View entering={FadeIn.duration(300).easing(Easing.out(Easing.quad))} style={{ flex: 1, backgroundColor: '#030303' }}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: '#030303' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -677,6 +679,10 @@ export default function MyFriendsScreen() {
             keyExtractor={item => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[s.listContent, { paddingTop: navTop + 36 }]}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            initialNumToRender={6}
             refreshControl={refreshCtrl}
             ListEmptyComponent={
               <View style={s.empty}>
@@ -686,7 +692,7 @@ export default function MyFriendsScreen() {
               </View>
             }
             renderItem={({ item, index }) => (
-              <ReAnimated.View entering={FadeInDown.duration(400).delay(index * 50).easing(Easing.out(Easing.cubic))}>
+              <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
                 <FriendRow
                   item={item}
                   onPress={() => router.push({ pathname: '/user-profile', params: { id: item.id, name: item.full_name } })}
@@ -704,6 +710,10 @@ export default function MyFriendsScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[s.listContent, { paddingTop: navTop + 100 }]}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={6}
           ListEmptyComponent={
             <View style={s.empty}>
               <View style={s.emptyIcon}><Search color={COLORS.neonPink} size={40} /></View>
@@ -712,7 +722,7 @@ export default function MyFriendsScreen() {
             </View>
           }
           renderItem={({ item, index }) => (
-            <ReAnimated.View entering={FadeInDown.duration(400).delay(index * 50).easing(Easing.out(Easing.cubic))}>
+            <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
               <SearchRow
                 item={item}
                 isFriend={friendIdSet.has(item.id)}
@@ -732,6 +742,10 @@ export default function MyFriendsScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[s.listContent, { paddingTop: navTop + 100 }]}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          initialNumToRender={6}
           refreshControl={refreshCtrl}
           ListHeaderComponent={displayedSuggestions.length > 0 ? (
             <Text style={[s.sectionLabel, { marginBottom: 14 }]}>SUGERIDOS PARA TI</Text>
@@ -744,7 +758,7 @@ export default function MyFriendsScreen() {
             </View>
           }
           renderItem={({ item, index }) => (
-            <ReAnimated.View entering={FadeInDown.duration(400).delay(index * 30).easing(Easing.out(Easing.cubic))}>
+            <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
               <SuggestionRow
                 item={item}
                 isRequestSent={sentRequestIds.has(item.id)}

@@ -3,9 +3,10 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'DyzGO',
-  slug: 'dizgo-app',
+  slug: 'dyzgoapp',
   version: '1.0.0',
-  scheme: 'dizgo',
+  updates: { enabled: false },
+  scheme: 'dyzgo',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   userInterfaceStyle: 'dark',
@@ -18,11 +19,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '1',
-    associatedDomains: ['applinks:dizgo.com'],
+    buildNumber: '36',
+    associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
         'DyzGO necesita tu ubicación para mostrarte los mejores eventos cerca de ti.',
+      NSIdentityDocumentUsageDescription:
+        'DyzGO solicita tu RUT para verificar tu identidad, facilitar la compra de entradas y cumplir las regulaciones chilenas de venta de tickets.',
       NSPhotoLibraryUsageDescription:
         'DyzGO necesita acceso a tu galería para que puedas personalizar tu foto de perfil.',
       NSPhotoLibraryAddUsageDescription:
@@ -33,8 +36,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         'DyzGO necesita acceso al micrófono cuando uses la cámara para grabar contenido.',
       NSFaceIDUsageDescription:
         'DyzGO usa Face ID para proteger el acceso a tu cuenta de forma segura.',
+      NSContactsUsageDescription:
+        'DyzGO puede acceder a tus contactos para ayudarte a encontrar amigos en la plataforma.',
       ITSAppUsesNonExemptEncryption: false,
       UIRequiresFullScreen: true,
+      LSApplicationQueriesSchemes: ['uber', 'comgooglemaps', 'googlemaps'],
     },
     config: {
       googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY,
@@ -87,8 +93,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     router: {},
     eas: {
-      projectId: '099cdb88-07f7-48be-a838-0d549afcd54c',
+      projectId: 'b1fb1a4a-cb3b-4309-a430-26bd062f4fc6',
     },
   },
-  owner: 'clemente65',
+  owner: 'contadorcito',
 });
