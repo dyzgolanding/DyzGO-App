@@ -38,7 +38,7 @@ serve(async (req) => {
           .single()
         if (tier) {
             tierName = tier.name.toUpperCase()
-            tierPrice = tier.price ? `$${tier.price.toLocaleString('es-CL')}` : ''
+            tierPrice = tier.price ? `$${tier.price.toLocaleString('es-CL')} CLP` : '$0 CLP'
         }
     }
 
@@ -74,125 +74,152 @@ serve(async (req) => {
 
     const shortId = ticket.id.split('-')[0].toUpperCase()
 
-    // --- HTML CLON EXACTO DE PASSLINE ---
+    // --- HTML DISEÑO RENOVADO DYZGO ---
     const html = `
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html lang="es">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>Passline.com</title>
-  <link rel="shortcut icon" href="https://www.passline.com/favicon.ico" type="image/x-icon" />
-  <style type="text/css">
-	body { background: #f0f1f4; margin-left: 0px; margin-top: 10px; margin-right: 0px; margin-bottom: 10px; font-family:Arial, Helvetica, sans-serif;font-size:12px; }
-	a { color:#000; }
-	h2{ font-size:24px; font-weight:bold; font-family:Arial, Helvetica, sans-serif; text-align: center; color:#445566;}
-	p{ font-size:15px; font-weight:normal; /*text-align: center;*/ color:#445566;/* line-height:22px;*/}
-	td.linea{ border-bottom:1px solid #CCC; padding-bottom:4px; text-align:left !important;}
-	span{ color:#888a98; font-size:11px;}
-	.link-a{ font-size:14px; font-weight:normal; color:#2792ba; text-align: center; line-height:22px; text-decoration:underline;}
-	.box-evento{ margin:10px 15px 30px 15px; float:left; border-bottom:3px solid #CCC;}
-	.box-evento img{float:left;}
-	.btn-verde{ background: #1abc9c; border-bottom: 2px solid #147f51; border-radius: 6px; color: #fff; font-family: Arial,Helvetica,sans-serif; font-size: 14px; font-weight: bold; padding: 10px 20px; text-transform:uppercase; display:block; text-align:center; text-decoration:none;}
-	.btn-verde:hover{ background: #147f51; border-bottom: 2px solid #0d623d;}
-	.btn-verde1 {background: #1abc9c; border-bottom: 2px solid #147f51; border-radius: 6px; color: #fff; font-family: Arial,Helvetica,sans-serif; font-size: 14px; font-weight: bold; padding: 10px 20px; text-transform:uppercase; display:block; text-align:center; text-decoration:none;}
-	.btn-verde2 {background: #1abc9c; border-bottom: 2px solid #147f51; border-radius:0 0 6px 6px; color: #fff; font-family: Arial,Helvetica,sans-serif; font-size: 14px; font-weight: bold; padding: 10px 20px; text-transform:uppercase; display:block; text-align:center; text-decoration:none;}
-	.btn-rojo {background: #F00; border-bottom: 2px solid #FFF; border-radius:6px 6px 6px 6px; color: #fff; font-family: Arial,Helvetica,sans-serif; font-size: 14px; font-weight: bold; padding: 10px 20px; text-transform:uppercase; display:block; text-align:center; text-decoration:none;}
-	.micro-ticket{ background:#eeeeee; -webkit-border-radius: 5px 5px 0 0; border-radius: 5px 5px 0 0; border:1px solid #ccc;}
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style>
+    body { margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+    .ticket-wrapper { max-width: 540px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    .neon-text { color: #ec4899; }
+    @media (max-width: 600px) {
+      .ticket-wrapper { border-radius: 0; border-left: none; border-right: none; width: 100%; box-shadow: none; }
+      td.p-wrap { padding-left: 20px !important; padding-right: 20px !important; }
+      body { background-color: #ffffff !important; }
+    }
   </style>
 </head>
-<body>
-  <table width="640" border="0" align="center" cellpadding="0" cellspacing="0" style="border-left:1px dotted #ccc; border-right:1px dotted #ccc; border-top:1px dotted #ccc; border-bottom:1px dotted #ccc;">
-		<tr>
-			  <td><img src="https://kovkkdhnmgavnqyjbqzd.supabase.co/storage/v1/object/public/banners/Gemini_Generated_Image_9cucca9cucca9cuc.png" alt="header" border="0" /></td>
-			</tr>
-				<tr>
-		  <td bgcolor="#FFFFFF" style="padding:0;">
-		  	<div style="text-align: right;margin: 0">
-		  		<h5 style="font-size: 7px; margin:1px; color: grey">IDEM 01</h5>
-		  	</div>
-		  </td>
-		</tr>
-		<tr>
-		  <td bgcolor="#FFFFFF" style="padding:20px 60px; border-bottom:1px dotted #ccc;">
-												<h2>${userName || 'Invitado'}, ¡Aquí tienes tus entradas!</h2>
-									  </td>
-		</tr>
-		<tr>
-					<td bgcolor="#FFFFFF" style="padding:20px 40px;  border-bottom:1px dotted #ccc;">
-					  <table width="100%" height="172" border="0" cellpadding="10" cellspacing="0" class="micro-ticket" >
-							<tr>
-							  <td width="100%" height="270" valign="top" align="center" style="vertical-align: initial;">
-																<img src="${eventImage}" alt="${event.title}" width="210" height="210" style="vertical-align: top; margin-bottom: 5px; object-fit: cover;" />&nbsp;&nbsp;&nbsp;&nbsp;
-																		<img src="${qrImageUrl}" width="210" height="210" alt="eTicket" style="padding: 0px 0px 20px 20px"/>
-				              						              									  </td>
-							</tr>
-							<tr>
-								<td>
-									<table width="100%" border="0" cellpadding="0" cellspacing="0">
-										<tr>
-											<td height="0" valign="top" style="text-align: center;">
-											    <p style="line-height:16px; margin:0 0 10px 0!important;">
-											    	<strong>${event.title}</strong>
-											    </p>
+<body style="background-color: #f4f4f5; margin: 0; padding: 40px 0;">
+  <table width="100%" bgcolor="#f4f4f5" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center" style="padding: 0 10px;">
+        <!-- TICKET CARD ENVELOPE -->
+        <table class="ticket-wrapper" width="100%" cellpadding="0" cellspacing="0" border="0">
+          
+          <!-- IMAGE HEADER -->
+          <tr>
+            <td>
+              <img src="${eventImage}" alt="${event.title}" style="width: 100%; max-width: 540px; display: block; border-bottom: 4px solid #ec4899;" />
+            </td>
+          </tr>
 
-												 
-												    <p style="margin:0 0 5px 0 !important; font-size: 24px;">${tierName} 
-												    ${tierPrice}												    .-</p>
+          <!-- TICKET HEADLINE -->
+          <tr>
+            <td class="p-wrap" style="padding: 40px 30px 10px 30px; text-align: center;">
+              <div style="font-weight: 900; font-size: 14px; letter-spacing: 5px; color: #ec4899; margin-bottom: 24px;">DYZGO</div>
+              <div style="font-size: 14px; color: #71717a; text-transform: uppercase; letter-spacing: 1.5px;">Hola ${userName || 'Invitado'},</div>
+              <h1 style="margin: 8px 0 30px 0; font-size: 38px; font-weight: 900; line-height: 1.05; color: #18181b; letter-spacing: -1px; text-transform: uppercase;">
+                ESTÁS <span class="neon-text" style="color: #ec4899;">DENTRO.</span>
+              </h1>
+              <div style="width: 32px; height: 3px; background-color: #e4e4e7; margin: 0 auto; border-radius: 2px;"></div>
+            </td>
+          </tr>
 
-							                         
-													    <p style=" margin:0 0 5px 0 !important;"><b>ID Compra</b>: ${shortId} </p> 
-													    <p style=" margin:0 0 5px 0 !important;">ID ticket: ${ticket.id} </p> 
-																												<p style=" margin:0 0 5px 0 !important;font-size: 20px;">  
-															${dateString} a las ${event.hour || '00:00'}</p>
-													     
-													  <p style=" margin:0 0 5px 0 !important;"> ${event.location || 'Ubicación por confirmar'}</p>
-																								</td>
-									  	</tr>
-																			</table>
-							  </td>
-							</tr>
-					  </table>
-					  					</td>
-			    </tr>
-				<tr>
-							<td style="background-color: #fff; padding:15px 40px; border-bottom:1px dotted #ccc;">
-								<p style="text-align: center; margin: 0px;">
-									<a style="text-decoration: none;" href="https://www.passline.com/add-google-wallet/8d8KCzY_MtT5YZYb3YpdOw@@&b=a6cc626d822dac0631fa637a33b74e54&c=AywsO69rdyKzTCIRczmiCQ@@">
-										<span style="text-decoration:none">
-											<img src="https://www.passline.com/imagenes/add-google-wallet/esES_add_to_google_wallet_add-wallet-badge_2.png" alt="Add Ticket to Google Wallet">
-										</span>	
-									</a>
-									&nbsp;&nbsp;&nbsp;
-									<a style="text-decoration: none;" href="https://www.passline.com/add-apple-wallet/8d8KCzY_MtT5YZYb3YpdOw@@&b=a6cc626d822dac0631fa637a33b74e54&c=AywsO69rdyKzTCIRczmiCQ@@">
-										<span style="text-decoration:none">	
-											<img width="207px;" height="55px;" src="https://www.passline.com/imagenes/add-apple-wallet/ES_Add_to_Apple_Wallet_2_1.png" alt="Add Ticket to Apple Wallet">
-										</span>
-									</a>
-								</p>
-							</td>
-						</tr>
-									<tr>
-				<td bgcolor="#FFFFFF" style="padding:15px 40px; border-bottom:1px dotted #ccc;">                
-					<p style="text-align:center;">Produce: DyzGO SpA - Chile</p>
-				</td>
-		  </tr>
-				<tr>
-			<td bgcolor="#FFFFFF" style="padding:20px 40px; border-bottom:1px dotted #ccc;">
-			  						<h2>Algunos consejos:</h2>
-					<ul>
-				  					  						        		<li><p style="text-align:left;">Recuerda presentar tu eTicket en el acceso del evento con tu celular.</p></li>
-			        				        	<li><p style="text-align:left;">Siempre podrás acceder a tus compras o eTickets desde nuestra web.</p></li>
-			        				        		<li><p style="text-align:left;">Recuerda llevar tus eTickets abiertos en tu celular.</p></li>
-			        				        	
-				  	 
-		            	<li><p style="text-align:left;">Descarga tu boleta electrónica <a href="#" target="_blank">aquí.</a></p></li>
-		        				</ul>
-			</td>
-		</tr>
-				<tr>
-			  <td><img src="https://kovkkdhnmgavnqyjbqzd.supabase.co/storage/v1/object/public/banners/Gemini_Generated_Image_62i9ot62i9ot62i9.png" alt="footer" border="0" style="display:block"/></td>
-			</tr>
-				</table>
+          <!-- KEY DETAILS -->
+          <tr>
+            <td class="p-wrap" style="padding: 30px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fafafa; border-radius: 12px; border: 1px solid #e4e4e7;">
+                <tr>
+                  <td width="33%" align="center" style="padding: 20px 10px;">
+                    <div style="font-size: 10px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">Fecha</div>
+                    <div style="font-size: 13px; color: #18181b; font-weight: 800;">${dateString}</div>
+                  </td>
+                  <td width="33%" align="center" style="padding: 20px 10px; border-left: 1px dashed #e4e4e7; border-right: 1px dashed #e4e4e7;">
+                    <div style="font-size: 10px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">Hora</div>
+                    <div style="font-size: 13px; color: #18181b; font-weight: 800;">${event.hour || '00:00'}</div>
+                  </td>
+                  <td width="33%" align="center" style="padding: 20px 10px;">
+                    <div style="font-size: 10px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">Lugar</div>
+                    <div style="font-size: 13px; color: #18181b; font-weight: 800;">${event.location || 'Por confirmar'}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- SEPARADOR PERFORADO SIMPLE -->
+          <tr>
+            <td class="p-wrap" style="padding: 0 30px;">
+              <div style="border-top: 2px dashed #d4d4d8; width: 100%;"></div>
+            </td>
+          </tr>
+
+          <!-- SCAN QR SECTION -->
+          <tr>
+            <td align="center" class="p-wrap" style="padding: 40px 30px 40px 30px;">
+              
+              <div style="font-size: 12px; color: #ec4899; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; margin-bottom: 24px;">TU LLAVE DE ACCESO</div>
+              
+              <div style="display: inline-block; background-color: #ffffff; padding: 14px; border-radius: 16px; border: 1px solid #e4e4e7; margin-bottom: 24px;">
+                <img src="${qrImageUrl}" alt="Código QR" style="width: 220px; height: 220px; display: block; border-radius: 6px;" />
+              </div>
+              
+              <div style="font-size: 20px; font-weight: 900; color: #18181b; text-transform: uppercase; letter-spacing: 1.5px;">${tierName}</div>
+              <div style="font-size: 12px; color: #a1a1aa; margin-top: 10px; font-family: monospace; letter-spacing: 1px;">ID: ${ticket.id}</div>
+              
+              <!-- WALLET -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 32px; width: 100%; text-align: center;">
+                <tr>
+                  <td align="center">
+                    <a href="https://www.passline.com/add-apple-wallet/8d8KCzY_MtT5YZYb3YpdOw@@&b=a6cc626d822dac0631fa637a33b74e54&c=AywsO69rdyKzTCIRczmiCQ@@" style="text-decoration: none; display: inline-block; margin: 0 4px;">
+                      <img src="https://www.passline.com/imagenes/add-apple-wallet/ES_Add_to_Apple_Wallet_2_1.png" alt="Apple Wallet" style="height: 44px; border-radius: 6px;" />
+                    </a>
+                    <a href="https://www.passline.com/add-google-wallet/8d8KCzY_MtT5YZYb3YpdOw@@&b=a6cc626d822dac0631fa637a33b74e54&c=AywsO69rdyKzTCIRczmiCQ@@" style="text-decoration: none; display: inline-block; margin: 0 4px;">
+                      <img src="https://www.passline.com/imagenes/add-google-wallet/esES_add_to_google_wallet_add-wallet-badge_2.png" alt="Google Wallet" style="height: 44px; border-radius: 6px;" />
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- RECEIPT -->
+          <tr>
+            <td class="p-wrap" style="padding: 0 30px 40px 30px;">
+              <table width="100%" style="background-color: #fafafa; border-radius: 12px; border: 1px solid #e4e4e7; padding: 24px;" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <div style="font-size: 11px; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 24px;">Recibo #${shortId}</div>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size: 14px; color: #52525b;">
+                      <tr>
+                        <td width="70%" style="padding-bottom: 12px; font-weight: 500;">1x ${tierName}</td>
+                        <td width="30%" align="right" style="padding-bottom: 12px; color: #18181b; font-weight: 700;">${tierPrice || '$0 CLP'}</td>
+                      </tr>
+                      <tr>
+                        <td width="70%" style="padding-bottom: 20px; font-weight: 500;">Cargo por servicio</td>
+                        <td width="30%" align="right" style="padding-bottom: 20px; color: #18181b; font-weight: 700;">Incluido</td>
+                      </tr>
+                      <tr>
+                        <td width="70%" style="border-top: 1px dashed #e4e4e7; padding-top: 20px; color: #18181b; font-weight: 800; font-size: 15px; letter-spacing: 1px;">TOTAL</td>
+                        <td width="30%" align="right" style="border-top: 1px dashed #e4e4e7; padding-top: 20px; color: #ec4899; font-weight: 900; font-size: 18px;">${tierPrice || '$0 CLP'}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+        </table>
+
+        <!-- TICKET FOOTER EXTERNAL -->
+        <table width="100%" style="max-width: 540px;" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center" style="padding: 30px 20px 0 20px;">
+               <div style="font-size: 11px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; margin-bottom: 16px;">PRODUCIDO POR DYZGO SPA</div>
+               <div style="font-size: 13px; color: #a1a1aa; margin-bottom: 24px; max-width: 400px; line-height: 1.5;">¿Tuviste algún problema con tu ticket? No hay de qué preocuparse, nuestro equipo está aquí para ayudarte.</div>
+               <a href="mailto:soporte@dyzgo.app" style="display:inline-block; color: #18181b; background-color: #e4e4e7; padding: 12px 24px; border-radius: 8px; font-size: 12px; font-weight: 800; text-decoration: none; border: 1px solid #d4d4d8; text-transform: uppercase; letter-spacing: 1px;">Contactar Soporte Urgente</a>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
     `;

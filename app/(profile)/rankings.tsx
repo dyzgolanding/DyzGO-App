@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
@@ -49,12 +49,13 @@ interface RankUser {
 // --- AVATAR ---
 function Avatar({ user, size, border }: { user: RankUser; size: number; border?: string }) {
   const ringColor = border ?? user.color;
+  const hasPhoto = !!user.avatarUrl;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
-      borderWidth: 2, borderColor: ringColor + '90',
-      backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }}>
-      {user.avatarUrl
-        ? <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size }} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+      borderWidth: 2, borderColor: hasPhoto ? ringColor + '90' : '#FF31D8',
+      backgroundColor: hasPhoto ? 'rgba(255,255,255,0.05)' : 'rgba(255,49,216,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+      {hasPhoto
+        ? <Image source={{ uri: user.avatarUrl! }} style={{ width: size, height: size }} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
         : <Text style={{ color: '#FBFBFB', fontWeight: '900', fontSize: size * 0.38, textAlign: 'center', lineHeight: size }}>
             {user.avatarChar}
           </Text>
@@ -181,7 +182,7 @@ function RankRow({ user, rank, currentUserId, onPress, showFriendBadge }: {
 
       <Text style={[row.rankNum, isMe && { color: COLORS.neonPink }]}>{rank}</Text>
 
-      <View style={[row.ring, { borderColor: lc + '90' }]}>
+      <View style={[row.ring, { borderColor: '#FF31D8' }]}>
         {user.avatarUrl
           ? <Image source={{ uri: user.avatarUrl }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
           : <Text style={row.initials}>{user.avatarChar}</Text>}
@@ -217,7 +218,7 @@ const row = StyleSheet.create({
   myCard:      { borderColor: 'rgba(255,49,216,0.35)', borderLeftWidth: 3, borderLeftColor: COLORS.neonPink },
   friendBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(138,43,226,0.15)', borderWidth: 1, borderColor: 'rgba(138,43,226,0.3)' },
   rankNum:     { width: 28, color: 'rgba(255,255,255,0.35)', fontWeight: '900', fontSize: 13, textAlign: 'center', marginRight: 2 },
-  ring:        { width: 52, height: 52, borderRadius: 26, borderWidth: 2, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginRight: 14, backgroundColor: 'rgba(255,255,255,0.05)' },
+  ring:        { width: 52, height: 52, borderRadius: 26, borderWidth: 2, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginRight: 14, backgroundColor: 'rgba(255,49,216,0.2)' },
   avatar:      { width: 52, height: 52 },
   initials:    { color: '#FBFBFB', fontSize: 20, fontWeight: '800' },
   info:        { flex: 1 },

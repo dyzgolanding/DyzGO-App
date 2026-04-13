@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -10,7 +10,7 @@ import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { useScreenEntry } from '../../hooks/useScreenEntry';
 import { timing } from '../../lib/animation';
 import * as Clipboard from 'expo-clipboard';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
@@ -460,7 +460,11 @@ export default function ClubDetailScreen() {
 
                         <AnimatedEntry index={4} style={styles.mbSection}>
                             <View style={styles.eventsHeader}>
+                                <View style={styles.eventsIconBox}>
+                                    <Calendar color={COLORS.neonPink} size={15} />
+                                </View>
                                 <Text style={[styles.sectionHeader, { fontSize: 18, marginBottom: 0 }]}>Próximos Eventos</Text>
+                                <View style={styles.eventsHeaderLine} />
                             </View>
 
                             {relatedEvents.length > 0 ? (
@@ -595,6 +599,8 @@ const styles = StyleSheet.create({
     mapsIconBox: { backgroundColor: 'rgba(66, 133, 244, 0.15)', width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(66, 133, 244, 0.3)', justifyContent: 'center', alignItems: 'center' },
 
     eventsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
+    eventsIconBox: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,0,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,0,255,0.25)', justifyContent: 'center', alignItems: 'center' },
+    eventsHeaderLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
     countBadge: { backgroundColor: '#8A2BE2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
     countText: { color: 'white', fontWeight: '800', fontSize: 12 },
     

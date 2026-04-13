@@ -1,13 +1,12 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, Lock, Plus, ShieldCheck, X } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, Lock, Plus, ShieldCheck, Tag, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { SkeletonBox } from '../../components/SkeletonBox';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +16,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -76,7 +76,6 @@ export default function PaymentScreen() {
 
   const isFreeOrder = totals.finalTotal === 0;
 
-  const [loadingReservation, setLoadingReservation] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [preloadedTx, setPreloadedTx] = useState<{ url: string, token: string } | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
@@ -92,7 +91,8 @@ export default function PaymentScreen() {
 
   const [savedCards, setSavedCards] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string>('webpay');
-  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoStatus, setPromoStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   const [promoFinalAmount, setPromoFinalAmount] = useState<number | null>(null);
 
   const webViewRef = useRef<WebView>(null);
@@ -120,6 +120,7 @@ export default function PaymentScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       if (success) return;
+      if (!reservationExpiresAt && !preloadedTx) return; // no reservation made yet
 
       e.preventDefault();
 
@@ -149,8 +150,19 @@ export default function PaymentScreen() {
     return unsubscribe;
   }, [navigation, success, eventId]);
 
+  // Clear any stale promo reservation left over from a previous (incomplete) payment session
   useEffect(() => {
-    createReservationOnEntry();
+    const clearStale = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && eventId) {
+          await supabase.functions.invoke('webpay', {
+            body: { action: 'cancel', user_id: user.id, event_id: eventId }
+          });
+        }
+      } catch {}
+    };
+    clearStale();
   }, []);
 
   useFocusEffect(
@@ -196,9 +208,26 @@ export default function PaymentScreen() {
     );
   };
 
-  const createReservationOnEntry = async () => {
+  const verifyPromoCode = async () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code) return;
+    setPromoStatus('checking');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setPromoStatus('invalid'); return; }
+      const { data: valid } = await supabase.rpc('check_level2_promo', {
+        p_code: code,
+        p_user_id: user.id
+      });
+      setPromoStatus(valid ? 'valid' : 'invalid');
+    } catch {
+      setPromoStatus('invalid');
+    }
+  };
+
+  const createReservationAndProceed = async () => {
     if (cart.length === 0) return;
-    setLoadingReservation(true);
+    setProcessing(true);
 
     try {
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
@@ -214,13 +243,18 @@ export default function PaymentScreen() {
         quantity: item.quantity
       }));
 
+      const createBody: any = {
+        action: 'create',
+        cart: simplifiedCart,
+        user_id: user.id,
+        event_id: eventId
+      };
+      if (promoCode.trim() && promoStatus === 'valid') {
+        createBody.promo_code = promoCode.trim().toUpperCase();
+      }
+
       const { data, error } = await supabase.functions.invoke('webpay', {
-        body: {
-          action: 'create',
-          cart: simplifiedCart,
-          user_id: user.id,
-          event_id: eventId
-        },
+        body: createBody,
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
 
@@ -230,9 +264,25 @@ export default function PaymentScreen() {
       }
 
       if (data && data.status === 'FREE_ORDER') {
-        // Orden gratuita: tickets reservados como pending, esperar confirmación del usuario
-        if (data.session_id) setCurrentSessionId(data.session_id);
         if (data.expires_at) setReservationExpiresAt(data.expires_at);
+        // Confirm free order immediately
+        const { data: freeData, error: freeError } = await supabase.functions.invoke('webpay', {
+          body: {
+            action: 'confirm_free',
+            user_id: user.id,
+            event_id: eventId,
+            session_id: data.session_id
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (freeError) throw freeError;
+        if (freeData?.status === 'FREE_CONFIRMED') {
+          setSuccess(true);
+          setReservationExpiresAt(null);
+          finishProcess();
+        } else {
+          throw new Error(freeData?.error || 'Error confirmando entradas gratuitas.');
+        }
         return;
       }
 
@@ -241,7 +291,22 @@ export default function PaymentScreen() {
         setAuthToken(data.token);
         if (data.expires_at) setReservationExpiresAt(data.expires_at);
         if (data.session_id) setCurrentSessionId(data.session_id);
-        if (data.promo_applied) { setPromoApplied(true); setPromoFinalAmount(data.final_amount ?? null); }
+
+        // Check if promo was sent but server couldn't apply it (already used/reserved)
+        const promoWasSent = promoCode.trim() && promoStatus === 'valid';
+        if (promoWasSent && !data.promo_applied) {
+          setPromoStatus('invalid');
+          setPromoFinalAmount(null);
+          Alert.alert('Código Promo', 'Este código ya fue utilizado o no es válido. Se continuará sin descuento.', [{ text: 'OK' }]);
+        } else if (data.promo_applied) {
+          setPromoFinalAmount(data.final_amount ?? null);
+        }
+
+        if (selectedMethod === 'webpay') {
+          setShowConfirmationModal(true);
+        } else {
+          setShowOneClickModal(true);
+        }
       } else {
         if (data?.error) throw new Error(data.error);
         throw new Error("Respuesta inválida del servidor.");
@@ -251,10 +316,10 @@ export default function PaymentScreen() {
       if (error.message?.toLowerCase().includes('invalid jwt') || error.message?.toLowerCase().includes('invalid_jwt')) {
         await handleInvalidSession();
       } else {
-        Alert.alert("Error de Reserva", error.message, [{ text: "Volver", onPress: () => router.back() }]);
+        Alert.alert("Error", error.message, [{ text: "OK" }]);
       }
     } finally {
-      setLoadingReservation(false);
+      setProcessing(false);
     }
   };
 
@@ -290,55 +355,7 @@ export default function PaymentScreen() {
 
   const handlePaymentButtonPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (isFreeOrder) {
-      handleConfirmFree();
-      return;
-    }
-    if (selectedMethod === 'webpay') {
-      setShowConfirmationModal(true);
-    } else {
-      setShowOneClickModal(true);
-    }
-  };
-
-  const handleConfirmFree = async () => {
-    setProcessing(true);
-    try {
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError || !refreshData.session) {
-        await handleInvalidSession();
-        return;
-      }
-      const session = refreshData.session;
-
-      const { data, error } = await supabase.functions.invoke('webpay', {
-        body: {
-          action: 'confirm_free',
-          user_id: session.user.id,
-          event_id: eventId,
-          session_id: currentSessionId
-        },
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-
-      if (error) {
-        const msg = await extractFunctionError(error);
-        throw new Error(msg);
-      }
-
-      if (data?.status === 'FREE_CONFIRMED') {
-        setSuccess(true);
-        setReservationExpiresAt(null);
-        setTimeLeft(null);
-        finishProcess();
-      } else {
-        throw new Error(data?.error || 'Error confirmando entradas gratuitas.');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'No se pudieron confirmar las entradas.');
-    } finally {
-      setProcessing(false);
-    }
+    createReservationAndProceed();
   };
 
   const handleOneClickPayment = async () => {
@@ -390,9 +407,12 @@ export default function PaymentScreen() {
   };
 
   const isCallbackUrl = (url: string): boolean => {
-    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-    if (!callbackHost) return false;
-    return url.includes(callbackHost) && url.includes('callback=dyzgo_final');
+    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
+    return url.includes(callbackHost) && (
+      url.includes('/tbk-plus') ||
+      url.includes('token_ws=') ||
+      url.includes('callback=dyzgo_final')
+    );
   };
 
   const commitPayment = async () => {
@@ -505,35 +525,6 @@ export default function PaymentScreen() {
     return `${clean}${a}`;
   };
 
-  if (loadingReservation) return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient colors={[withAlpha(accentColor, 0.2), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', withAlpha(accentColor, 0.15)]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      </View>
-      <NavBar title="RESUMEN DE COMPRA" onBack={handleCancelAndExit} />
-      <View style={{ flex: 1, padding: 20 }}>
-        <View style={{ flexDirection: 'row', gap: 14, marginBottom: 16 }}>
-          <SkeletonBox height={80} width={80} borderRadius={12} />
-          <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
-            <SkeletonBox height={20} borderRadius={6} />
-            <SkeletonBox height={16} borderRadius={6} width="60%" />
-            <SkeletonBox height={14} borderRadius={6} width="45%" />
-          </View>
-        </View>
-        <SkeletonBox height={60} borderRadius={16} style={{ marginBottom: 16 }} />
-        <SkeletonBox height={180} borderRadius={20} style={{ marginBottom: 16 }} />
-        <SkeletonBox height={24} borderRadius={6} width="40%" style={{ marginBottom: 12 }} />
-        <SkeletonBox height={72} borderRadius={16} style={{ marginBottom: 10 }} />
-        <SkeletonBox height={72} borderRadius={16} />
-      </View>
-      <View style={{ padding: 20 }}>
-        <SkeletonBox height={56} borderRadius={16} />
-      </View>
-    </View>
-  );
-
   if (paymentUrl) {
     return (
       <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
@@ -549,11 +540,42 @@ export default function PaymentScreen() {
             }}
             onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
             onNavigationStateChange={handleWebViewNavigation}
+            onLoadStart={(e) => {
+              const url = e.nativeEvent.url;
+              if (isCallbackUrl(url) && authToken && !commitAttempted.current) {
+                commitAttempted.current = true;
+                webViewRef.current?.stopLoading();
+                commitPayment();
+              }
+            }}
             style={{ flex: 1, backgroundColor: '#ffffff' }}
             startInLoadingState={true}
             renderLoading={() => <ActivityIndicator size="large" color={accentColor} style={StyleSheet.absoluteFill} />}
           />
-          <TouchableOpacity onPress={() => setPaymentUrl(null)} style={styles.floatingCloseBtn}>
+          <TouchableOpacity
+            onPress={async () => {
+              setPaymentUrl(null);
+              // Reset transaction so the next "FINALIZAR COMPRA" creates a fresh one
+              setPreloadedTx(null);
+              setAuthToken(null);
+              setCurrentSessionId(null);
+              setReservationExpiresAt(null);
+              setTimeLeft(null);
+              setPromoStatus('idle');
+              setPromoFinalAmount(null);
+              commitAttempted.current = false;
+              // Release reserved tickets + promo code reservation
+              try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user && eventId) {
+                  await supabase.functions.invoke('webpay', {
+                    body: { action: 'cancel', user_id: user.id, event_id: eventId }
+                  });
+                }
+              } catch {}
+            }}
+            style={styles.floatingCloseBtn}
+          >
             <X color="#333" size={24} />
           </TouchableOpacity>
         </View>
@@ -646,18 +668,71 @@ export default function PaymentScreen() {
                 <Text style={styles.ticketPrice}>${totals.serviceFeeTotal.toLocaleString()}</Text>
               </View>
 
-              {promoApplied && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' }}>
-                  <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>🎉 Descuento Nivel 1 (−10%)</Text>
-                  <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '800' }}>−${Math.round(totals.finalTotal * 0.10).toLocaleString()}</Text>
+              {!isFreeOrder && (
+                <View style={{ marginTop: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Tag color={COLORS.textGray} size={13} />
+                    <Text style={{ color: COLORS.textGray, fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>CÓDIGO PROMOCIONAL</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      value={promoCode}
+                      onChangeText={(t) => { setPromoCode(t.toUpperCase()); setPromoStatus('idle'); setPromoFinalAmount(null); }}
+                      placeholder="DYZ-XXXXXXXX"
+                      placeholderTextColor="rgba(251,251,251,0.25)"
+                      autoCapitalize="characters"
+                      style={{
+                        flex: 1,
+                        backgroundColor: 'rgba(255,255,255,0.05)',
+                        borderWidth: 1,
+                        borderColor: promoStatus === 'valid' ? 'rgba(34,197,94,0.5)' : promoStatus === 'invalid' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)',
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        color: '#FBFBFB',
+                        fontSize: 14,
+                        fontWeight: '700',
+                        letterSpacing: 2,
+                      }}
+                    />
+                    <TouchableOpacity
+                      onPress={verifyPromoCode}
+                      disabled={!promoCode.trim() || promoStatus === 'checking'}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        backgroundColor: withAlpha(accentColor, 0.15),
+                        borderWidth: 1,
+                        borderColor: withAlpha(accentColor, 0.35),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        opacity: !promoCode.trim() ? 0.4 : 1,
+                      }}
+                    >
+                      {promoStatus === 'checking'
+                        ? <ActivityIndicator size="small" color={accentColor} />
+                        : <Text style={{ color: accentColor, fontSize: 12, fontWeight: '800' }}>APLICAR</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                  {promoStatus === 'valid' && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' }}>
+                      <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>Código válido · Descuento −10%</Text>
+                      <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '800' }}>−${Math.round(totals.finalTotal * 0.10).toLocaleString()}</Text>
+                    </View>
+                  )}
+                  {promoStatus === 'invalid' && (
+                    <Text style={{ color: '#ef4444', fontSize: 11, marginTop: 6, marginLeft: 4 }}>Código inválido o ya utilizado.</Text>
+                  )}
                 </View>
               )}
 
               <View style={[styles.summaryRow, { marginTop: 15 }]}>
                 <Text style={styles.totalLabelFinal}>Total a Pagar</Text>
                 <Text style={[styles.totalValueFinal, { color: accentColor }]}>
-                  {promoApplied && promoFinalAmount != null
-                    ? `$${promoFinalAmount.toLocaleString()}`
+                  {promoStatus === 'valid'
+                    ? `$${Math.round(totals.finalTotal * 0.90).toLocaleString()}`
                     : `$${totals.finalTotal.toLocaleString()}`}
                 </Text>
               </View>
@@ -750,12 +825,7 @@ export default function PaymentScreen() {
 
         {!isFreeOrder && (
           <>
-            {loadingReservation ? (
-              <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
-                <ActivityIndicator color={accentColor} size="small" />
-                <Text style={{ color: COLORS.textGray, fontSize: 12, marginLeft: 8 }}>Reservando tus tickets...</Text>
-              </BlurView>
-            ) : timeLeft ? (
+            {timeLeft ? (
               <BlurView intensity={80} tint="dark" style={styles.timerAbove}>
                 <Clock color={COLORS.warning} size={16} />
                 <Text style={styles.timerText}>Reserva expira en: <Text style={{ fontWeight: '800' }}>{timeLeft}</Text></Text>
@@ -764,20 +834,20 @@ export default function PaymentScreen() {
 
             <BlurView intensity={80} tint="dark" style={styles.footer}>
               <TouchableOpacity
-                style={[styles.payBtnMain, (loadingReservation || processing || cart.length === 0) && { opacity: 0.6 }, {
+                style={[styles.payBtnMain, (processing || cart.length === 0) && { opacity: 0.6 }, {
                   backgroundColor: withAlpha(accentColor, 0.15),
                   borderWidth: 1,
                   borderColor: withAlpha(accentColor, 0.35),
                 }]}
                 onPress={handlePaymentButtonPress}
-                disabled={loadingReservation || processing || cart.length === 0}
+                disabled={processing || cart.length === 0}
                 activeOpacity={0.65}
               >
                 {processing ? (
                   <ActivityIndicator color={accentColor} />
                 ) : (
                   <Text style={[styles.payBtnMainText, { color: accentColor }]}>
-                    {loadingReservation ? "CARGANDO..." : "FINALIZAR COMPRA"}
+                    FINALIZAR COMPRA
                   </Text>
                 )}
               </TouchableOpacity>
@@ -788,20 +858,20 @@ export default function PaymentScreen() {
         {isFreeOrder && (
           <BlurView intensity={80} tint="dark" style={styles.footer}>
             <TouchableOpacity
-              style={[styles.payBtnMain, (loadingReservation || processing) && { opacity: 0.6 }, {
+              style={[styles.payBtnMain, processing && { opacity: 0.6 }, {
                 backgroundColor: withAlpha(accentColor, 0.15),
                 borderWidth: 1,
                 borderColor: withAlpha(accentColor, 0.35),
               }]}
               onPress={handlePaymentButtonPress}
-              disabled={loadingReservation || processing}
+              disabled={processing}
               activeOpacity={0.65}
             >
               {processing ? (
                 <ActivityIndicator color={accentColor} />
               ) : (
                 <Text style={[styles.payBtnMainText, { color: accentColor }]}>
-                  {loadingReservation ? "CARGANDO..." : "OBTENER ENTRADAS"}
+                  OBTENER ENTRADAS
                 </Text>
               )}
             </TouchableOpacity>
@@ -819,7 +889,7 @@ export default function PaymentScreen() {
             </View>
             <Text style={styles.modalTitle}>Confirmar Pago</Text>
             <Text style={styles.modalSubtitle}>
-              ¿Pagar <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoApplied && promoFinalAmount != null ? promoFinalAmount : totals.finalTotal).toLocaleString()}</Text> con tu tarjeta guardada?
+              ¿Pagar <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoStatus === 'valid' ? Math.round(totals.finalTotal * 0.90) : totals.finalTotal).toLocaleString()}</Text> con tu tarjeta guardada?
             </Text>
             <View style={styles.modalBtnRow}>
               <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowOneClickModal(false)}>
@@ -847,7 +917,7 @@ export default function PaymentScreen() {
             </View>
             <Text style={styles.modalTitle}>Ir a Webpay</Text>
             <Text style={styles.modalSubtitle}>
-              Serás redirigido a Webpay para completar el pago de <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoApplied && promoFinalAmount != null ? promoFinalAmount : totals.finalTotal).toLocaleString()}</Text>.
+              Serás redirigido a Webpay para completar el pago de <Text style={{ color: COLORS.textWhite, fontWeight: '800' }}>${(promoStatus === 'valid' ? Math.round(totals.finalTotal * 0.90) : totals.finalTotal).toLocaleString()}</Text>.
               {timeLeft ? `\nCuentas con ${timeLeft} para finalizar.` : ''}
             </Text>
             <View style={styles.modalBtnRow}>

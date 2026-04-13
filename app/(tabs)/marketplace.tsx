@@ -2,7 +2,7 @@ import { Image as ExpoImage } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import ReAnimated, { LinearTransition, Easing, Extrapolation, FadeIn, FadeOut, FadeInDown, FadeInRight, SlideInRight, SlideInDown, SlideOutDown, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {

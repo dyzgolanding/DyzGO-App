@@ -108,6 +108,29 @@ export default function NotificationsScreen() {
           n.type !== 'friend_request' || pendingIds.has(n.related_id)
         );
 
+        // Enriquecer friend_request con el perfil del remitente
+        const friendRequestIds = [...new Set(
+          filtered
+            .filter(n => ['friend_request', 'new_friend', 'friend_connected', 'friend_level'].includes(n.type) && n.related_id)
+            .map(n => n.related_id)
+        )];
+
+        let profileMap: Record<string, any> = {};
+        if (friendRequestIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, username, full_name, avatar_url')
+            .in('id', friendRequestIds);
+          if (profiles) {
+            profileMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+          }
+        }
+
+        const enriched = filtered.map(n => ({
+          ...n,
+          sender_profile: profileMap[n.related_id] ?? null,
+        }));
+
           const now = new Date();
           const sevenDaysAgo = new Date();
           sevenDaysAgo.setDate(now.getDate() - 7);
@@ -115,7 +138,7 @@ export default function NotificationsScreen() {
           const recent: any[] = [];
           const older: any[] = [];
 
-          filtered.forEach(n => {
+          enriched.forEach(n => {
               const notifDate = new Date(n.created_at);
               if (notifDate >= sevenDaysAgo) {
                   recent.push(n);
@@ -320,6 +343,11 @@ export default function NotificationsScreen() {
 
           <View style={{ flex: 1, marginLeft: 15 }}>
               <Text style={styles.notifTitle} numberOfLines={1}>{n.title}</Text>
+              {n.sender_profile && (
+                <Text style={styles.senderName} numberOfLines={1}>
+                  @{n.sender_profile.username || n.sender_profile.full_name || 'Usuario'}
+                </Text>
+              )}
               <Text style={styles.notifText} numberOfLines={2}>{n.message}</Text>
 
               {/* BOTONES DE ACCIÓN — solo solicitudes de amistad */}
@@ -441,7 +469,8 @@ const styles = StyleSheet.create({
       borderWidth: 1, borderColor: COLORS.glassBorder 
   },
   iconContainer: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
-  notifTitle: { color: 'white', fontWeight: '800', fontSize: 14, marginBottom: 4 },
+  notifTitle: { color: 'white', fontWeight: '800', fontSize: 14, marginBottom: 2 },
+  senderName: { color: '#D8B4FE', fontWeight: '700', fontSize: 13, marginBottom: 3 },
   notifText: { color: COLORS.textZinc, fontSize: 13, lineHeight: 18 },
   arrowContainer: { paddingLeft: 10 },
   

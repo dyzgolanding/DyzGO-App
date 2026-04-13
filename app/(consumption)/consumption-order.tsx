@@ -8,7 +8,7 @@
  *
  * Params: orderId
  */
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -308,8 +308,8 @@ export default function ConsumptionOrderScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient colors={['rgba(139,92,246,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(139,92,246,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['rgba(255,49,216,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.1)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       </View>
       <NavBar title="MI PEDIDO" onBack={() => router.back()} />
       <View style={{ flex: 1, padding: 20, paddingTop: navTop }}>
@@ -333,17 +333,17 @@ export default function ConsumptionOrderScreen() {
 
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient
-          colors={['rgba(139,92,246,0.2)', 'transparent']}
+          colors={['rgba(255,49,216,0.15)', 'transparent']}
           start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }}
           style={StyleSheet.absoluteFill}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(139,92,246,0.15)']}
+          colors={['transparent', 'rgba(255,49,216,0.1)']}
           start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(139,92,246,0.05)', 'transparent']}
+          colors={['transparent', 'rgba(255,49,216,0.03)', 'transparent']}
           start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}
           locations={[0.3, 0.5, 0.7]}
           style={StyleSheet.absoluteFill}
@@ -360,67 +360,84 @@ export default function ConsumptionOrderScreen() {
         {/* Header */}
         <Animated.View entering={FadeInUp.duration(300).delay(0).springify()}>
         <View style={styles.orderHeader}>
-          <ShoppingBag size={20} color="#a78bfa" />
+          <View style={[styles.orderIconWrapper, { backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)' }]}>
+            <ShoppingBag size={22} color="#FF31D8" />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.eventTitle}>{order.event?.title ?? 'Evento'}</Text>
             <Text style={styles.orderMeta}>
-              {items.length} {items.length === 1 ? 'ítem' : 'ítems'} · ${order.total_amount.toLocaleString('es-CL')}
+              {items.length} {items.length === 1 ? 'ítem' : 'ítems'} · <Text style={{ color: '#fff', fontWeight: '800' }}>${order.total_amount.toLocaleString('es-CL')}</Text>
             </Text>
           </View>
         </View>
-
         </Animated.View>
 
         {/* ─── SECCIÓN: ACTIVAR ─── */}
         {inactiveProducts.length > 0 && (
           <Animated.View entering={FadeInUp.duration(300).delay(80).springify()}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Activar bebidas</Text>
-            <Text style={styles.sectionHint}>
-              Seleccioná cuántos de cada bebida querés pedir ahora. Entrarán juntos como un solo pedido.
-            </Text>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(255,49,216,0.15)' }]}>
+                <Zap size={18} color="#FF31D8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Activar bebidas</Text>
+                <Text style={styles.sectionSubtitle}>Seleccioná cuántos de cada bebida querés pedir ahora. Entrarán juntos como un solo pedido.</Text>
+              </View>
+            </View>
 
-            {productsWithSelection.map(product => {
-              const qty = product.selected;
-              const max = product.ids.length;
-              return (
-                <View key={product.item_name} style={styles.productRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.productName}>{product.item_name}</Text>
-                    <Text style={styles.productAvail}>{max} disponible{max !== 1 ? 's' : ''}</Text>
+            <View style={styles.productsContainer}>
+              {productsWithSelection.map((product, idx) => {
+                const qty = product.selected;
+                const max = product.ids.length;
+                const isLast = idx === productsWithSelection.length - 1;
+                return (
+                  <View key={product.item_name} style={[styles.productRow, isLast && { borderBottomWidth: 0 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.productName}>{product.item_name}</Text>
+                      <Text style={styles.productAvail}>{max} disponible{max !== 1 ? 's' : ''}</Text>
+                    </View>
+                    <View style={styles.stepper}>
+                      <TouchableOpacity
+                        onPress={() => setQty(product.item_name, -1, max)}
+                        style={[styles.stepperBtn, { opacity: qty === 0 ? 0.3 : 1 }]}
+                        disabled={qty === 0}
+                      >
+                        <Minus size={16} color="#fff" />
+                      </TouchableOpacity>
+                      <Text style={styles.stepperQty}>{qty}</Text>
+                      <TouchableOpacity
+                        onPress={() => setQty(product.item_name, +1, max)}
+                        style={[styles.stepperBtn, { opacity: qty === max ? 0.3 : 1 }]}
+                        disabled={qty === max}
+                      >
+                        <Plus size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.stepper}>
-                    <TouchableOpacity
-                      onPress={() => setQty(product.item_name, -1, max)}
-                      style={[styles.stepperBtn, { opacity: qty === 0 ? 0.3 : 1 }]}
-                      disabled={qty === 0}
-                    >
-                      <Minus size={16} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={styles.stepperQty}>{qty}</Text>
-                    <TouchableOpacity
-                      onPress={() => setQty(product.item_name, +1, max)}
-                      style={[styles.stepperBtn, { opacity: qty === max ? 0.3 : 1 }]}
-                      disabled={qty === max}
-                    >
-                      <Plus size={16} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
 
             <TouchableOpacity
               onPress={handleActivate}
               disabled={activating || totalSelected === 0}
-              style={[styles.activateBtn, { opacity: totalSelected === 0 ? 0.4 : 1 }]}
+              style={[
+                styles.activateBtn,
+                totalSelected > 0 && {
+                  backgroundColor: '#FF31D8',
+                  borderColor: '#FF7BED',
+                  shadowOpacity: 0.6,
+                },
+                totalSelected === 0 && { opacity: 0.4 }
+              ]}
               activeOpacity={0.85}
             >
               {activating
-                ? <ActivityIndicator color="#a78bfa" />
+                ? <ActivityIndicator color={totalSelected > 0 ? "#fff" : "#FF31D8"} />
                 : <>
-                    <Zap size={18} color="#a78bfa" />
-                    <Text style={styles.activateBtnText}>
+                    <Zap size={18} color={totalSelected > 0 ? "#fff" : "#FF31D8"} />
+                    <Text style={[styles.activateBtnText, totalSelected > 0 && { color: '#fff' }]}>
                       Activar {totalSelected > 0 ? `${totalSelected} ítem${totalSelected !== 1 ? 's' : ''}` : 'pedido'}
                     </Text>
                   </>
@@ -434,7 +451,15 @@ export default function ConsumptionOrderScreen() {
         {activeGroupList.length > 0 && (
           <Animated.View entering={FadeInUp.duration(300).delay(160).springify()}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>En progreso</Text>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                <Clock size={18} color="#f59e0b" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>En progreso</Text>
+                <Text style={styles.sectionSubtitle}>Tus pedidos en preparación o en cola</Text>
+              </View>
+            </View>
 
             {activeGroupList.map((group) => {
               const isPreparing = group.status === 'preparing';
@@ -510,7 +535,15 @@ export default function ConsumptionOrderScreen() {
         {Object.keys(pastGroups).length > 0 && (
           <Animated.View entering={FadeInUp.duration(300).delay(240).springify()}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Historial</Text>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+                <ShoppingBag size={18} color="rgba(255,255,255,0.6)" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Historial</Text>
+                <Text style={styles.sectionSubtitle}>Pedidos entregados o expirados</Text>
+              </View>
+            </View>
 
             {Object.entries(pastGroups).map(([key, group]) => {
               const color = STATUS_COLOR[group.status] ?? '#71717a';
@@ -547,38 +580,54 @@ export default function ConsumptionOrderScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#030303' },
   center: { flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' },
-  orderHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.glassBg, borderRadius: 18,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
-    padding: 16, marginBottom: 24,
-  },
-  eventTitle: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: -0.3 },
-  orderMeta: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 3, fontWeight: '600' },
-  section: { marginBottom: 28 },
-  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: -0.5, fontStyle: 'italic', marginBottom: 6 },
-  sectionHint: { color: 'rgba(255,255,255,0.35)', fontSize: 13, lineHeight: 19, marginBottom: 16 },
-  productRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  productName: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  productAvail: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepperBtn: {
-    width: 34, height: 34, borderRadius: 10, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.06)',
+  orderIconWrapper: {
+    width: 48, height: 48, borderRadius: 16,
     justifyContent: 'center', alignItems: 'center',
   },
-  stepperQty: { color: '#fff', fontWeight: '900', fontSize: 18, minWidth: 22, textAlign: 'center' },
+  orderHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    padding: 16, marginBottom: 28,
+  },
+  eventTitle: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: -0.3 },
+  orderMeta: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 3, fontWeight: '500' },
+  section: { marginBottom: 32 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16,
+  },
+  sectionIconBadge: {
+    width: 38, height: 38, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  sectionSubtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 13, lineHeight: 18, marginTop: 2 },
+  productsContainer: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 16,
+  },
+  productRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  productName: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  productAvail: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2, fontWeight: '500' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  stepperBtn: {
+    width: 36, height: 36, borderRadius: 12, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  stepperQty: { color: '#fff', fontWeight: '900', fontSize: 18, minWidth: 24, textAlign: 'center' },
   activateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    marginTop: 20, paddingVertical: 16, borderRadius: 18,
-    backgroundColor: 'rgba(139,92,246,0.15)',
-    borderWidth: 1, borderColor: 'rgba(139,92,246,0.4)',
-    shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45, shadowRadius: 14, elevation: 8,
+    marginTop: 20, paddingVertical: 16, borderRadius: 20,
+    backgroundColor: 'rgba(255,49,216,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)',
+    shadowColor: '#FF31D8', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 8,
   },
-  activateBtnText: { color: '#a78bfa', fontWeight: '900', fontSize: 16 },
+  activateBtnText: { color: '#FF31D8', fontWeight: '900', fontSize: 16 },
   groupCard: {
     borderRadius: 20, borderWidth: 1, overflow: 'hidden',
     padding: 16, marginBottom: 12,

@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
-import { Crown, Gift, Lock, QrCode, Star, Ticket, Trophy, Wine, X, Zap } from 'lucide-react-native';
+import { CheckCheck, Copy, Crown, Gift, Lock, QrCode, Star, Ticket, Trophy, Wine, X, Zap } from 'lucide-react-native';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
+import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -29,8 +30,7 @@ const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 20 * 2 - 12) / 2;
 
 const REWARDS: Record<number, { prize: string; info: string; icon: React.ComponentType<{ color: string; size: number }> }> = {
-  1:  { prize: '10% Primera Compra',  info: 'Se aplica automáticamente.',   icon: Zap },
-  2:  { prize: '2x1 Cervezas',        info: 'Marcas nacionales.',           icon: Gift },
+  2:  { prize: 'Código Promo −10%',   info: 'Descuento en tu próxima compra.\nÚnico, personal e intransferible.', icon: Zap },
   3:  { prize: 'Entrada Gratis',      info: 'Cualquier evento.',            icon: Ticket },
   4:  { prize: 'Coctel Premium',      info: 'Carta seleccionada.',          icon: Star },
   5:  { prize: 'Fast Pass VIP',       info: 'Sin filas.',                   icon: Zap },
@@ -41,6 +41,7 @@ const REWARDS: Record<number, { prize: string; info: string; icon: React.Compone
   10: { prize: 'God Mode',            info: 'Entradas gratis x 1 anio.',   icon: Trophy },
 };
 
+// Todos los niveles — usados para el hero card (progreso, colores, XP)
 const LEVELS = [
   { level: 1,  min: 0,      label: 'Novato',    color: '#8A2BE2' },
   { level: 2,  min: 1000,   label: 'Iniciado',  color: '#9D50BB' },
@@ -53,6 +54,9 @@ const LEVELS = [
   { level: 9,  min: 100000, label: 'Mitico',    color: '#1A2980' },
   { level: 10, min: 150000, label: 'Inmortal',  color: '#FFD700' },
 ];
+
+// Salón de la fama — solo niveles con recompensa (nivel 1 no tiene medalla)
+const SALON_LEVELS = LEVELS.filter(l => l.level >= 2);
 
 // --- BARRA ANIMADA ---
 function ProgressBar({ progress, color }: { progress: number; color: string }) {
@@ -73,7 +77,7 @@ const bar = StyleSheet.create({
 // --- TARJETA DE MEDALLA ---
 interface MedalProps { data: typeof LEVELS[0]; isUnlocked: boolean; onPress: () => void }
 function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
-  const RewardIcon = REWARDS[data.level].icon;
+  const RewardIcon = (REWARDS[data.level] ?? REWARDS[2]).icon;
 
   const handlePress = () => {
     if (!isUnlocked) return;
@@ -112,7 +116,7 @@ function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
           {data.label.toUpperCase()}
         </Text>
         <Text style={[ms.prize, !isUnlocked && { color: '#2a2a2a' }]} numberOfLines={1}>
-          {isUnlocked ? REWARDS[data.level].prize : '???'}
+          {isUnlocked ? (REWARDS[data.level] ?? REWARDS[2]).prize : '???'}
         </Text>
         {isUnlocked && (
           <View style={[ms.dot, { backgroundColor: data.color, shadowColor: data.color }]} />
@@ -141,6 +145,9 @@ export default function AchievementsScreen() {
   const [level, setLevel] = useState(1);
   const [modal, setModal] = useState<number | null>(null);
   const [loadingXP, setLoadingXP] = useState(true);
+  const [promoCode, setPromoCode] = useState<string | null>(null);
+  const [promoUsedAt, setPromoUsedAt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => { fetchProgress(); }, []);
 
@@ -148,8 +155,29 @@ export default function AchievementsScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('profiles').select('xp, level').eq('id', user.id).single();
-      if (data) { setXp(data.xp ?? 0); setLevel(data.level ?? 1); }
+
+      // Core query — always works (columns guaranteed to exist)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('xp, level')
+        .eq('id', user.id)
+        .single();
+      if (error) throw error;
+      if (data) {
+        setXp(data.xp ?? 0);
+        setLevel(data.level ?? 1);
+      }
+
+      // Promo code query — only if migration has been run
+      const { data: promoData } = await supabase
+        .from('profiles')
+        .select('level2_promo_code, level2_promo_used_at')
+        .eq('id', user.id)
+        .single();
+      if (promoData) {
+        setPromoCode(promoData.level2_promo_code ?? null);
+        setPromoUsedAt(promoData.level2_promo_used_at ?? null);
+      }
     } catch (e) {
       console.error('[achievements] fetchProgress:', e);
     } finally {
@@ -163,8 +191,8 @@ export default function AchievementsScreen() {
     ? Math.min(1, (xp - currentLevel.min) / (nextLevel.min - currentLevel.min))
     : 1;
   const xpLeft       = nextLevel ? nextLevel.min - xp : 0;
-  const modalLevel   = LEVELS[(modal ?? 1) - 1] ?? LEVELS[0];
-  const ModalIcon    = REWARDS[modal ?? 1]?.icon ?? Trophy;
+  const modalLevel   = LEVELS.find(l => l.level === modal) ?? LEVELS[1];
+  const ModalIcon    = REWARDS[modal ?? 2]?.icon ?? Trophy;
 
   const BG = ['#030303'] as const;
 
@@ -282,7 +310,7 @@ export default function AchievementsScreen() {
             </View>
             <Text style={s.sectionSub}>Desbloquea niveles para obtener recompensas exclusivas</Text>
             <View style={s.grid}>
-              {LEVELS.map((l) => (
+              {SALON_LEVELS.map((l) => (
                 <MedalCard
                   key={l.level}
                   data={l}
@@ -317,20 +345,63 @@ export default function AchievementsScreen() {
             <Text style={[s.modalLevelText, { color: modalLevel.color }]}>
               RECOMPENSA · NIVEL {modal}
             </Text>
-            <Text style={s.modalPrize}>{REWARDS[modal ?? 1]?.prize}</Text>
-            <Text style={s.modalInfo}>{REWARDS[modal ?? 1]?.info}</Text>
-            <View style={s.codeBox}>
-              <Text style={s.codeLabel}>CODIGO DE CANJE</Text>
-              <Text style={[s.codeValue, { color: modalLevel.color }]}>
-                DYZ-{modal}-{Math.floor(1000 + Math.random() * 9000)}
-              </Text>
-            </View>
+            <Text style={s.modalPrize}>{REWARDS[modal ?? 2]?.prize}</Text>
+            <Text style={s.modalInfo}>{REWARDS[modal ?? 2]?.info}</Text>
+
+            {modal === 2 && (
+              promoUsedAt ? (
+                <View style={[s.codeBox, { borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.06)' }]}>
+                  <Text style={[s.codeLabel, { color: '#ef4444' }]}>YA CANJEADO</Text>
+                  <Text style={{ color: 'rgba(239,68,68,0.6)', fontSize: 13, fontWeight: '600', marginTop: 4 }}>
+                    Este código ya fue utilizado.
+                  </Text>
+                </View>
+              ) : promoCode ? (
+                <View style={s.codeBox}>
+                  <Text style={s.codeLabel}>TU CÓDIGO PERSONAL</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                    <Text
+                      style={[s.codeValue, { color: modalLevel.color, flex: 1 }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                    >
+                      {promoCode}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(promoCode);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      style={[s.copyBtn, { borderColor: modalLevel.color + '50', backgroundColor: modalLevel.color + '15' }]}
+                      activeOpacity={0.7}
+                    >
+                      {copied
+                        ? <CheckCheck color={modalLevel.color} size={16} />
+                        : <Copy color={modalLevel.color} size={16} />
+                      }
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ color: 'rgba(251,251,251,0.4)', fontSize: 11, marginTop: 8 }}>
+                    Ingrésalo al pagar para obtener −10%
+                  </Text>
+                </View>
+              ) : (
+                <View style={s.codeBox}>
+                  <Text style={[s.codeLabel, { color: 'rgba(251,251,251,0.4)' }]}>CÓDIGO NO DISPONIBLE</Text>
+                </View>
+              )
+            )}
+
             <TouchableOpacity
               style={[s.redeemBtn, { backgroundColor: modalLevel.color, shadowColor: modalLevel.color }]}
               onPress={() => setModal(null)}
               activeOpacity={0.8}
             >
-              <Text style={s.redeemText}>CANJEAR RECOMPENSA</Text>
+              <Text style={s.redeemText}>
+                {modal === 2 && promoUsedAt ? 'CERRAR' : 'ENTENDIDO'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -374,7 +445,8 @@ const s = StyleSheet.create({
   modalInfo:      { color: COLORS.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
   codeBox:        { width: '100%', backgroundColor: 'rgba(0,0,0,0.5)', padding: 18, borderRadius: 18, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderStyle: 'dashed' },
   codeLabel:      { color: COLORS.textSecondary, fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 6 },
-  codeValue:      { fontSize: 26, fontWeight: '900', letterSpacing: 4 },
+  codeValue:      { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+  copyBtn:        { width: 34, height: 34, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   redeemBtn:      { width: '100%', padding: 17, borderRadius: 18, alignItems: 'center', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 18, elevation: 10 },
   redeemText:     { color: '#FBFBFB', fontWeight: '900', fontSize: 14, letterSpacing: 2 },
 });

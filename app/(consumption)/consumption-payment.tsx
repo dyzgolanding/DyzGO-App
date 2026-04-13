@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -57,9 +57,7 @@ export default function ConsumptionPaymentScreen() {
   const [processing, setProcessing] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const xpAwarded = React.useRef(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
@@ -69,14 +67,6 @@ export default function ConsumptionPaymentScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const commitAttempted = useRef(false);
-
-  // Otorgar XP al confirmarse el pago (una sola vez por orden)
-  useEffect(() => {
-    if (!success || !orderId || xpAwarded.current) return;
-    xpAwarded.current = true;
-    supabase.rpc('award_consumption_xp', { p_order_id: orderId })
-      .then(({ error }) => { if (error) console.error('[XP] award_consumption_xp:', error.message); });
-  }, [success, orderId]);
 
   // Bloquear swipe-back durante el pago
   useFocusEffect(useCallback(() => {
@@ -181,10 +171,13 @@ export default function ConsumptionPaymentScreen() {
   };
 
   const isCallbackUrl = (url: string): boolean => {
-    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-    return callbackHost
-      ? url.includes(callbackHost) && url.includes('callback=dyzgo_final')
-      : url.includes('dyzgo_final') || url.includes('callback=dyzgo');
+    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
+    return url.includes(callbackHost) && (
+      url.includes('/tbk-plus') ||
+      url.includes('/tbk-consumption') ||
+      url.includes('token_ws=') ||
+      url.includes('callback=dyzgo_final')
+    );
   };
 
   const commitConsumptionPayment = async () => {
@@ -201,7 +194,7 @@ export default function ConsumptionPaymentScreen() {
 
       const approved = data?.status === 'AUTHORIZED' && data?.response_code === 0;
       if (approved) {
-        setSuccess(true);
+        router.replace('/(consumption)/consumption-confirmation' as any);
       } else {
         Alert.alert('Pago rechazado', 'El banco no autorizó la transacción.', [
           { text: 'OK', onPress: () => router.back() },
@@ -253,7 +246,7 @@ export default function ConsumptionPaymentScreen() {
 
       if (error) throw error;
       if (data?.status === 'SUCCESS') {
-        setSuccess(true);
+        router.replace('/(consumption)/consumption-confirmation' as any);
       } else {
         throw new Error(data?.error || 'Pago rechazado');
       }
@@ -302,35 +295,22 @@ export default function ConsumptionPaymentScreen() {
           }}
           onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
           onNavigationStateChange={handleWebViewNav}
+          onLoadStart={(e) => {
+            const url = e.nativeEvent.url;
+            if (isCallbackUrl(url) && authToken && !commitAttempted.current) {
+              commitAttempted.current = true;
+              webViewRef.current?.stopLoading();
+              commitConsumptionPayment();
+            }
+          }}
           style={{ flex: 1 }}
           startInLoadingState
           renderLoading={() => (
             <ActivityIndicator size="large" color={accentColor} style={StyleSheet.absoluteFill} />
           )}
         />
-        <TouchableOpacity onPress={() => setPaymentUrl(null)} style={styles.floatingCloseBtn}>
+        <TouchableOpacity onPress={() => { setPaymentUrl(null); commitAttempted.current = false; }} style={styles.floatingCloseBtn}>
           <X color="#333" size={24} />
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Pantalla éxito
-  if (success) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
-        <View style={[styles.successIcon, { backgroundColor: COLORS.success + '20' }]}>
-          <CheckCircle2 size={60} color={COLORS.success} />
-        </View>
-        <Text style={styles.successTitle}>¡Compra Exitosa!</Text>
-        <Text style={styles.successSubtitle}>
-          Tus bebidas están en "Mis Consumos".{'\n'}Actívalas cuando quieras para entrar a la cola.
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.replace('/(tickets)/my-tickets' as any)}
-          style={[styles.successBtn, { backgroundColor: accentColor }]}
-        >
-          <Text style={styles.successBtnText}>Ver Mis Consumos</Text>
         </TouchableOpacity>
       </View>
     );
@@ -610,9 +590,4 @@ const styles = StyleSheet.create({
   modalBtnCancelText: { color: COLORS.textGray, fontWeight: '700', fontSize: 14 },
   modalBtnConfirm: { flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
   modalBtnConfirmText: { fontWeight: '900', fontSize: 14 },
-  successIcon: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  successTitle: { color: '#fff', fontWeight: '900', fontSize: 28, textAlign: 'center' },
-  successSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 8 },
-  successBtn: { paddingVertical: 16, paddingHorizontal: 40, borderRadius: 20, marginTop: 16 },
-  successBtnText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 });

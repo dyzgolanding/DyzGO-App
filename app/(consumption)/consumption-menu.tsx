@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
@@ -250,8 +250,8 @@ export default function ConsumptionMenuScreen() {
                     </Text>
                   </View>
                   {qty === 0 ? (
-                    <TouchableOpacity onPress={() => addToCart(item.id)} style={[styles.addBtn, { backgroundColor: accentColor }]}>
-                      <Plus size={16} color="#fff" />
+                    <TouchableOpacity onPress={() => addToCart(item.id)} style={[styles.addBtn, { backgroundColor: withAlpha(accentColor, 0.15), borderWidth: 1, borderColor: withAlpha(accentColor, 0.35) }]}>
+                      <Plus size={16} color={accentColor} />
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.qtyControl}>
@@ -283,13 +283,15 @@ export default function ConsumptionMenuScreen() {
           <TouchableOpacity
             onPress={openCart}
             style={[styles.floatingCartBtn, {
-              backgroundColor: accentColor,
+              backgroundColor: withAlpha(accentColor, 0.15),
+              borderWidth: 1,
+              borderColor: withAlpha(accentColor, 0.35),
             }]}
             activeOpacity={0.9}
           >
-            <ShoppingCart size={18} color="#fff" />
-            <Text style={[styles.floatingCartText, { color: '#fff' }]}>Ver pedido · {cartCount} ítem{cartCount > 1 ? 's' : ''}</Text>
-            <Text style={[styles.floatingCartPrice, { color: '#fff' }]}>${cartTotal.toLocaleString('es-CL')}</Text>
+            <ShoppingCart size={18} color={accentColor} />
+            <Text style={[styles.floatingCartText, { color: accentColor }]}>Ver pedido · {cartCount} ítem{cartCount > 1 ? 's' : ''}</Text>
+            <Text style={[styles.floatingCartPrice, { color: accentColor }]}>${cartTotal.toLocaleString('es-CL')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
   itemDesc: { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 4, lineHeight: 15 },
   alcoholBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
   alcoholText: { fontSize: 10, fontWeight: '700' },
-  addBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
+  addBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   qtyControl: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, paddingHorizontal: 4, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   qtyBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
   qtyText: { color: '#fff', fontWeight: '900', fontSize: 13, minWidth: 20, textAlign: 'center' },

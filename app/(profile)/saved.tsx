@@ -23,7 +23,7 @@ import ReAnimated, {
 const AnimatedScrollView = ReAnimated.createAnimatedComponent(ScrollView);
 const SNAP = CARD_SIZE + CARD_GAP;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { NavBar } from '../../components/NavBar';
 import { StaggeredItem } from '../../components/StaggeredItem';
 import { COLORS } from '../../constants/colors';

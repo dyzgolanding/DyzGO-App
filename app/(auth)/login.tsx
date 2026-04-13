@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, ArrowRight, AtSign, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, User, UserPlus } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import React, { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';

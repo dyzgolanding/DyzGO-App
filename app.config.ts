@@ -3,7 +3,7 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'DyzGO',
-  slug: 'dyzgoapp',
+  slug: 'dyzgot',
   version: '1.0.0',
   updates: { enabled: false },
   scheme: 'dyzgo',
@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '36',
+    buildNumber: '56',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
@@ -65,7 +65,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         action: 'VIEW',
         autoVerify: true,
-        data: [{ scheme: 'dizgo' }],
+        data: [{ scheme: 'dyzgo' }],
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],
@@ -93,8 +93,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     router: {},
     eas: {
-      projectId: 'b1fb1a4a-cb3b-4309-a430-26bd062f4fc6',
+      projectId: '0a423597-b7cd-4ef4-9219-9a27ec056001',
     },
   },
-  owner: 'contadorcito',
+  owner: 'topincito',
 });

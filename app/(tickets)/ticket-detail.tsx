@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import ReAnimated, { FadeInUp } from 'react-native-reanimated';
@@ -559,31 +559,33 @@ export default function TicketDetailScreen() {
           <ReAnimated.View entering={FadeInUp.duration(350).delay(100).springify()}>
             <View style={styles.actionArea}>
 
-              <TouchableOpacity
-                style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAppleTransfer(); }}
-                disabled={isDisabled}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={blockReason
-                    ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']
-                    : ['rgba(255,49,216,0.18)', 'rgba(180,30,160,0.10)']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={[styles.actionBtnInner, { borderColor: blockReason ? 'rgba(255,255,255,0.08)' : 'rgba(255,49,216,0.4)' }]}
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAppleTransfer(); }}
+                  disabled={isDisabled}
+                  activeOpacity={0.8}
                 >
-                  {transferring ? (
-                    <ActivityIndicator color="#FF31D8" size="small" />
-                  ) : (
-                    <>
-                      <MoveHorizontal color={blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8'} size={18} />
-                      <Text style={[styles.actionBtnText, { color: blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8' }]}>
-                        {blockReason || (isListed ? 'BLOQUEADO (EN VENTA)' : 'TRANSFERIR POR APROXIMACIÓN')}
-                      </Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={blockReason
+                      ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,49,216,0.18)', 'rgba(180,30,160,0.10)']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={[styles.actionBtnInner, { borderColor: blockReason ? 'rgba(255,255,255,0.08)' : 'rgba(255,49,216,0.4)' }]}
+                  >
+                    {transferring ? (
+                      <ActivityIndicator color="#FF31D8" size="small" />
+                    ) : (
+                      <>
+                        <MoveHorizontal color={blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8'} size={18} />
+                        <Text style={[styles.actionBtnText, { color: blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8' }]}>
+                          {blockReason || (isListed ? 'BLOQUEADO (EN VENTA)' : 'TRANSFERIR POR APROXIMACIÓN')}
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}

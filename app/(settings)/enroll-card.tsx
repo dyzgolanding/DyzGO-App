@@ -65,12 +65,8 @@ export default function EnrollCardScreen() {
         // Detectar si volvimos a nuestra "URL de retorno"
         // NOTA: Transbank hace un POST, por eso no vemos el token en la URL,
         // pero solo el hecho de llegar aquí significa que terminó.
-        const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-        if (!callbackHost) {
-          console.error('[CONFIG ERROR] EXPO_PUBLIC_CALLBACK_HOST no definida');
-          return;
-        }
-        if (url.includes(callbackHost) && url.includes('callback=dyzgo_oneclick')) {
+        const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
+        if (url.includes(callbackHost) && (url.includes('/tbk-enroll') || url.includes('TBK_TOKEN=') || url.includes('callback=dyzgo_oneclick'))) {
             
             if (finishAttempted.current) return;
             finishAttempted.current = true;
@@ -127,6 +123,18 @@ export default function EnrollCardScreen() {
                         ref={webViewRef}
                         source={{ uri: enrollUrl }}
                         onNavigationStateChange={handleWebViewNavigation}
+                        onShouldStartLoadWithRequest={(request) => {
+                          const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
+                          if (request.url.includes(callbackHost) &&
+                              (request.url.includes('/tbk-enroll') || request.url.includes('TBK_TOKEN=') || request.url.includes('callback=dyzgo_oneclick'))) {
+                            handleWebViewNavigation({ url: request.url });
+                            return false;
+                          }
+                          return true;
+                        }}
+                        onLoadStart={(e) => {
+                          handleWebViewNavigation({ url: e.nativeEvent.url });
+                        }}
                         onLoadEnd={() => setLoading(false)}
                         style={{ flex: 1 }}
                         sharedCookiesEnabled={true}

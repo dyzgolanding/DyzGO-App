@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ExpoLinking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';

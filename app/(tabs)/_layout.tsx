@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { Tabs } from 'expo-router';
 import { Compass, House, Store, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';

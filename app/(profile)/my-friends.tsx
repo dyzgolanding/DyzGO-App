@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
@@ -69,8 +69,8 @@ function SuggestionCard({
         </TouchableOpacity>
       )}
 
-      <View style={[sug.ring, { borderColor: lc + '80', shadowColor: lc }]}>
-        <LinearGradient colors={[lc + '60', lc + '20']} style={StyleSheet.absoluteFill} />
+      <View style={[sug.ring, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}>
+        <LinearGradient colors={['rgba(255,49,216,0.3)', 'rgba(255,49,216,0.08)']} style={StyleSheet.absoluteFill} />
         {item.avatar_url
           ? <Image source={{ uri: item.avatar_url }} style={sug.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={sug.initials}>{initials}</Text>}
@@ -118,7 +118,7 @@ function FriendRow({ item, onPress }: { item: UserItem; onPress: () => void }) {
         colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)']} 
         style={StyleSheet.absoluteFill} 
       />
-      <View style={[row.ring, { borderColor: lc + '90' }]}>
+      <View style={[row.ring, { borderColor: '#FF31D8' }]}>
         {item.avatar_url
           ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
@@ -152,7 +152,7 @@ function SearchRow({
         colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)']} 
         style={StyleSheet.absoluteFill} 
       />
-      <View style={[row.ring, { borderColor: lc + '90' }]}>
+      <View style={[row.ring, { borderColor: '#FF31D8' }]}>
         {item.avatar_url
           ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
@@ -195,7 +195,7 @@ function SuggestionRow({
         colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)']}
         style={StyleSheet.absoluteFill}
       />
-      <View style={[row.ring, { borderColor: lc + '90' }]}>
+      <View style={[row.ring, { borderColor: '#FF31D8' }]}>
         {item.avatar_url
           ? <Image source={{ uri: item.avatar_url }} style={row.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
           : <Text style={row.initials}>{initials}</Text>}
@@ -778,7 +778,7 @@ export default function MyFriendsScreen() {
 // ─── Estilos de filas compactas (FriendRow / SearchRow) ──────────────────────
 const row = StyleSheet.create({
   wrap:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.02)', overflow: 'hidden' },
-  ring:      { width: 52, height: 52, borderRadius: 26, borderWidth: 2, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginRight: 14, backgroundColor: 'rgba(255,255,255,0.05)' },
+  ring:      { width: 52, height: 52, borderRadius: 26, borderWidth: 2, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginRight: 14, backgroundColor: 'rgba(255,49,216,0.2)' },
   avatar:    { width: 52, height: 52 },
   initials:  { color: '#FBFBFB', fontSize: 20, fontWeight: '800' },
   info:      { flex: 1 },
@@ -795,7 +795,7 @@ const row = StyleSheet.create({
 const sug = StyleSheet.create({
   card:      { width: '100%', height: 370, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 28, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'space-between', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } },
   dismiss:   { position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  ring:      { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginTop: 24, shadowOpacity: 0.6, shadowRadius: 15, shadowOffset: { width: 0, height: 0 } },
+  ring:      { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginTop: 24, shadowOpacity: 0.6, shadowRadius: 15, shadowOffset: { width: 0, height: 0 }, backgroundColor: 'rgba(255,49,216,0.2)' },
   avatar:    { width: 110, height: 110 },
   initials:  { color: '#FBFBFB', fontSize: 44, fontWeight: '900' },
   info:      { alignItems: 'center', gap: 8, paddingHorizontal: 10, width: '100%' },

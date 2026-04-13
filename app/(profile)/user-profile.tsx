@@ -255,9 +255,8 @@ export default function UserProfileScreen() {
         <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
         <View style={s.heroSection}>
           {/* Anillo del avatar con color de nivel */}
-          <View style={[s.avatarOuter, { borderColor: lc, shadowColor: lc }]}>
-            <LinearGradient colors={[lc + '50', lc + '15', 'transparent']} style={StyleSheet.absoluteFill} />
-            <View style={s.avatarInner}>
+          <View style={[s.avatarOuter, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}>
+            <View style={[s.avatarInner, !profile.avatar_url && { backgroundColor: 'rgba(255,49,216,0.2)' }]}>
               {profile.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 : <Text style={s.avatarChar}>{initials}</Text>

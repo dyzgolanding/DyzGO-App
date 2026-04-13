@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from './BlurSurface';
 import { ChevronLeft } from 'lucide-react-native';
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -87,6 +87,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
     position: 'relative',
+    overflow: 'hidden',
   },
   pillContent: {
     flexDirection: 'row',

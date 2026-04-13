@@ -21,11 +21,7 @@ export default function PaymentResaleScreen() {
         const { url: currentUrl } = navState;
         
         // Detectar URL de retorno real desde variable de entorno
-        const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-        if (!callbackHost) {
-          console.error('[CONFIG ERROR] EXPO_PUBLIC_CALLBACK_HOST no definida');
-          return;
-        }
+        const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
         if (currentUrl.includes(callbackHost) && currentUrl.includes('callback=dyzgo_final')) {
             
             if (commitAttempted.current) return;

@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import {
   Award,
   ChevronRight,

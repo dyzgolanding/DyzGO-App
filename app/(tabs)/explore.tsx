@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
 import { eventCache } from '../../lib/eventCache';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   ArrowLeft,
@@ -584,21 +584,16 @@ export default function ExploreScreen() {
   const SNAP = CARD_W + CARD_GAP;
   const N = catalogData.length;
 
-  // Carrusel circular: triplicamos los datos para que haya items a ambos lados
+  // 200 copias → el usuario nunca llega al borde en uso normal.
+  // FlatList virtualiza los items (solo ~windowSize en memoria), sin costo extra.
+  const LOOP_MULTIPLIER = N > 1 ? 200 : 1;
+  const LOOP_MID = Math.floor(LOOP_MULTIPLIER / 2); // copia central = índice 100
+
   const loopedData = useMemo(() => {
     if (N === 0) return [];
-    return [...catalogData, ...catalogData, ...catalogData];
-  }, [catalogData]);
-
-  // Salta silenciosamente al tramo del medio si llegamos a los extremos
-  const checkAndWrapLoop = useCallback((loopedIdx: number) => {
-    if (N === 0) return;
-    if (loopedIdx < N) {
-      flatListRef.current?.scrollToOffset({ offset: (loopedIdx + N) * SNAP, animated: false });
-    } else if (loopedIdx >= 2 * N) {
-      flatListRef.current?.scrollToOffset({ offset: (loopedIdx - N) * SNAP, animated: false });
-    }
-  }, [N, SNAP]);
+    if (N === 1) return [...catalogData];
+    return Array.from({ length: LOOP_MULTIPLIER }, () => catalogData).flat();
+  }, [catalogData, LOOP_MULTIPLIER]);
 
   // ANIMATED MAP CENTERING
   const animateMapToIndex = useCallback((loopedIdx: number) => {
@@ -615,7 +610,7 @@ export default function ExploreScreen() {
     }
   }, [currentData, N]);
 
-  // Dispara al soltar el dedo — predice el snap target sin esperar la inercia
+  // Predice el destino del snap antes de que termine la inercia (mueve el mapa ya)
   const onScrollEndDrag = useCallback((event: any) => {
     const { contentOffset, velocity } = event.nativeEvent;
     let loopedIdx = Math.round(contentOffset.x / SNAP);
@@ -623,20 +618,18 @@ export default function ExploreScreen() {
     else if (velocity?.x < -0.3) loopedIdx = Math.max(0, Math.ceil(contentOffset.x / SNAP) - 1);
     loopedIdx = Math.max(0, Math.min(loopedData.length - 1, loopedIdx));
     animateMapToIndex(loopedIdx);
-    checkAndWrapLoop(loopedIdx);
-  }, [animateMapToIndex, checkAndWrapLoop, loopedData.length, SNAP]);
+  }, [animateMapToIndex, loopedData.length, SNAP]);
 
-  // Corrección final por si la predicción no fue exacta
+  // Corrección final cuando el snap se detiene
   const onMomentumScrollEnd = useCallback((event: any) => {
     const loopedIdx = Math.round(event.nativeEvent.contentOffset.x / SNAP);
     animateMapToIndex(loopedIdx);
-    checkAndWrapLoop(loopedIdx);
-  }, [animateMapToIndex, checkAndWrapLoop, SNAP]);
+  }, [animateMapToIndex, SNAP]);
 
-  // Resetear al cambiar de tab (Eventos <-> Clubes) — siempre al item 0 del tramo del medio
+  // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
     setActiveCarouselIndex(0);
-    const startOffset = N * SNAP;
+    const startOffset = LOOP_MID * N * SNAP;
     flatListRef.current?.scrollToOffset({ offset: startOffset, animated: false });
     if (catalogData.length > 0) {
       const item = catalogData[0];
@@ -928,13 +921,14 @@ export default function ExploreScreen() {
             showsHorizontalScrollIndicator={false}
             snapToInterval={SNAP}
             decelerationRate="fast"
+            disableIntervalMomentum={true}
             removeClippedSubviews={true}
             maxToRenderPerBatch={8}
             windowSize={5}
             initialNumToRender={6}
             getItemLayout={(_: any, index: number) => ({ length: SNAP, offset: (width - CARD_W) / 2 + index * SNAP, index })}
             onLayout={() => {
-              if (N > 0) flatListRef.current?.scrollToOffset({ offset: N * SNAP, animated: false });
+              if (N > 1) flatListRef.current?.scrollToOffset({ offset: LOOP_MID * N * SNAP, animated: false });
             }}
             onScrollEndDrag={onScrollEndDrag}
             onMomentumScrollEnd={onMomentumScrollEnd}

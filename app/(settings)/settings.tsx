@@ -1,6 +1,6 @@
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';

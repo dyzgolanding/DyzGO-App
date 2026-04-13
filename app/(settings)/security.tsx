@@ -30,7 +30,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import Animated, {
     Easing,
     FadeInUp,
