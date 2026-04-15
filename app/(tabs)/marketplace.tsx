@@ -8,7 +8,7 @@ import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
     AlertCircle, ArrowLeft, ArrowUpDown, Calendar, Check, ChevronDown, ChevronRight, ChevronUp,
     Filter, Gavel, Ghost, Plus, ShoppingBag, Tag, Trash, Users, X,
-    Ticket, Landmark, User, Hash, CreditCard, Receipt, Music
+    Ticket, Landmark, User, Hash, CreditCard, Receipt, Music, Store
 } from 'lucide-react-native';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import {
@@ -24,6 +24,8 @@ import { isEventFinished } from '../../utils/format';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
+import { PressableScale } from '../../components/animated/PressableScale';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 
 const { width, height } = Dimensions.get('window');
 const TAB_W = (width - 48) / 2;
@@ -400,7 +402,11 @@ export default function MarketplaceScreen() {
 
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) setCurrentUserId(user.id);
+        if (user) {
+            setCurrentUserId(user.id);
+        } else {
+            setLoading(false);
+        }
     };
 
     const fetchData = async () => {
@@ -1034,55 +1040,70 @@ export default function MarketplaceScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={{ color: '#FBFBFB', fontSize: 24, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 }}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
                     </View>
-                    {tab === 'market' ? (
-                        <TouchableOpacity
-                            onPress={() => setShowFilterMenu(true)}
-                            style={{ position: 'relative', padding: 4 }}
-                        >
-                            <Filter size={24} color={activeFiltersCount > 0 ? '#FF31D8' : 'rgba(251,251,251,0.5)'} />
-                            {activeFiltersCount > 0 && (
-                                <View style={{ position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' }} />
-                            )}
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            onPress={() => { setLoadingTickets(true); setSellModal(true); fetchMyTickets(); }}
-                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)', justifyContent: 'center', alignItems: 'center' }}
-                        >
-                            <Plus color={COLORS.neonPink} size={20} />
-                        </TouchableOpacity>
-                    )}
+                    {currentUserId ? (
+                        tab === 'market' ? (
+                            <TouchableOpacity
+                                onPress={() => setShowFilterMenu(true)}
+                                style={{ position: 'relative', padding: 4 }}
+                            >
+                                <Filter size={24} color={activeFiltersCount > 0 ? '#FF31D8' : 'rgba(251,251,251,0.5)'} />
+                                {activeFiltersCount > 0 && (
+                                    <View style={{ position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' }} />
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => { setLoadingTickets(true); setSellModal(true); fetchMyTickets(); }}
+                                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)', justifyContent: 'center', alignItems: 'center' }}
+                            >
+                                <Plus color={COLORS.neonPink} size={20} />
+                            </TouchableOpacity>
+                        )
+                    ) : null}
                 </BlurView>
             </View>
 
             {/* ── PILL TABS flotando ── */}
-            <View style={{ position: 'absolute', zIndex: 99, top: insets.top + 80, left: 0, right: 0, alignItems: 'center' }}>
-                <View style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
-                    <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
-                        <TouchableOpacity
-                            onPress={() => switchTab('market')}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'market' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
-                            activeOpacity={0.8}
-                        >
-                            <ShoppingBag size={14} color={tab === 'market' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
-                            <Text style={{ color: tab === 'market' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'market' ? '800' : '600', fontSize: 13 }}>Explorar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => switchTab('selling')}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'selling' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
-                            activeOpacity={0.8}
-                        >
-                            <Tag size={14} color={tab === 'selling' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
-                            <Text style={{ color: tab === 'selling' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'selling' ? '800' : '600', fontSize: 13 }}>Mis Ventas</Text>
-                        </TouchableOpacity>
-                    </BlurView>
+            {currentUserId && (
+                <View style={{ position: 'absolute', zIndex: 99, top: insets.top + 80, left: 0, right: 0, alignItems: 'center' }}>
+                    <View style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
+                        <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                            <TouchableOpacity
+                                onPress={() => switchTab('market')}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'market' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                                activeOpacity={0.8}
+                            >
+                                <ShoppingBag size={14} color={tab === 'market' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
+                                <Text style={{ color: tab === 'market' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'market' ? '800' : '600', fontSize: 13 }}>Explorar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => switchTab('selling')}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'selling' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                                activeOpacity={0.8}
+                            >
+                                <Tag size={14} color={tab === 'selling' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
+                                <Text style={{ color: tab === 'selling' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'selling' ? '800' : '600', fontSize: 13 }}>Mis Ventas</Text>
+                            </TouchableOpacity>
+                        </BlurView>
+                    </View>
                 </View>
-            </View>
+            )}
 
             <ReAnimated.View style={[s.screen, contentStyle]}>
 
                 {/* ── LISTA — ocupa toda la pantalla ── */}
                 <View style={{ flex: 1 }} onLayout={e => setMarketListH(e.nativeEvent.layout.height)}>
+
+                    {!currentUserId && !loading && (
+                        <EmptyStateCard
+                            icon={<Store color={COLORS.neonPink} size={32} />}
+                            title="Marketplace"
+                            subtitle="Inicia sesión para vivir la experiencia del marketplace y conseguir tickets a los mejores precios de la comunidad."
+                            actionText="INICIAR SESIÓN"
+                            onAction={() => router.push({ pathname: '/login', params: { redirect: '/(tabs)/marketplace' } } as any)}
+                            marginTop={-60}
+                        />
+                    )}
 
                     {/* SKELETON — imita la forma de las cards de snap vertical */}
                     {loading && listings.length === 0 && tab === 'market' && (
@@ -1106,7 +1127,7 @@ export default function MarketplaceScreen() {
                     )}
 
                     {/* TAB EXPLORAR — siempre montado, display toggle */}
-                    <View style={{ flex: 1, display: tab === 'market' ? 'flex' : 'none' }}>
+                    <View style={{ flex: 1, display: (currentUserId && tab === 'market') ? 'flex' : 'none' }}>
                         {cardSnapH > 0 && (
                             <AnimatedFlatList
                                 style={{ flex: 1 }}
@@ -1124,11 +1145,12 @@ export default function MarketplaceScreen() {
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.neonPink} />}
                                 ListEmptyComponent={
-                                    <View style={[s.empty, { height: cardSnapH }]}>
-                                        <View style={s.emptyIconCircle}><Ghost color={COLORS.neonPink} size={38} /></View>
-                                        <Text style={s.emptyTitle}>Sin tickets en reventa</Text>
-                                        <Text style={s.emptySub}>No hay tickets disponibles ahora o intenta ajustar tus filtros.</Text>
-                                    </View>
+                                    <EmptyStateCard
+                                        height={cardSnapH}
+                                        icon={<Ghost color={COLORS.neonPink} size={38} />}
+                                        title="Sin tickets en reventa"
+                                        subtitle="No hay tickets disponibles ahora o intenta ajustar tus filtros."
+                                    />
                                 }
                                 renderItem={({ item, index }: { item: any; index: number }) => (
                                     <MarketCard
@@ -1150,7 +1172,7 @@ export default function MarketplaceScreen() {
                     </View>
 
                     {/* TAB MIS VENTAS — siempre montado, display toggle */}
-                    <View style={{ flex: 1, display: tab === 'selling' ? 'flex' : 'none' }}>
+                    <View style={{ flex: 1, display: (currentUserId && tab === 'selling') ? 'flex' : 'none' }}>
                         {cardSnapH > 0 && (
                             <AnimatedFlatList
                                 style={{ flex: 1 }}
@@ -1168,11 +1190,12 @@ export default function MarketplaceScreen() {
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.neonPink} />}
                                 ListEmptyComponent={
-                                    <View style={[s.empty, { height: cardSnapH }]}>
-                                        <View style={s.emptyIconCircle}><Ghost color={COLORS.neonPink} size={38} /></View>
-                                        <Text style={s.emptyTitle}>Nada publicado aún</Text>
-                                        <Text style={s.emptySub}>Toca + para publicar un ticket y empezar a vender.</Text>
-                                    </View>
+                                    <EmptyStateCard
+                                        height={cardSnapH}
+                                        icon={<Ghost color={COLORS.neonPink} size={38} />}
+                                        title="Nada publicado aún"
+                                        subtitle="Toca + para publicar un ticket y empezar a vender."
+                                    />
                                 }
                                 renderItem={({ item, index }: { item: any; index: number }) => (
                                     <MarketCard

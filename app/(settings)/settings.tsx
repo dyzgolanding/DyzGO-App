@@ -251,7 +251,10 @@ export default function SettingsScreen() {
             { text: "Cancelar", style: "cancel" },
             { text: "Salir", style: "destructive", onPress: async () => {
                 await supabase.auth.signOut();
-                router.replace('/login');
+                router.replace('/(tabs)/home');
+                setTimeout(() => {
+                    router.push('/login');
+                }, 100);
             }}
         ]);
     };

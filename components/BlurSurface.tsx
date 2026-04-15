@@ -22,8 +22,6 @@ const ANDROID_BG: Record<string, string> = {
 export function BlurView({ tint = 'default', intensity, style, children, ...rest }: BlurViewProps) {
   if (Platform.OS === 'android') {
     const bg = ANDROID_BG[tint as string] ?? ANDROID_BG.default;
-    // Aplanamos el estilo y eliminamos cualquier backgroundColor que venga del caller
-    // (en iOS son tints sutiles sobre el blur, en Android necesitamos nuestro color opaco)
     const flatStyle = StyleSheet.flatten(style) ?? {};
     const { backgroundColor: _ignored, ...styleWithoutBg } = flatStyle as any;
     return (

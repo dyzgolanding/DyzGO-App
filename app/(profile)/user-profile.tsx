@@ -390,7 +390,7 @@ const s = StyleSheet.create({
 
   // Action button
   actionBtn:    { height: 58, borderRadius: 22, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 10, borderWidth: 1, overflow: 'hidden', shadowColor: COLORS.neonPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
-  actionText:   { fontSize: 15, fontWeight: '900', letterSpacing: 1, fontStyle: 'italic' },
+  actionText:   { fontSize: 16, fontWeight: '900' },
 
   // Amigos en común
   mutualRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(251,251,251,0.05)' },

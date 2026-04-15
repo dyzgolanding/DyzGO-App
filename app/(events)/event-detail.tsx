@@ -294,8 +294,10 @@ export default function EventDetailScreen() {
 
         const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
         Linking.canOpenURL(url!).then(supported => {
-            Linking.openURL(supported ? url! : fallbackMaps);
-        }).catch(() => Linking.openURL(fallbackMaps));
+            Linking.openURL(supported ? url! : fallbackMaps).catch(() => {});
+        }).catch(() => {
+            Linking.openURL(fallbackMaps).catch(() => {});
+        });
     };
 
     const openUber = () => {
@@ -308,8 +310,10 @@ export default function EventDetailScreen() {
         const fallbackUber = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
         Linking.canOpenURL(uberUrl).then(supported => {
-            Linking.openURL(supported ? uberUrl : fallbackUber);
-        }).catch(() => Linking.openURL(fallbackUber));
+            Linking.openURL(supported ? uberUrl : fallbackUber).catch(() => {});
+        }).catch(() => {
+            Linking.openURL(fallbackUber).catch(() => {});
+        });
     };
 
     const finalInstagramUrl = event?.instagram_url || optInstagramUrl;
@@ -319,11 +323,16 @@ export default function EventDetailScreen() {
             ? finalInstagramUrl
             : `https://instagram.com/${finalInstagramUrl.replace('@', '')}`;
         if (/^https?:\/\/(www\.)?instagram\.com\//.test(url)) {
-            Linking.openURL(url);
+            Linking.openURL(url).catch(() => {});
         }
     };
 
-    const handleGetTickets = () => {
+    const handleGetTickets = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push({ pathname: '/login', params: { redirect: 'back' } } as any);
+            return;
+        }
         router.push({
             pathname: '/select-tickets',
             params: {
@@ -333,6 +342,22 @@ export default function EventDetailScreen() {
                 eventLocation: event?.location,
                 accentColor: activeBg1,
             }
+        });
+    };
+
+    const handleGetConsumption = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push({ pathname: '/login', params: { redirect: 'back' } } as any);
+            return;
+        }
+        router.push({
+            pathname: '/(consumption)/consumption-menu',
+            params: {
+                eventId: String(params.id),
+                eventName: event?.title || optTitle || '',
+                accentColor: activeBg1,
+            },
         });
     };
 
@@ -841,14 +866,7 @@ export default function EventDetailScreen() {
                                         backgroundColor: withAlpha(activeBg1, 0.1),
                                         borderColor: withAlpha(activeBg1, 0.3),
                                     }]}
-                                    onPress={() => router.push({
-                                        pathname: '/(consumption)/consumption-menu',
-                                        params: {
-                                            eventId: String(params.id),
-                                            eventName: event?.title || optTitle || '',
-                                            accentColor: activeBg1,
-                                        },
-                                    })}
+                                    onPress={handleGetConsumption}
                                 >
                                     <Wine size={22} color={activeBg1} />
                                 </PressableScale>

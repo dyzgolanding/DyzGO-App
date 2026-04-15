@@ -33,6 +33,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 
 const TABS = ['Productoras', 'Clubes'];
 
@@ -238,15 +239,15 @@ export default function SavedScreen() {
 
   // ─── EMPTY STATE ────────────────────────────────────────────
   const EmptyState = ({ label, subtitle }: { label: string; subtitle: string }) => (
-    <ReAnimated.View entering={FadeIn.duration(250)} style={s.emptyWrap}>
-      <View style={s.emptyIcon}>
-        <Ghost color={COLORS.neonPink} size={40} strokeWidth={1.5} />
-      </View>
-      <Text style={s.emptyTitle}>{label}</Text>
-      <Text style={s.emptySubtitle}>{subtitle}</Text>
-      <TouchableOpacity onPress={() => router.navigate('/(tabs)/explore')} style={s.emptyBtn}>
-        <Text style={s.emptyBtnText}>Explorar ahora</Text>
-      </TouchableOpacity>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, marginTop: 40 }}>
+      <EmptyStateCard
+        icon={<Ghost color={COLORS.neonPink} size={40} strokeWidth={1.5} />}
+        title={label}
+        subtitle={subtitle}
+        actionText="EXPLORAR AHORA"
+        onAction={() => router.navigate('/(tabs)/explore')}
+        marginTop={0}
+      />
     </ReAnimated.View>
   );
 

@@ -1,6 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, ArrowRight, AtSign, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, User, UserPlus } from 'lucide-react-native';
 import { BlurView } from '../../components/BlurSurface';
@@ -51,6 +52,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
 
   // --- ESTADOS ---
   const [isLogin, setIsLogin] = useState(true);
@@ -159,7 +161,7 @@ export default function AuthScreen() {
           throw new Error("Error creando perfil: " + profileError.message);
         }
 
-        router.replace('/onboarding');
+        router.replace({ pathname: '/onboarding', params: { redirect: redirect ?? '/(tabs)/home' } } as any);
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Código inválido o expirado.");
@@ -201,7 +203,11 @@ export default function AuthScreen() {
           options: { captchaToken } // Pasamos el token a Supabase
         });
         if (error) throw error;
-        router.replace('/(tabs)/home');
+        if (redirect === 'back') {
+          router.back();
+        } else {
+          router.replace((redirect as any) ?? '/(tabs)/home');
+        }
       } else {
         // --- SIGNUP ---
         const { data: existingUser } = await supabase

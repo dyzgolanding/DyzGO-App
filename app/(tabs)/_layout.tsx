@@ -1,11 +1,12 @@
 import { BlurView } from '../../components/BlurSurface';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Compass, House, Store, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { supabase } from '../../lib/supabase';
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -19,6 +20,8 @@ const ICONS: Record<string, { icon: React.ComponentType<any>; label: string }> =
 const TabItem = ({ route, index, state, navigation, tabWidth, leftEdge, rightEdge }: any) => {
   const isFocused = state.index === index;
   const { icon: Icon, label } = ICONS[route.name] || { icon: House, label: 'App' };
+  const router = useRouter();
+  const isNavigating = React.useRef(false);
 
   const animatedScaleStyle = useAnimatedStyle(() => {
     if (tabWidth === 0) return {};
@@ -39,7 +42,31 @@ const TabItem = ({ route, index, state, navigation, tabWidth, leftEdge, rightEdg
     };
   });
 
-  const handlePress = () => {
+  const handlePress = async () => {
+    if (isFocused || isNavigating.current) return;
+
+    // Tab Profile requiere autenticación
+    if (route.name === 'profile') {
+      isNavigating.current = true;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push({ pathname: '/login', params: { redirect: '/(tabs)/profile' } } as any);
+        // Evitaremos nuevos toques por 1 segundo mientras ocurre la animación de la ruta de login
+        setTimeout(() => {
+          isNavigating.current = false;
+        }, 1000);
+        return;
+      }
+      
+      isNavigating.current = false;
+    }
+
+    isNavigating.current = true;
+    setTimeout(() => {
+       isNavigating.current = false;
+    }, 500);
+
     const event = navigation.emit({
       type: 'tabPress',
       target: route.key,

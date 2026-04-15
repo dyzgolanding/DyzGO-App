@@ -21,6 +21,7 @@ import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 
 const { width } = Dimensions.get('window');
 const isSmall = width < 400;
@@ -685,11 +686,11 @@ export default function MyFriendsScreen() {
             initialNumToRender={6}
             refreshControl={refreshCtrl}
             ListEmptyComponent={
-              <View style={s.empty}>
-                <View style={s.emptyIcon}><User color={COLORS.neonPink} size={40} /></View>
-                <Text style={s.emptyTitle}>Aún no tienes amigos</Text>
-                <Text style={s.emptyText}>Ve a "Global" o usa el Radar para conectar con personas.</Text>
-              </View>
+              <EmptyStateCard
+                icon={<User color={COLORS.neonPink} size={40} />}
+                title="Aún no tienes amigos"
+                subtitle="Ve a Global o usa el Radar para conectar con personas."
+              />
             }
             renderItem={({ item, index }) => (
               <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
@@ -715,11 +716,11 @@ export default function MyFriendsScreen() {
           windowSize={5}
           initialNumToRender={6}
           ListEmptyComponent={
-            <View style={s.empty}>
-              <View style={s.emptyIcon}><Search color={COLORS.neonPink} size={40} /></View>
-              <Text style={s.emptyTitle}>Sin resultados</Text>
-              <Text style={s.emptyText}>Intenta con otro nombre o @usuario.</Text>
-            </View>
+            <EmptyStateCard
+              icon={<Search color={COLORS.neonPink} size={40} />}
+              title="Sin resultados"
+              subtitle="Intenta con otro nombre o @usuario."
+            />
           }
           renderItem={({ item, index }) => (
             <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
@@ -751,11 +752,11 @@ export default function MyFriendsScreen() {
             <Text style={[s.sectionLabel, { marginBottom: 14 }]}>SUGERIDOS PARA TI</Text>
           ) : null}
           ListEmptyComponent={
-            <View style={s.empty}>
-              <View style={s.emptyIcon}><Globe color={COLORS.neonPink} size={40} /></View>
-              <Text style={s.emptyTitle}>Sin sugerencias</Text>
-              <Text style={s.emptyText}>Usa el buscador para encontrar personas.</Text>
-            </View>
+            <EmptyStateCard
+              icon={<Globe color={COLORS.neonPink} size={40} />}
+              title="Sin sugerencias"
+              subtitle="Usa el buscador para encontrar personas."
+            />
           }
           renderItem={({ item, index }) => (
             <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>

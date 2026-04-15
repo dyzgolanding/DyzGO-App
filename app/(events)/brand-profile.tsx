@@ -475,7 +475,7 @@ export default function BrandProfileScreen() {
               data={pastEvents}
               keyExtractor={item => item.id}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 24, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
+              contentContainerStyle={{ paddingLeft: 26, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
               snapToInterval={PAST_SNAP}
               decelerationRate="fast"
               removeClippedSubviews={true}
@@ -595,7 +595,7 @@ const s = StyleSheet.create({
   // ── Section header ──
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 20, marginTop: 28, marginBottom: 16,
+    paddingHorizontal: 26, marginTop: 28, marginBottom: 16,
   },
   sectionIconBox: {
     width: 30, height: 30, borderRadius: 9,

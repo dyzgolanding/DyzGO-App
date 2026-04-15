@@ -44,7 +44,7 @@ export function PermissionModal({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       statusBarTranslucent
     >
       <View style={styles.modalBackdropDark}>

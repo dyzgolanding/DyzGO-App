@@ -151,8 +151,11 @@ export default function HomeScreen() {
 
     // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
     useEffect(() => {
-        if (needsPermission) setShowLocationModal(true);
-    }, [needsPermission]);
+        if (needsPermission && !loading) {
+            const timer = setTimeout(() => setShowLocationModal(true), 600);
+            return () => clearTimeout(timer);
+        }
+    }, [needsPermission, loading]);
 
     // --- DATOS PRECARGADOS ---
     const initialData = useMemo(() => {
@@ -173,13 +176,24 @@ export default function HomeScreen() {
         }));
     });
 
-    const [featuredEvents, setFeaturedEvents] = useState<any[]>(
-        (initialData?.events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info') && e.image_url)
-    );
+    const [featuredEvents, setFeaturedEvents] = useState<any[]>(() => {
+        const evs = (initialData?.events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info') && e.image_url);
+        return evs.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 6);
+    });
 
     const [loading, setLoading] = useState(!initialData);
     const [connecting, setConnecting] = useState(false);
     const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true); // Controla el puntito magenta
+
+    // Redirige al login con param redirect si no hay sesión, retorna false
+    const requireAuth = async (destination: string): Promise<boolean> => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push({ pathname: '/login', params: { redirect: destination } } as any);
+            return false;
+        }
+        return true;
+    };
 
     const flatListRef = useRef<FlatList>(null);
     const featuredScrollRef = useRef<ScrollView>(null);
@@ -209,7 +223,8 @@ export default function HomeScreen() {
         if (topClubs.length === 0 && featuredEvents.length === 0) setLoading(true);
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user ?? null;
             if (user) {
                 const { data: profile } = await supabase
                     .from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
@@ -218,6 +233,9 @@ export default function HomeScreen() {
                     setUserName(profile.full_name || '');
                     setAvatarUrl(profile.avatar_url || null);
                 }
+            } else {
+                setUserName('');
+                setAvatarUrl(null);
             }
 
             const { data: clubs } = await supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10);
@@ -245,35 +263,42 @@ export default function HomeScreen() {
                 .limit(6);
 
             if (events && events.length > 0) {
-                const [myFollowing, theirFollowing] = await Promise.all([
-                    user ? supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
-                    user ? supabase.from('follows').select('follower_id').eq('following_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
-                ]);
-                const iFollow = myFollowing.data?.map((f: any) => f.following_id) ?? [];
-                const theyFollow = theirFollowing.data?.map((f: any) => f.follower_id) ?? [];
-                const friendIds = iFollow.filter((id: string) => theyFollow.includes(id));
+                let eventsWithAttendees = events.map((event: any) => ({ ...event, attendeesAvatars: [], friendsCount: 0 }));
 
-                const eventIds = events.map(e => e.id);
-                const ticketQuery = supabase.from('tickets').select('event_id, user_id, profiles(avatar_url)').in('event_id', eventIds);
+                if (user) {
+                    const [myFollowing, theirFollowing] = await Promise.all([
+                        supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted'),
+                        supabase.from('follows').select('follower_id').eq('following_id', user.id).eq('status', 'accepted'),
+                    ]);
+                    const iFollow = myFollowing.data?.map((f: any) => f.following_id) ?? [];
+                    const theyFollow = theirFollowing.data?.map((f: any) => f.follower_id) ?? [];
+                    const friendIds = iFollow.filter((id: string) => theyFollow.includes(id));
 
-                const { data: tickets } = friendIds.length > 0
-                    ? await ticketQuery.in('user_id', friendIds)
-                    : await ticketQuery.in('user_id', ['00000000-0000-0000-0000-000000000000']);
+                    if (friendIds.length > 0) {
+                        const eventIds = events.map((e: any) => e.id);
+                        const { data: tickets } = await supabase
+                            .from('tickets')
+                            .select('event_id, user_id, profiles(avatar_url)')
+                            .in('event_id', eventIds)
+                            .in('user_id', friendIds);
 
-                const eventsWithAttendees = events.map(event => {
-                    const relevantTickets = tickets?.filter((t: any) => t.event_id === event.id) || [];
-                    const uniqueAvatars = new Set();
-                    const attendeesAvatars: string[] = [];
-                    relevantTickets.forEach((t: any) => {
-                        if (user && t.user_id === user.id) return;
-                        const url = t.profiles?.avatar_url;
-                        if (url && !uniqueAvatars.has(url)) {
-                            uniqueAvatars.add(url);
-                            attendeesAvatars.push(url);
-                        }
-                    });
-                    return { ...event, attendees: attendeesAvatars };
-                });
+                        eventsWithAttendees = events.map((event: any) => {
+                            const relevantTickets = tickets?.filter((t: any) => t.event_id === event.id) || [];
+                            const uniqueAvatars = new Set();
+                            const attendeesAvatars: string[] = [];
+                            relevantTickets.forEach((t: any) => {
+                                if (t.user_id === user.id) return;
+                                const url = t.profiles?.avatar_url;
+                                if (url && !uniqueAvatars.has(url)) {
+                                    uniqueAvatars.add(url);
+                                    attendeesAvatars.push(url);
+                                }
+                            });
+                            return { ...event, attendeesAvatars, friendsCount: attendeesAvatars.length };
+                        });
+                    }
+                }
+
                 setFeaturedEvents(eventsWithAttendees);
                 eventsWithAttendees.forEach((e: any) => {
                     const cl = Array.isArray(e.clubs) ? e.clubs[0] : e.clubs;
@@ -372,12 +397,12 @@ export default function HomeScreen() {
                         <Text style={styles.brandText}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                        <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={() => router.push('/notifications')}>
+                        <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={async () => { if (await requireAuth('/notifications')) router.push('/notifications'); }}>
                             <Bell color="rgba(251, 251, 251, 0.5)" size={24} />
                             {hasUnreadNotifs && <View style={styles.notifDot} />}
                         </PressableScale>
 
-                        <PressableScale scaleTo={0.88} haptic="light" onPress={() => router.push('/profile')}>
+                        <PressableScale scaleTo={0.88} haptic="light" onPress={async () => { if (await requireAuth('/profile')) router.push('/profile'); }}>
                             <View style={styles.avatarBorder}>
                                 {avatarUrl ? (
                                     <ExpoImage source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -399,7 +424,7 @@ export default function HomeScreen() {
                 {/* 1. HERO GREETING */}
                 <AnimatedEntry index={0} fromY={20} style={styles.heroSection}>
                     <Text style={styles.greetingText}>
-                        Hola, {userName.split(' ')[0] || 'usuario'}
+                        {userName ? `Hola, ${userName.split(' ')[0]}` : '\u00a1Hola!'}
                     </Text>
                     <Text style={styles.heroMainText}>
                         ¿Dónde salimos <Text style={styles.nocheText}>hoy?</Text>
@@ -513,7 +538,7 @@ export default function HomeScreen() {
                         {/* FILA 1: Tickets y Radar */}
                         <View style={{ flexDirection: 'row', gap: 12, height: 160 }}>
                             {/* Tarjeta 1: Mis Tickets */}
-                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/my-tickets')}>
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={async () => { if (await requireAuth('/my-tickets')) router.push('/my-tickets'); }}>
                                 <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
                                 <View style={styles.bentoIconRounded}>
@@ -555,7 +580,7 @@ export default function HomeScreen() {
 
                         {/* FILA 2: Rankings */}
                         <View style={{ flexDirection: 'row', gap: 12, height: 110 }}>
-                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/rankings')}>
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={async () => { if (await requireAuth('/rankings')) router.push('/rankings'); }}>
                                 <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>

@@ -95,12 +95,12 @@ export default function SplashScreen() {
                     supabase.from('profiles').select('full_name, avatar_url').eq('id', session.user.id).single(),
                     supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10),
                     supabase.from('events')
-                        .select('*, clubs(latitude, longitude)')
+                        .select('*, clubs(latitude, longitude, name, image), experiences(id, name, logo_url)')
                         .eq('is_active', true)
-                        .eq('status', 'active')
-                        .gte('date', today)
+                        .in('status', ['active', 'info'])
+                        .not('image_url', 'is', null)
                         .order('date', { ascending: true })
-                        .limit(5)
+                        .limit(6)
                 ]);
 
                 let finalEvents = eventsRes.data || [];
@@ -152,7 +152,7 @@ export default function SplashScreen() {
                     params: { preloadedData: JSON.stringify(preloadedData) }
                 });
             } else {
-                router.replace('/login');
+                router.replace('/(tabs)/home');
             }
         }
     }, [animationDone, dataLoaded, hasSession]);

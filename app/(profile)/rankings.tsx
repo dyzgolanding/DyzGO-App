@@ -52,8 +52,8 @@ function Avatar({ user, size, border }: { user: RankUser; size: number; border?:
   const hasPhoto = !!user.avatarUrl;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
-      borderWidth: 2, borderColor: hasPhoto ? ringColor + '90' : '#FF31D8',
-      backgroundColor: hasPhoto ? 'rgba(255,255,255,0.05)' : 'rgba(255,49,216,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+      borderWidth: 2, borderColor: hasPhoto ? ringColor + '90' : ringColor,
+      backgroundColor: hasPhoto ? 'rgba(255,255,255,0.05)' : ringColor + '33', justifyContent: 'center', alignItems: 'center' }}>
       {hasPhoto
         ? <Image source={{ uri: user.avatarUrl! }} style={{ width: size, height: size }} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
         : <Text style={{ color: '#FBFBFB', fontWeight: '900', fontSize: size * 0.38, textAlign: 'center', lineHeight: size }}>

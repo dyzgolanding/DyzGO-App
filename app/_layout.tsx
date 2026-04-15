@@ -75,8 +75,9 @@ const modalInterpolator = ({ current, layouts }: any) => ({
 function SessionPreloader({ session }: { session: Session | null }) {
   const { preload } = useAppData();
   useEffect(() => {
-    if (session) preload();
-  }, [session]);
+    // Siempre precargamos datos públicos (eventos/clubes) independientemente de la sesión
+    preload();
+  }, []);
   return null;
 }
 
@@ -128,7 +129,7 @@ function RootLayout() {
       if (event === 'SIGNED_OUT') {
         setIsRecoveryMode(false);
         setIsBiometricAuthorized(true);
-        setNeedsOnboarding(null);
+        setNeedsOnboarding(false);
       }
       setSession(session);
 
@@ -209,12 +210,10 @@ function RootLayout() {
 
   useEffect(() => {
     if (!isReady || !isBiometricAuthorized || needsOnboarding === null) return;
-    const inProtectedArea = segments[0] !== undefined && segments[0] !== '(auth)';
-    const inOnboarding    = segments[1] === 'onboarding';
+    const inOnboarding = segments[1] === 'onboarding';
 
-    if (!session && inProtectedArea) {
-      router.replace('/login');
-    } else if (session && !isRecoveryMode) {
+    // Sin sesión: no forzamos login, el usuario puede explorar libremente
+    if (session && !isRecoveryMode) {
       if (needsOnboarding && !inOnboarding) {
         router.replace('/onboarding');
       } else if (!needsOnboarding && segments[0] === '(auth)' && !inOnboarding) {

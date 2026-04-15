@@ -6,7 +6,7 @@
 let _locked = false;
 let _timer: ReturnType<typeof setTimeout> | null = null;
 
-const LOCK_MS = 200; // just past pushTransitionSpec open (180ms) + minimal buffer
+const LOCK_MS = 800; // extended timeout to prevent stacked screens from rapid taps
 
 export const navLock = {
   tryLock(): boolean {

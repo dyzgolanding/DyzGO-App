@@ -23,6 +23,7 @@ const isSmallScreen = SCREEN_WIDTH < 400;
 import { supabase } from '../../lib/supabase';
 
 import { COLORS } from '../../constants/colors';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 const DANGER = '#ef4444';
 
 export default function PaymentMethodsScreen() {
@@ -128,12 +129,12 @@ export default function PaymentMethodsScreen() {
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
                             loading ? null : (
-                                <View style={styles.emptyContainer}>
-                                    <View style={styles.emptyIconWrapper}>
-                                        <CreditCard color={COLORS.neonPink} size={40} />
-                                    </View>
-                                    <Text style={styles.emptyText}>No tienes tarjetas guardadas.</Text>
-                                </View>
+                                <EmptyStateCard
+                                    marginTop={40}
+                                    icon={<CreditCard color={COLORS.neonPink} size={40} />}
+                                    title="Sin tarjetas"
+                                    subtitle="No tienes tarjetas guardadas."
+                                />
                             )
                         }
                     />

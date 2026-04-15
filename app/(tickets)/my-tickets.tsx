@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { PressableScale } from '../../components/animated/PressableScale';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 import { timing } from '../../lib/animation';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { COLORS } from '../../constants/colors';
@@ -407,13 +408,11 @@ export default function MyTicketsScreen() {
                   ))}
                 </View>
               ) : (
-                <View style={styles.emptyContainer}>
-                  <View style={styles.emptyIconCircle}>
-                    <Ghost color={COLORS.neonPink} size={40} />
-                  </View>
-                  <Text style={styles.emptyTitle}>No tienes tickets disponibles</Text>
-                  <Text style={styles.emptySubtitle}>Tus próximas entradas aparecerán aquí.</Text>
-                </View>
+                <EmptyStateCard
+                  icon={<Ghost color={COLORS.neonPink} size={40} />}
+                  title="No tienes tickets disponibles"
+                  subtitle="Tus próximas entradas aparecerán aquí."
+                />
               )
             }
           />
@@ -475,13 +474,11 @@ export default function MyTicketsScreen() {
             }}
             ListEmptyComponent={
               !consumosLoading ? (
-                <View style={styles.emptyContainer}>
-                  <View style={[styles.emptyIconCircle, { borderColor: 'rgba(255,49,216,0.3)', backgroundColor: 'rgba(255,49,216,0.05)' }]}>
-                    <Wine color={COLORS.neonPink} size={40} />
-                  </View>
-                  <Text style={styles.emptyTitle}>Sin consumos por ahora</Text>
-                  <Text style={styles.emptySubtitle}>Compra bebidas desde la carta de tu evento favorito.</Text>
-                </View>
+                <EmptyStateCard
+                  icon={<Wine color={COLORS.neonPink} size={40} />}
+                  title="Sin consumos por ahora"
+                  subtitle="Compra bebidas desde la carta de tu evento favorito."
+                />
               ) : null
             }
           />

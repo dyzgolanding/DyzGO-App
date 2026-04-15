@@ -196,7 +196,7 @@ function buildCatCardParams(item: any, isTabEv: boolean) {
   if (cleanDate?.includes('T')) cleanDate = cleanDate.split('T')[0];
   const venue = isTabEv ? (clubObj?.name || item.club_name) : (item.location || item.address);
   const price = isTabEv
-    ? (item.minTicketPrice > 0 ? `Desde $${item.minTicketPrice.toLocaleString()}` : item.minTicketPrice === 0 ? 'By List' : null)
+    ? (item.minTicketPrice >= 0 ? `Desde $${item.minTicketPrice.toLocaleString()}` : null)
     : null;
   return { exp, clubObj, cleanDate, venue, price };
 }

@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '56',
+    buildNumber: '57',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
@@ -52,7 +52,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundImage: './assets/images/android-icon-background.png',
     },
     package: 'com.dyzgo.app',
-    versionCode: 1,
+    versionCode: 3,
     permissions: [
       'ACCESS_COARSE_LOCATION',
       'ACCESS_FINE_LOCATION',
@@ -61,6 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'USE_BIOMETRIC',
       'USE_FINGERPRINT',
     ],
+    blockedPermissions: ['android.permission.ACTIVITY_RECOGNITION'],
     intentFilters: [
       {
         action: 'VIEW',
