@@ -92,6 +92,11 @@ export default function ProfileScreen() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+
       if (user) {
         const { data: profileData } = await supabase
           .from('profiles')

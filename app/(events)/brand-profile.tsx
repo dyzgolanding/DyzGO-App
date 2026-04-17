@@ -177,7 +177,7 @@ export default function BrandProfileScreen() {
     if (Math.abs(currentOffset - targetOffset) > UPCOMING_SNAP / 2) {
       upcomingListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: {
+      router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : {
         id: event.id,
         status: event.status,
         imageUrl: event.image_url,
@@ -206,7 +206,7 @@ export default function BrandProfileScreen() {
     if (Math.abs(currentOffset - targetOffset) > PAST_SNAP / 2) {
       pastListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: {
+      router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : {
         id: event.id,
         status: event.status,
         imageUrl: event.image_url,

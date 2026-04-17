@@ -464,7 +464,7 @@ export default function RankingsScreen() {
                       top3={top3}
                       currentUserId={currentUserId}
                       showFriendBadge={scope === 'Global'}
-                      onPress={(u) => router.push({ pathname: '/user-profile', params: { id: u.id, name: u.name } })}
+                      onPress={(u) => router.push({ pathname: '/user-profile', params: Platform.OS === 'web' ? { id: u.id } : { id: u.id, name: u.name } })}
                     />
                   </ReAnimated.View>
                 )}
@@ -490,7 +490,7 @@ export default function RankingsScreen() {
                       rank={i + 4}
                       currentUserId={currentUserId}
                       showFriendBadge={scope === 'Global'}
-                      onPress={() => router.push({ pathname: '/user-profile', params: { id: user.id, name: user.name } })}
+                      onPress={() => router.push({ pathname: '/user-profile', params: Platform.OS === 'web' ? { id: user.id } : { id: user.id, name: user.name } })}
                     />
                   </ReAnimated.View>
                 ))}

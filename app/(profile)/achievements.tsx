@@ -12,6 +12,7 @@ import { Platform,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
  } from 'react-native';
 import Animated, {
   FadeInUp,
@@ -75,8 +76,8 @@ const bar = StyleSheet.create({
 });
 
 // --- TARJETA DE MEDALLA ---
-interface MedalProps { data: typeof LEVELS[0]; isUnlocked: boolean; onPress: () => void }
-function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
+interface MedalProps { data: typeof LEVELS[0]; isUnlocked: boolean; onPress: () => void; cardSize?: number }
+function MedalCard({ data, isUnlocked, onPress, cardSize = CARD_SIZE }: MedalProps) {
   const RewardIcon = (REWARDS[data.level] ?? REWARDS[2]).icon;
 
   const handlePress = () => {
@@ -85,12 +86,13 @@ function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
   };
 
   return (
-    <View style={{ width: CARD_SIZE }}>
+    <View style={{ width: cardSize }}>
       <TouchableOpacity
         onPress={handlePress}
         activeOpacity={isUnlocked ? 0.85 : 1}
         style={[
           ms.card,
+          { height: cardSize * 1.1 },
           isUnlocked
             ? { borderColor: data.color + '50', backgroundColor: data.color + '0D' }
             : ms.locked,
@@ -126,7 +128,7 @@ function MedalCard({ data, isUnlocked, onPress }: MedalProps) {
   );
 }
 const ms = StyleSheet.create({
-  card:      { height: CARD_SIZE * 1.1, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 12, overflow: 'hidden', gap: 6 },
+  card:      { borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 12, overflow: 'hidden', gap: 6 },
   locked:    { borderColor: 'rgba(255,255,255,0.05)', backgroundColor: 'rgba(255,255,255,0.01)' },
   badge:     { position: 'absolute', top: 10, left: 10, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
   badgeText: { fontSize: 10, fontWeight: '900' },
@@ -141,6 +143,10 @@ export default function AchievementsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const navTop = useNavBarPaddingTop();
+  const { width: windowWidth } = useWindowDimensions();
+  const isWebDesktop = Platform.OS === 'web' && windowWidth >= 768;
+  const currentCardSize = isWebDesktop ? 160 : CARD_SIZE;
+
   const [xp, setXp] = useState(0);
   const [level, setLevel] = useState(1);
   const [modal, setModal] = useState<number | null>(null);
@@ -300,7 +306,7 @@ export default function AchievementsScreen() {
             <SkeletonBox height={16} borderRadius={6} width="55%" />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               {[1, 2, 3, 4, 5, 6].map(i => (
-                <SkeletonBox key={i} height={CARD_SIZE * 1.1} width={CARD_SIZE} borderRadius={22} />
+                <SkeletonBox key={i} height={currentCardSize * 1.1} width={currentCardSize} borderRadius={22} />
               ))}
             </View>
           </View>
@@ -318,6 +324,7 @@ export default function AchievementsScreen() {
                   data={l}
                   isUnlocked={level >= l.level}
                   onPress={() => setModal(l.level)}
+                  cardSize={currentCardSize}
                 />
               ))}
             </View>

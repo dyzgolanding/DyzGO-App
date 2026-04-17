@@ -146,7 +146,7 @@ export default function SplashScreen() {
 
     useEffect(() => {
         if (animationDone && dataLoaded) {
-            if (hasSession && preloadedData) {
+            if (hasSession && preloadedData && Platform.OS !== 'web') {
                 router.replace({
                     pathname: '/(tabs)/home',
                     params: { preloadedData: JSON.stringify(preloadedData) }

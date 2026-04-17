@@ -698,7 +698,7 @@ export default function MyFriendsScreen() {
               <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
                 <FriendRow
                   item={item}
-                  onPress={() => router.push({ pathname: '/user-profile', params: { id: item.id, name: item.full_name } })}
+                  onPress={() => router.push({ pathname: '/user-profile', params: Platform.OS === 'web' ? { id: item.id } : { id: item.id, name: item.full_name } })}
                 />
               </ReAnimated.View>
             )}
@@ -730,7 +730,7 @@ export default function MyFriendsScreen() {
                 item={item}
                 isFriend={friendIdSet.has(item.id)}
                 isRequestSent={sentRequestIds.has(item.id)}
-                onPress={() => router.push({ pathname: '/user-profile', params: { id: item.id, name: item.full_name } })}
+                onPress={() => router.push({ pathname: '/user-profile', params: Platform.OS === 'web' ? { id: item.id } : { id: item.id, name: item.full_name } })}
                 onAdd={() => handleAddFriend(item.id)}
               />
             </ReAnimated.View>
@@ -765,7 +765,7 @@ export default function MyFriendsScreen() {
               <SuggestionRow
                 item={item}
                 isRequestSent={sentRequestIds.has(item.id)}
-                onPress={() => router.push({ pathname: '/user-profile', params: { id: item.id, name: item.full_name } })}
+                onPress={() => router.push({ pathname: '/user-profile', params: Platform.OS === 'web' ? { id: item.id } : { id: item.id, name: item.full_name } })}
                 onAdd={() => handleAddFriend(item.id)}
                 onDismiss={() => dismissSuggestion(item.id)}
               />

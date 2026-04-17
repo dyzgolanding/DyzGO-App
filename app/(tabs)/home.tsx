@@ -111,7 +111,7 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
         if (Math.abs(scrollX.value - targetX) > FULL_SIZE * 0.4) {
             onScrollTo(index);
         } else {
-            router.push({ pathname: '/club-detail', params: { id: item.id, imageUrl: item.image, name: item.name } });
+            router.push({ pathname: '/club-detail', params: Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image, name: item.name } });
         }
     };
 
@@ -518,7 +518,7 @@ export default function HomeScreen() {
                                                 if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
                                                     featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
                                                 } else {
-                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
+                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
                                                 }
                                             }}
                                         >

@@ -92,7 +92,7 @@ export default function SelectTicketsScreen() {
     const fetchEventSettings = async () => {
         const { data } = await supabase
             .from('events')
-            .select('max_tickets_per_person, image_url, date, end_date, hour, end_time, location, club_name, accent_color, experience_id, clubs(name), experiences(name)')
+            .select('max_tickets_per_person, image_url, date, end_date, hour, end_time, location, club_name, title, accent_color, experience_id, clubs(name), experiences(name)')
             .eq('id', eventId)
             .single();
 
@@ -179,18 +179,29 @@ export default function SelectTicketsScreen() {
                 };
             });
 
-        router.push({
-            pathname: '/payment',
-            params: {
-                eventId,
-                eventName,
-                eventDate,
-                cartData: JSON.stringify(cleanCart),
-                totalToPay: totalToPay.toString(),
-                serviceFee: Math.round(serviceFee).toString(),
-                accentColor,
-            }
-        });
+        const resolvedName = eventDetails?.title || eventName;
+        const resolvedDate = eventDetails?.date || eventDate;
+        if (Platform.OS === 'web') {
+            sessionStorage.setItem('dyzgo_cart', JSON.stringify({
+                cartData: cleanCart,
+                totalToPay,
+                serviceFee: Math.round(serviceFee),
+            }));
+            router.push({ pathname: '/payment', params: { eventId } });
+        } else {
+            router.push({
+                pathname: '/payment',
+                params: {
+                    eventId,
+                    eventName: resolvedName,
+                    eventDate: resolvedDate,
+                    cartData: JSON.stringify(cleanCart),
+                    totalToPay: totalToPay.toString(),
+                    serviceFee: Math.round(serviceFee).toString(),
+                    accentColor,
+                }
+            });
+        }
     };
 
     const formatEventDateTime = (evt: any) => {

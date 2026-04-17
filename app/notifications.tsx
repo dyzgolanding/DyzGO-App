@@ -22,6 +22,7 @@ import {
     Alert,
     Animated,
     Dimensions,
+    Platform,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -247,22 +248,24 @@ export default function NotificationsScreen() {
               .select('*, clubs(name, image), experiences(name, logo_url, id)')
               .eq('id', notification.related_id)
               .single();
-            router.push({ pathname: '/event-detail', params: ev ? {
-              id: ev.id,
-              status: ev.status,
-              imageUrl: ev.image_url,
-              title: ev.title,
-              date: ev.date,
-              hour: ev.hour,
-              accentColor: ev.accent_color,
-              category: ev.category,
-              clubName: ev.club_name || ev.clubs?.name,
-              clubImage: ev.clubs?.image,
-              producerName: ev.experiences?.name,
-              producerLogo: ev.experiences?.logo_url,
-              producerId: ev.experiences?.id,
-              instagramUrl: ev.instagram_url,
-            } : { id: notification.related_id } });
+            router.push({ pathname: '/event-detail', params: ev
+              ? (Platform.OS === 'web' ? { id: ev.id } : {
+                  id: ev.id,
+                  status: ev.status,
+                  imageUrl: ev.image_url,
+                  title: ev.title,
+                  date: ev.date,
+                  hour: ev.hour,
+                  accentColor: ev.accent_color,
+                  category: ev.category,
+                  clubName: ev.club_name || ev.clubs?.name,
+                  clubImage: ev.clubs?.image,
+                  producerName: ev.experiences?.name,
+                  producerLogo: ev.experiences?.logo_url,
+                  producerId: ev.experiences?.id,
+                  instagramUrl: ev.instagram_url,
+                })
+              : { id: notification.related_id } });
           }
           break;
         // Marketplace → gestionar desde allí

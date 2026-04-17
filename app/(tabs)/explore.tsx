@@ -221,15 +221,17 @@ function renderCatCard(item: any, isTabEv: boolean, router: any, big = true) {
         if (isTabEv) eventCache.set(String(item.id), item);
         router.push({
           pathname: isTabEv ? '/event-detail' : '/club-detail',
-          params: isTabEv ? {
-            id: item.id, imageUrl: item.image_url || item.image || '',
-            title: item.title || item.name, date: cleanDate, hour: item.hour,
-            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
-            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-            themeColorEnd: item.theme_color_end || '#0a0014',
-            category: item.category || item.area, area: item.area || item.category,
-            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
-          } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: opt(item.instagram || item.instagram_url) },
+          params: isTabEv
+            ? (Platform.OS === 'web' ? { id: item.id } : {
+                id: item.id, imageUrl: item.image_url || item.image || '',
+                title: item.title || item.name, date: cleanDate, hour: item.hour,
+                clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+                accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+                themeColorEnd: item.theme_color_end || '#0a0014',
+                category: item.category || item.area, area: item.area || item.category,
+                producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+              })
+            : (Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: opt(item.instagram || item.instagram_url) }),
         });
       }}
     >
@@ -979,16 +981,16 @@ export default function ExploreScreen() {
                     router.push({
                       pathname: isTabEv ? '/event-detail' : '/club-detail',
                       params: isTabEv
-                        ? {
-                          id: item.id, imageUrl: item.image_url || item.image || '',
-                          title: item.title || item.name, date: cleanDate, hour: item.hour,
-                          clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
-                          accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-                          themeColorEnd: item.theme_color_end || '#0a0014',
-                          category: item.category || item.area, area: item.area || item.category,
-                          producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
-                        }
-                        : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url },
+                        ? (Platform.OS === 'web' ? { id: item.id } : {
+                            id: item.id, imageUrl: item.image_url || item.image || '',
+                            title: item.title || item.name, date: cleanDate, hour: item.hour,
+                            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+                            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+                            themeColorEnd: item.theme_color_end || '#0a0014',
+                            category: item.category || item.area, area: item.area || item.category,
+                            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+                          })
+                        : (Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url }),
                     });
                   }}
                 />

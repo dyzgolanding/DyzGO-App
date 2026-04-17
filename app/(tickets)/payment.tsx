@@ -63,16 +63,29 @@ export default function PaymentScreen() {
   const eventName = params.eventName as string;
   const paramAccentColor = params.accentColor as string | undefined;
 
-  const rawCart: CartItem[] = params.cartData ? JSON.parse(params.cartData as string) : [];
+  const webCart = useMemo(() => {
+    if (Platform.OS !== 'web') return null;
+    try {
+      const stored = sessionStorage.getItem('dyzgo_cart');
+      if (stored) return JSON.parse(stored) as { cartData: CartItem[]; totalToPay: number; serviceFee: number };
+    } catch {}
+    return null;
+  }, []);
+
+  const rawCart: CartItem[] = webCart?.cartData ?? (params.cartData ? JSON.parse(params.cartData as string) : []);
   const cart: CartItem[] = rawCart.filter((item) => UUID_REGEX.test(item.id));
   const hasCorruptItems = rawCart.length > cart.length;
 
   const totals = useMemo(() => {
+    if (webCart) {
+      const subtotal = webCart.totalToPay - webCart.serviceFee;
+      return { subtotal, serviceFeeTotal: webCart.serviceFee, finalTotal: webCart.totalToPay };
+    }
     const subtotal = cart.reduce((acc, item) => acc + (Number(item.price) * Number(item.quantity)), 0);
     const serviceFeeTotal = Math.round(subtotal * 0.12);
     const finalTotal = subtotal + serviceFeeTotal;
     return { subtotal, serviceFeeTotal, finalTotal };
-  }, [cart]);
+  }, [cart, webCart]);
 
   const isFreeOrder = totals.finalTotal === 0;
 
@@ -105,7 +118,7 @@ export default function PaymentScreen() {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('image_url, date, hour, end_time, accent_color, experiences(name)')
+          .select('image_url, date, hour, end_time, accent_color, title, experiences(name)')
           .eq('id', eventId)
           .single();
         if (error) throw error;
@@ -476,11 +489,12 @@ export default function PaymentScreen() {
   const finishProcess = () => {
     const totalQuantity = cart.reduce((acc, item) => acc + item.quantity, 0);
 
+    if (Platform.OS === 'web') sessionStorage.removeItem('dyzgo_cart');
     router.replace({
       pathname: '/ticket-confirmation',
       params: {
         eventId,
-        eventName,
+        eventName: eventDetails?.title || eventName,
         quantity: totalQuantity.toString()
       }
     });
@@ -517,6 +531,7 @@ export default function PaymentScreen() {
   };
 
   const displayDate = formatEventDateTime(eventDetails) || params.eventDate as string;
+  const displayName = eventDetails?.title || eventName;
   const producerName = Array.isArray(eventDetails?.experiences) ? eventDetails?.experiences[0]?.name : eventDetails?.experiences?.name;
 
   const accentColor = eventDetails?.accent_color || paramAccentColor || '#FF31D8';
@@ -615,7 +630,7 @@ export default function PaymentScreen() {
                 cachePolicy="memory-disk"
               />
               <View style={styles.eventHeaderTextContainer}>
-                <Text style={styles.eventHeaderTitle} numberOfLines={2}>{eventName}</Text>
+                <Text style={styles.eventHeaderTitle} numberOfLines={2}>{displayName}</Text>
 
                 {displayDate && (
                   <View style={styles.eventHeaderSubRow}>

@@ -347,13 +347,15 @@ export default function EventDetailScreen() {
         }
         router.push({
             pathname: '/select-tickets',
-            params: {
-                eventId: event?.id || params.id,
-                eventName: event?.title || optTitle,
-                eventDate: event?.date || optDate,
-                eventLocation: event?.location,
-                accentColor: activeBg1,
-            }
+            params: Platform.OS === 'web'
+                ? { eventId: event?.id || params.id }
+                : {
+                    eventId: event?.id || params.id,
+                    eventName: event?.title || optTitle,
+                    eventDate: event?.date || optDate,
+                    eventLocation: event?.location,
+                    accentColor: activeBg1,
+                }
         });
     };
 
