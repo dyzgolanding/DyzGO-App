@@ -229,11 +229,10 @@ export default function MarketplaceScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     
-    // Ocultamiento seguro para native (en web, unmountOnBlur hace esto automáticamente)
+    // Ocultamiento seguro para que no se superpongan las pantallas en web
     const [isScreenFocused, setIsScreenFocused] = useState(true);
     useFocusEffect(
         useCallback(() => {
-            if (Platform.OS === 'web') return;
             setIsScreenFocused(true);
             return () => setIsScreenFocused(false);
         }, [])
