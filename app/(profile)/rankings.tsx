@@ -368,7 +368,8 @@ export default function RankingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
@@ -389,6 +390,7 @@ export default function RankingsScreen() {
               style={StyleSheet.absoluteFill}
           />
       </View>
+)}
 
       <NavBar
         title="LEADERBOARD"

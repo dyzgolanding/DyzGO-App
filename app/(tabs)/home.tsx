@@ -342,6 +342,18 @@ export default function HomeScreen() {
         }, [fetchData])
     );
 
+    useEffect(() => {
+        if (!topClubs.length || !flatListRef.current || hasCentered.current) return;
+        const frame = requestAnimationFrame(() => {
+            if (flatListRef.current && infiniteClubs.length > startIndex) {
+                scrollX.value = startIndex * FULL_SIZE;
+                flatListRef.current.scrollToOffset({ offset: startIndex * FULL_SIZE, animated: false });
+                hasCentered.current = true;
+            }
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [startIndex]);
+
     const handleProximityConnect = async () => {
         try {
             setConnecting(true);
@@ -644,11 +656,9 @@ export default function HomeScreen() {
                             getItemLayout={getItemLayout}
                             initialScrollIndex={topClubs.length > 0 ? startIndex : undefined}
                             onLayout={() => {
-                                if (topClubs.length > 0 && flatListRef.current && !hasCentered.current) {
+                                if (topClubs.length > 0 && flatListRef.current && !hasCentered.current && infiniteClubs.length > startIndex) {
                                     scrollX.value = startIndex * FULL_SIZE;
-                                    if (flatListRef.current && infiniteClubs.length > startIndex) {
-                                        flatListRef.current.scrollToIndex({ index: startIndex, animated: false, viewPosition: 0.5 });
-                                    }
+                                    flatListRef.current.scrollToOffset({ offset: startIndex * FULL_SIZE, animated: false });
                                     hasCentered.current = true;
                                 }
                             }}

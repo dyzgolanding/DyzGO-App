@@ -8,10 +8,8 @@ import {
 } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import {
-    Dimensions, Linking, ScrollView, StyleSheet,
-    Text, TextInput, TouchableOpacity, View, LayoutAnimation
-} from 'react-native';
+import { Platform, Dimensions, Linking, ScrollView, StyleSheet,
+    Text, TextInput, TouchableOpacity, View, LayoutAnimation } from 'react-native';
 import { COLORS } from '../../constants/colors';
 
 const { width } = Dimensions.get('window');
@@ -204,10 +202,12 @@ export default function HelpScreen() {
 
     return (
         <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             </View>
+)}
 
             <NavBar title="CENTRO DE AYUDA" onBack={() => router.back()} />
 

@@ -73,6 +73,13 @@ export default function SettingsScreen() {
         const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
             if (!isDirty) return;
             e.preventDefault();
+            if (Platform.OS === 'web') {
+                if (window.confirm('¿Quieres salir sin guardar los cambios?')) {
+                    navigation.dispatch(e.data.action);
+                }
+                return;
+            }
+
             Alert.alert(
                 'Cambios sin guardar',
                 '¿Quieres salir sin guardar los cambios?',
@@ -247,6 +254,15 @@ export default function SettingsScreen() {
     };
 
     const handleLogout = async () => {
+        if (Platform.OS === 'web') {
+            if (window.confirm("¿Seguro que quieres salir?")) {
+                await supabase.auth.signOut();
+                router.replace('/(tabs)/home');
+                setTimeout(() => { router.push('/login'); }, 100);
+            }
+            return;
+        }
+
         Alert.alert("Cerrar Sesión", "¿Seguro que quieres salir?", [
             { text: "Cancelar", style: "cancel" },
             { text: "Salir", style: "destructive", onPress: async () => {
@@ -263,7 +279,8 @@ export default function SettingsScreen() {
         <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
             <StatusBar barStyle="light-content" />
             
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
                     start={{ x: 0, y: 0 }}
@@ -284,6 +301,7 @@ export default function SettingsScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+)}
             
             {/* PASTILLA FLOTANTE */}
             <View style={[styles.floatingHeader, { top: insets.top + 12 }]}>

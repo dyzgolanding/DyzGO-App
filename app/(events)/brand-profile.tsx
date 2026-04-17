@@ -9,10 +9,8 @@ import {
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import ReAnimated from 'react-native-reanimated';
-import {
-  Animated, Dimensions, FlatList, ImageBackground, InteractionManager, Linking,
-  Share, StatusBar, StyleSheet, Text, TouchableOpacity, View
-} from 'react-native';
+import { Platform, Animated, Dimensions, FlatList, ImageBackground, InteractionManager, Linking,
+  Share, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { useSaved } from '../../context/SavedContext';
@@ -22,7 +20,7 @@ import { getDistanceFromLatLonInKm, formatDistance } from '../../utils/location'
 import { SkeletonBox } from '../../components/SkeletonBox';
 
 const { width } = Dimensions.get('window');
-const BANNER_H = Math.round((width / 3) * 1.5);
+const BANNER_H = Platform.OS === 'web' ? 250 : Math.round((width / 3) * 1.5);
 
 const isEventFinished = (evt: any) => {
   if (!evt) return false;
@@ -169,7 +167,7 @@ export default function BrandProfileScreen() {
   const upcomingScrollX = useRef(0);
   const pastScrollX = useRef(0);
 
-  const UPCOMING_W = width - 52;
+  const UPCOMING_W = Platform.OS === 'web' ? 400 : width - 52;
   const UPCOMING_GAP = 12;
   const UPCOMING_SNAP = UPCOMING_W + UPCOMING_GAP;
 
@@ -231,11 +229,12 @@ export default function BrandProfileScreen() {
     <ReAnimated.View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Ambient background */}
+      {Platform.OS !== 'web' && (
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
         <LinearGradient colors={[`${pColor}2E`, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={['transparent', `${pColor}1F`]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
       </View>
+      )}
 
       {/* ── FLOATING NAV ── */}
       <View style={[s.fixedHeader, { top: insets.top + 8 }]}>
@@ -270,7 +269,7 @@ export default function BrandProfileScreen() {
               ? <Image source={{ uri: brand.banner_url }} style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} contentFit="fill" transition={150} cachePolicy="memory-disk" />
               : <LinearGradient colors={['rgba(255,49,216,0.25)', 'rgba(138,43,226,0.25)', 'transparent']} style={StyleSheet.absoluteFill} />}
             <LinearGradient
-              colors={['rgba(3,3,3,0.15)', 'transparent', 'transparent', COLORS.background]}
+              colors={['rgba(3,3,3,0.15)', 'transparent', 'transparent', Platform.OS === 'web' ? 'transparent' : COLORS.background]}
               locations={[0, 0.3, 0.6, 1]}
               style={StyleSheet.absoluteFill}
             />
@@ -357,7 +356,7 @@ export default function BrandProfileScreen() {
         {loading ? (
           <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
             <SkeletonBox height={14} width={140} borderRadius={5} />
-            <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
+            <SkeletonBox height={UPCOMING_W} width={UPCOMING_W} borderRadius={28} />
           </View>
         ) : (
           <View>
@@ -371,7 +370,7 @@ export default function BrandProfileScreen() {
 
             {fetchingEvents ? (
               <View style={{ paddingHorizontal: 26, marginTop: 4 }}>
-                <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
+                <SkeletonBox height={UPCOMING_W} width={UPCOMING_W} borderRadius={28} />
               </View>
             ) : events.length === 0 ? (
               <View style={s.emptyEvents}>
@@ -517,7 +516,7 @@ export default function BrandProfileScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+  root: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : COLORS.background },
 
   // ── Fixed nav ──
   fixedHeader: {
@@ -607,7 +606,7 @@ const s = StyleSheet.create({
 
   // ── Event card (próximos) — mismo estilo que home ──
   eventCard: {
-    width: width - 52, height: width - 52,
+    width: Platform.OS === 'web' ? 400 : width - 52, height: Platform.OS === 'web' ? 400 : width - 52,
     borderRadius: 32, overflow: 'hidden',
     backgroundColor: '#0A0A0A',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',

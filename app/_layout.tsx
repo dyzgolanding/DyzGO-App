@@ -276,11 +276,17 @@ function RootLayout() {
                 <Stack.Screen
                   name="(tickets)/select-tickets"
                   options={{
-                    presentation: Platform.OS !== 'web' ? 'transparentModal' : 'modal',
                     headerShown: false,
-                    contentStyle: { backgroundColor: 'transparent' },
                     gestureEnabled: Platform.OS !== 'web',
-                    animation: Platform.OS !== 'web' ? 'slide_from_bottom' : 'fade',
+                    animation: Platform.OS !== 'web' ? 'slide_from_right' : 'none',
+                  }}
+                />
+                <Stack.Screen
+                  name="(tickets)/payment"
+                  options={{
+                    headerShown: false,
+                    gestureEnabled: Platform.OS !== 'web',
+                    animation: Platform.OS !== 'web' ? 'slide_from_right' : 'none',
                   }}
                 />
                 <Stack.Screen name="(tickets)" />

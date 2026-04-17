@@ -217,6 +217,7 @@ export default function UserProfileScreen() {
   return (
     <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <StatusBar barStyle="light-content" />
+      {Platform.OS !== 'web' && (
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -238,6 +239,7 @@ export default function UserProfileScreen() {
               style={StyleSheet.absoluteFill}
           />
       </View>
+      )}
 
       <NavBar onBack={() => router.back()} />
 

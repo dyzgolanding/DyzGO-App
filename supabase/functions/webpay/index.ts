@@ -150,7 +150,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: finalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}/tbk-plus`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 
@@ -212,7 +212,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: finalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}/tbk-plus`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 
@@ -528,7 +528,7 @@ serve(async (req) => {
                     buy_order: order.payment_buy_order,
                     session_id: order.payment_session_id,
                     amount: order.total_amount,
-                    return_url: `${DYZGO_CALLBACK_URL}/tbk-consumption`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-consumption`
                 })
             });
 
@@ -592,7 +592,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: totalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}/tbk-plus`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 

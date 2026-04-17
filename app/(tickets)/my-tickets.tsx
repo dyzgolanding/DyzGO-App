@@ -350,7 +350,8 @@ export default function MyTicketsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
@@ -371,6 +372,7 @@ export default function MyTicketsScreen() {
               style={StyleSheet.absoluteFill}
           />
       </View>
+)}
 
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
 

@@ -250,7 +250,8 @@ export default function SelectTicketsScreen() {
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Fondo — 3 capas de luz con accent_color */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={[withAlpha(accentColor, 0.2), 'transparent']}
                     start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }}
@@ -268,6 +269,7 @@ export default function SelectTicketsScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+)}
             
             <View style={{ flex: 1 }}>
                 <NavBar title="SELECCIONAR ENTRADAS" onBack={() => router.back()} />

@@ -11,7 +11,7 @@ import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import {
   ActivityIndicator, Alert, Dimensions, Modal, ScrollView,
-  StatusBar, StyleSheet, Text, TouchableOpacity, View,
+  StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
@@ -154,7 +154,12 @@ export default function ConsumptionPaymentScreen() {
       if (!session) throw new Error('Sin sesión activa');
 
       const { data, error } = await supabase.functions.invoke('webpay', {
-        body: { action: 'init_webpay_consumption', order_id: orderId, user_id: session.user.id },
+        body: { 
+          action: 'init_webpay_consumption', 
+          order_id: orderId, 
+          user_id: session.user.id,
+          return_url: Platform.OS === 'web' ? window.location.origin + '/tbk-consumption' : undefined
+        },
       });
 
       if (error || !data?.url || !data?.token)
@@ -282,6 +287,10 @@ export default function ConsumptionPaymentScreen() {
 
   // Pantalla WebView
   if (paymentUrl) {
+    if (Platform.OS === 'web') {
+      return <WebRedirector url={paymentUrl} token={authToken} color={accentColor} />;
+    }
+
     return (
       <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
@@ -551,6 +560,29 @@ export default function ConsumptionPaymentScreen() {
   );
 }
 
+const WebRedirector = ({ url, token, color }: any) => {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'token_ws';
+    input.value = token || '';
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }, [url, token]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color={color} />
+      <Text style={{ color: 'white', marginTop: 20, fontWeight: '700', fontSize: 16 }}>Redirigiendo a Webpay Seguro...</Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bgDark },
   infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
@@ -581,7 +613,7 @@ const styles = StyleSheet.create({
   payBtnText: { fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
   floatingCloseBtn: { position: 'absolute', top: 55, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center' },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', padding: 24 },
-  modalCard: { width: '100%', borderRadius: 28, padding: 28, alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  modalCard: { width: '100%', maxWidth: Platform.OS === 'web' ? 400 : undefined, borderRadius: 28, padding: 28, alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   modalIconBg: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginBottom: 4 },
   modalTitle: { color: '#fff', fontWeight: '900', fontSize: 20 },
   modalSubtitle: { color: COLORS.textGray, fontSize: 14, textAlign: 'center', lineHeight: 20 },

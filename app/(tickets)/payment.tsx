@@ -247,7 +247,8 @@ export default function PaymentScreen() {
         action: 'create',
         cart: simplifiedCart,
         user_id: user.id,
-        event_id: eventId
+        event_id: eventId,
+        return_url: Platform.OS === 'web' ? window.location.origin + '/tbk-plus' : undefined
       };
       if (promoCode.trim() && promoStatus === 'valid') {
         createBody.promo_code = promoCode.trim().toUpperCase();
@@ -526,6 +527,10 @@ export default function PaymentScreen() {
   };
 
   if (paymentUrl) {
+    if (Platform.OS === 'web') {
+      return <WebRedirector url={paymentUrl} token={authToken} color={accentColor} />;
+    }
+
     return (
       <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
@@ -588,11 +593,13 @@ export default function PaymentScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Fondo — 3 capas con accent_color */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient colors={[withAlpha(accentColor, 0.2), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={['transparent', withAlpha(accentColor, 0.15)]} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={['transparent', withAlpha(accentColor, 0.05), 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
       </View>
+)}
 
       <View style={{ flex: 1 }}>
         <NavBar title="RESUMEN DE COMPRA" onBack={handleCancelAndExit} />
@@ -943,6 +950,29 @@ export default function PaymentScreen() {
   );
 }
 
+const WebRedirector = ({ url, token, color }: any) => {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'token_ws';
+    input.value = token || '';
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }, [url, token]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color={color} />
+      <Text style={{ color: 'white', marginTop: 20, fontWeight: '700', fontSize: 16 }}>Redirigiendo a Webpay Seguro...</Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1255,6 +1285,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
+    maxWidth: Platform.OS === 'web' ? 400 : undefined,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 24,
     padding: 24,

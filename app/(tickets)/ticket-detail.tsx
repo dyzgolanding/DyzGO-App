@@ -45,11 +45,12 @@ import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
 const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 400;
+const baseWidth = Platform.OS === 'web' && width > 500 ? 450 : width;
+const isSmallScreen = baseWidth < 400;
 
 // Card dimensions
 const CARD_MARGIN = 22;
-const CARD_WIDTH = width - CARD_MARGIN * 2;
+const CARD_WIDTH = baseWidth - CARD_MARGIN * 2;
 const CARD_HEIGHT = CARD_WIDTH;          // front face: square
 const CARD_HEIGHT_BACK = CARD_WIDTH * 1.3; // back face: taller for QR
 
@@ -683,7 +684,7 @@ const styles = StyleSheet.create({
   pillBg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 50, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', overflow: 'hidden' },
   iconBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 
-  scrollContent: { paddingBottom: 48, flexGrow: 1, justifyContent: 'center' },
+  scrollContent: { paddingBottom: 48, flexGrow: 1, justifyContent: 'center', alignItems: Platform.OS === 'web' ? 'center' : undefined },
 
   // ── Flip card wrapper ──
   flipWrapper: {
@@ -793,7 +794,7 @@ const styles = StyleSheet.create({
   flipBackHintText: { color: 'rgba(255,255,255,0.25)', fontSize: 11, fontWeight: '500' },
 
   // ── Action buttons ──
-  actionArea: { paddingHorizontal: CARD_MARGIN, paddingTop: 16, gap: 12 },
+  actionArea: { paddingHorizontal: CARD_MARGIN, paddingTop: 16, gap: 12, width: baseWidth },
   actionBtn: { width: '100%', borderRadius: 18, overflow: 'hidden' },
   actionBtnInner: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
