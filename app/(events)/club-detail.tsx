@@ -537,7 +537,7 @@ export default function ClubDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     
     // 'top' se aplica inline con insets.top + 10 para respetar el safe area real del dispositivo

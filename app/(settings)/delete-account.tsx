@@ -231,7 +231,7 @@ export default function DeleteAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   
   content: { paddingHorizontal: isSmallScreen ? 20 : 30, paddingBottom: isSmallScreen ? 20 : 30, alignItems: 'center', flexGrow: 1, justifyContent: 'center' },
   stepContainer: { width: '100%', alignItems: 'center' },

@@ -52,11 +52,14 @@ import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location'
 import { COLORS } from '../../constants/colors';
 import { safeFormatDate, formatDayShort } from '../../utils/format';
 import { PermissionModal } from '../../components/PermissionModal';
+import { useMouseScroll } from '../../hooks/useMouseScroll';
 
-const { width, height } = Dimensions.get('window');
-const S = width / 430; // scale factor vs iPhone 15 Pro Max
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
+const S = Platform.OS === 'web' ? 1 : width / 430; // scale factor vs iPhone 15 Pro Max
 
-const ITEM_WIDTH = Math.round(width * 0.75); // Tarjetas de club más amplias
+const CARD_BASE_WIDTH = Platform.OS === 'web' ? 430 : width;
+const ITEM_WIDTH = Math.round(CARD_BASE_WIDTH * 0.75); // Tarjetas de club
 const SPACING = 16;
 const FULL_SIZE = ITEM_WIDTH + SPACING;
 
@@ -145,17 +148,19 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
 export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    
+    // Ocultamiento seguro para Web
+    const [isScreenFocused, setIsScreenFocused] = useState(true);
+    useFocusEffect(
+        useCallback(() => {
+            setIsScreenFocused(true);
+            return () => setIsScreenFocused(false);
+        }, [])
+    );
+
     const params = useLocalSearchParams();
     const { location, needsPermission, requestPermission } = useUserLocation();
     const [showLocationModal, setShowLocationModal] = useState(false);
-
-    // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
-    useEffect(() => {
-        if (needsPermission && !loading) {
-            const timer = setTimeout(() => setShowLocationModal(true), 600);
-            return () => clearTimeout(timer);
-        }
-    }, [needsPermission, loading]);
 
     // --- DATOS PRECARGADOS ---
     const initialData = useMemo(() => {
@@ -183,6 +188,14 @@ export default function HomeScreen() {
 
     const [loading, setLoading] = useState(!initialData);
     const [connecting, setConnecting] = useState(false);
+
+    // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
+    useEffect(() => {
+        if (needsPermission && !loading) {
+            const timer = setTimeout(() => setShowLocationModal(true), 600);
+            return () => clearTimeout(timer);
+        }
+    }, [needsPermission, loading]);
     const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true); // Controla el puntito magenta
 
     // Redirige al login con param redirect si no hay sesión, retorna false
@@ -197,6 +210,8 @@ export default function HomeScreen() {
 
     const flatListRef = useRef<FlatList>(null);
     const featuredScrollRef = useRef<ScrollView>(null);
+    const mouseScrollEvents = useMouseScroll(featuredScrollRef);
+    const mouseScrollClubs = useMouseScroll(flatListRef);
     const featuredScrollX = useRef(0);
     const hasCentered = useRef(false);
     const scrollX = useSharedValue(0);
@@ -358,11 +373,13 @@ export default function HomeScreen() {
             }}
         />
     ), [scrollX, location]);
+    
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* GLOW ROJO SUTIL EN EL FONDO - Luces difuminadas sin oscurecer el negro */}
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 {/* Luz superior izquierda */}
                 <LinearGradient
@@ -387,6 +404,7 @@ export default function HomeScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+            )}
 
 
 
@@ -445,16 +463,17 @@ export default function HomeScreen() {
                     {loading && featuredEvents.length === 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPadEvent}>
                             {[1, 2].map(i => (
-                                <SkeletonBox key={i} height={width - 52} width={width - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                                <SkeletonBox key={i} height={CARD_BASE_WIDTH - 52} width={CARD_BASE_WIDTH - 52} borderRadius={30} style={{ marginRight: 12 }} />
                             ))}
                         </ScrollView>
                     ) : (
                         <ScrollView
+                            {...mouseScrollEvents}
                             ref={featuredScrollRef}
                             horizontal
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.horizontalPadEvent}
-                            snapToInterval={width - 40}
+                            snapToInterval={CARD_BASE_WIDTH - 40}
                             decelerationRate="fast"
                             disableIntervalMomentum
                             onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
@@ -476,7 +495,7 @@ export default function HomeScreen() {
                                             haptic="light"
                                             style={styles.bigEventCard}
                                             onPress={() => {
-                                                const FEATURED_INTERVAL = width - 40;
+                                                const FEATURED_INTERVAL = CARD_BASE_WIDTH - 40;
                                                 const targetX = index * FEATURED_INTERVAL;
                                                 if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
                                                     featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
@@ -607,6 +626,7 @@ export default function HomeScreen() {
                         </ScrollView>
                     ) : topClubs.length > 0 && (
                         <AnimatedFlatList
+                            {...mouseScrollClubs}
                             ref={flatListRef}
                             data={infiniteClubs}
                             keyExtractor={(item: any, index) => `${item.id}-${index}`}
@@ -658,7 +678,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
 
     floatingHeader: { position: 'absolute', zIndex: 100, left: 16, right: 16 },
     blurNavbar: {
@@ -706,7 +726,7 @@ const styles = StyleSheet.create({
     horizontalPad: { paddingLeft: 24, paddingRight: 16 },
     horizontalPadEvent: { paddingLeft: 26, paddingRight: 14 },
 
-    bigEventCard: { width: width - 52, height: width - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    bigEventCard: { width: CARD_BASE_WIDTH - 52, height: CARD_BASE_WIDTH - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
     fullImg: { flex: 1, borderRadius: 32 },
     fullImgOverlay: { flex: 1, padding: 24, justifyContent: 'space-between' },
 
@@ -733,7 +753,7 @@ const styles = StyleSheet.create({
     bentoTitle: { color: '#FBFBFB', fontSize: 16, fontWeight: '800' },
     bentoSubtitle: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 12, marginTop: 2, fontWeight: '500' },
 
-    clubCardContainer: { flex: 1, borderRadius: 32, overflow: 'hidden', height: Math.round(340 * S), backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    clubCardContainer: { borderRadius: 32, overflow: 'hidden', height: Math.round(340 * S), backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
     clubImgRounded: { flex: 1, borderRadius: 32 },
     clubOverlay: { flex: 1, justifyContent: 'space-between', padding: 20 },
     clubHeaderRow: { flexDirection: 'row', justifyContent: 'flex-end' },

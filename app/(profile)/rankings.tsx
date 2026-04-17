@@ -6,7 +6,7 @@ import { Globe, Medal, Users, UserPlus, ChevronRight } from 'lucide-react-native
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
+import { Platform, 
   Animated,
   Dimensions,
   PanResponder,
@@ -16,7 +16,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+ } from 'react-native';
 import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
@@ -367,7 +367,7 @@ export default function RankingsScreen() {
   const rest = currentRankings.slice(3);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#030303' }}>
+    <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}

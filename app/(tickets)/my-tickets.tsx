@@ -6,7 +6,7 @@ import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { Calendar, Ghost, MapPin, Ticket, Wine, GlassWater, Clock, Zap, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image } from 'expo-image';
-import { FlatList, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform,  FlatList, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View  } from 'react-native';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import Animated, {
   useAnimatedStyle,
@@ -518,7 +518,7 @@ export default function MyTicketsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   list: { paddingHorizontal: 20, paddingBottom: 40, flexGrow: 1 },
   
   // Headers normales

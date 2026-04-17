@@ -4,10 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { ShoppingCart, Plus, Minus, Wine, X, ChevronLeft } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
+import { Platform, 
   ActivityIndicator, Dimensions, FlatList, Modal,
   ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   FadeInUp,
   useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
@@ -352,8 +352,8 @@ export default function ConsumptionMenuScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
-  center: { flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
+  center: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303', justifyContent: 'center', alignItems: 'center' },
   catScroll: { maxHeight: 52, marginBottom: 8 },
   catChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', height: 36, justifyContent: 'center' },
   catChipText: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },

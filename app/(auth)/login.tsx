@@ -188,8 +188,12 @@ export default function AuthScreen() {
     }
 
     setLoading(true);
-    // Iniciamos la validación de hCaptcha
-    captchaRef.current?.show();
+    // Iniciamos la validación de hCaptcha (Saltamos en web por incompatibilidad con WebView nativo)
+    if (Platform.OS === 'web') {
+      executeAuthWithCaptcha('web-bypassed');
+    } else {
+      captchaRef.current?.show();
+    }
   };
 
   // --- EJECUCIÓN REAL CON TOKEN DE CAPTCHA ---
@@ -400,15 +404,17 @@ export default function AuthScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
-      </View>
+      {Platform.OS !== 'web' && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+        </View>
+      )}
 
       <View style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]} keyboardShouldPersistTaps="handled">
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]} keyboardShouldPersistTaps="handled">
 
             <Animated.View style={styles.header} layout={containerLayoutAnim}>
               <Text style={styles.logoText}>DyzGO<Text style={{ color: COLORS.neonPink }}>.</Text></Text>
@@ -442,7 +448,7 @@ export default function AuthScreen() {
               {!showOTP ? (
                 <>
                   {showNameUser && (
-                    <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                    <Animated.View entering={simpleFadeIn}>
                       <GlassInput label="NOMBRE COMPLETO" icon={<User color={COLORS.neonPink} size={18} />} placeholder="Nombre Apellido" value={fullName} onChangeText={handleNameInput} />
                       <GlassInput label="USERNAME" icon={<AtSign color={COLORS.neonPink} size={18} />} placeholder="tu_usuario" value={username} onChangeText={handleUsernameInput} autoCapitalize="none" />
                     </Animated.View>
@@ -461,7 +467,7 @@ export default function AuthScreen() {
                       </Text>
                       <View style={styles.inputContainer}>
                         <View style={styles.iconBox}><Lock color={COLORS.neonPink} size={18} /></View>
-                        <TextInput placeholder="••••••••" placeholderTextColor="#666" style={styles.input} secureTextEntry={!showPassword} value={password} onChangeText={handlePasswordInput} autoCapitalize="none" />
+                        <TextInput placeholder="••••••••" placeholderTextColor="#666" style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} secureTextEntry={!showPassword} value={password} onChangeText={handlePasswordInput} autoCapitalize="none" autoComplete="off" autoCorrect={false} />
                         <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ marginRight: 15 }}>
                           {showPassword ? <EyeOff color="#999" size={18} /> : <Eye color="#999" size={18} />}
                         </TouchableOpacity>
@@ -469,7 +475,7 @@ export default function AuthScreen() {
                       {(!isLogin || isResetting) && <View style={styles.strengthBarContainer}><Animated.View style={[styles.strengthBarFill, animatedBarStyle]} /></View>}
 
                       {showForgotLink && (
-                        <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                        <Animated.View entering={simpleFadeIn}>
                           <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: 10 }} onPress={() => { setIsResetting(true); setStep(1); }}>
                             <Text style={styles.forgotText}>¿OLVIDASTE TU CONTRASEÑA?</Text>
                           </TouchableOpacity>
@@ -479,13 +485,13 @@ export default function AuthScreen() {
                   )}
 
                   {showConfirmPassword && (
-                    <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                    <Animated.View entering={simpleFadeIn}>
                       <GlassInput label="CONFIRMAR" icon={<Lock color={COLORS.neonPink} size={18} />} placeholder="••••••••" secureTextEntry={!showPassword} value={confirmPassword} onChangeText={setConfirmPassword} />
                     </Animated.View>
                   )}
                 </>
               ) : (
-                <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut} style={{ width: '100%', alignItems: 'center' }}>
+                <Animated.View entering={simpleFadeIn} style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={styles.otpInfo}>Código enviado a{"\n"}<Text style={{ color: '#fff', fontWeight: '800' }}>{email}</Text></Text>
                   <GlassInput label="CÓDIGO" icon={<KeyRound color={COLORS.neonPink} size={20} />} placeholder="000000" value={otpCode} onChangeText={setOtpCode} keyboardType="number-pad" maxLength={6} />
                   <View style={styles.resendContainer}>
@@ -524,7 +530,7 @@ export default function AuthScreen() {
             </Animated.View>
 
             {step === 1 && !isResetting && !isLogin && (
-              <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut} layout={containerLayoutAnim} style={styles.termsContainer}>
+              <Animated.View entering={simpleFadeIn} layout={containerLayoutAnim} style={styles.termsContainer}>
                 <Text style={styles.termsText}>
                   Al crear una cuenta aceptas nuestros{' '}
                   <Text style={styles.termsLink} onPress={() => Linking.openURL('https://dyzgo.com/terms')}>
@@ -573,25 +579,27 @@ export default function AuthScreen() {
         </KeyboardAvoidingView>
       </View>
 
-      {/* COMPONENTE INVISIBLE DE HCAPTCHA */}
-      <ConfirmHcaptcha
-        ref={captchaRef}
-        siteKey="4e10b7a0-804e-4efa-89b4-5c6a29a43daa"
-        baseUrl="https://dyzgo.app" // Tu dominio base o uno ficticio para React Native
-        languageCode="es"
-        onMessage={(event: any) => {
-          if (event && event.nativeEvent.data) {
-            if (['cancel', 'error', 'expired'].includes(event.nativeEvent.data)) {
-              captchaRef.current?.hide();
-              setLoading(false);
-            } else {
-              captchaRef.current?.hide();
-              // ¡Pasó la prueba! Mandamos el token a Supabase
-              executeAuthWithCaptcha(event.nativeEvent.data);
+      {/* COMPONENTE INVISIBLE DE HCAPTCHA (Solo se renderiza en nativo) */}
+      {Platform.OS !== 'web' && (
+        <ConfirmHcaptcha
+          ref={captchaRef}
+          siteKey="4e10b7a0-804e-4efa-89b4-5c6a29a43daa"
+          baseUrl="https://dyzgo.app" // Tu dominio base o uno ficticio
+          languageCode="es"
+          onMessage={(event: any) => {
+            if (event && event.nativeEvent.data) {
+              if (['cancel', 'error', 'expired'].includes(event.nativeEvent.data)) {
+                captchaRef.current?.hide();
+                setLoading(false);
+              } else {
+                captchaRef.current?.hide();
+                // ¡Pasó la prueba! Mandamos el token a Supabase
+                executeAuthWithCaptcha(event.nativeEvent.data);
+              }
             }
-          }
-        }}
-      />
+          }}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -601,20 +609,20 @@ const GlassInput = ({ label, icon, placeholder, value, onChangeText, ...props }:
     <Text style={styles.label}>{label}</Text>
     <View style={styles.inputContainer}>
       <View style={styles.iconBox}>{icon}</View>
-      <TextInput placeholder={placeholder} placeholderTextColor="#666" style={styles.input} value={value} onChangeText={onChangeText} {...props} />
+      <TextInput placeholder={placeholder} placeholderTextColor="#666" style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} value={value} onChangeText={onChangeText} autoComplete="off" autoCorrect={false} {...props} />
     </View>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' },
   content: {
     padding: CONTENT_PADDING,
     justifyContent: 'center',
     flexGrow: 1,
     alignItems: 'center'
   },
-  header: { alignItems: 'center', marginBottom: Math.round(16 * S) },
+  header: { alignItems: 'center', marginBottom: Platform.OS === 'web' ? 32 : Math.round(16 * S) },
   logoText: { fontSize: Math.round(54 * S), fontWeight: '900', color: 'white', fontStyle: 'italic', letterSpacing: -3 },
   subtitle: { color: COLORS.textZinc, fontSize: 13, fontWeight: '900', letterSpacing: 0, marginTop: 5 },
   tabsFloating: {

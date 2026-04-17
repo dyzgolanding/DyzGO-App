@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { useFocusEffect } from 'expo-router';
 import {
     AlertCircle, ArrowLeft, ArrowUpDown, Calendar, Check, ChevronDown, ChevronRight, ChevronUp,
     Filter, Gavel, Ghost, Plus, ShoppingBag, Tag, Trash, Users, X,
@@ -27,7 +28,8 @@ import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { PressableScale } from '../../components/animated/PressableScale';
 import { EmptyStateCard } from '../../components/EmptyStateCard';
 
-const { width, height } = Dimensions.get('window');
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
 const TAB_W = (width - 48) / 2;
 
 // ── CONSTANTES DE FILTROS ──
@@ -226,6 +228,16 @@ const MarketCard = memo(function MarketCard({ item, index, cardH, scrollY, curre
 export default function MarketplaceScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    
+    // Ocultamiento seguro para Web
+    const [isScreenFocused, setIsScreenFocused] = useState(true);
+    useFocusEffect(
+        useCallback(() => {
+            setIsScreenFocused(true);
+            return () => setIsScreenFocused(false);
+        }, [])
+    );
+
 
     // ── DATA ──
     const [listings, setListings] = useState<any[]>([]);
@@ -1028,7 +1040,7 @@ export default function MarketplaceScreen() {
     // JSX PRINCIPAL
     // ─────────────────────────────────────────────────────────────
     return (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={[{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' }, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />

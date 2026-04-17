@@ -470,7 +470,7 @@ const SettingNavigation = ({ icon, title, onPress }: any) => (
 );
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     
     floatingHeader: {
         position: 'absolute',

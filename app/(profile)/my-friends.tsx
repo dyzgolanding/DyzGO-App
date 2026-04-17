@@ -573,7 +573,7 @@ export default function MyFriendsScreen() {
   );
 
   return (
-    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: '#030303' }}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}

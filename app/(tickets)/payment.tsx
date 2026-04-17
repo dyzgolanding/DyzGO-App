@@ -7,7 +7,7 @@ import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { AlertTriangle, CheckCircle2, Clock, CreditCard, Lock, Plus, ShieldCheck, Tag, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import {
+import { Platform, 
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -19,7 +19,7 @@ import {
   TextInput,
   TouchableOpacity,
   View
-} from 'react-native';
+ } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 400;
@@ -946,7 +946,7 @@ export default function PaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#030303'
+    backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303'
   },
   content: {
     padding: 20,

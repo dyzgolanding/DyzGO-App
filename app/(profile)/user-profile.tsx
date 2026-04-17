@@ -10,11 +10,11 @@ import {
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import {
+import { Platform, 
   Alert,
   Dimensions, ScrollView, StatusBar,
   StyleSheet, Text, TouchableOpacity, View,
-} from 'react-native';
+ } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
@@ -215,7 +215,7 @@ export default function UserProfileScreen() {
   }[friendState];
 
   return (
-    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: '#030303' }}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <StatusBar barStyle="light-content" />
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient

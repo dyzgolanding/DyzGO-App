@@ -1,12 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../hooks/useNavRouter';
 import React, { useEffect, useState } from 'react';
-import {
+import { Platform, 
   Dimensions,
   StatusBar,
   StyleSheet,
   View
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
@@ -184,7 +184,7 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     centerStage: { flex: 1, justifyContent: 'center', alignItems: 'center', overflow: 'visible' },
     logoRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginLeft: 10, overflow: 'visible', paddingHorizontal: 20 },
     brandText: { color: COLORS.white, fontSize: 68, fontWeight: '900', fontStyle: 'italic', lineHeight: 90, height: 100, textAlignVertical: 'bottom', paddingHorizontal: 4, marginHorizontal: -3, includeFontPadding: false, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 10, overflow: 'visible', zIndex: 10 },

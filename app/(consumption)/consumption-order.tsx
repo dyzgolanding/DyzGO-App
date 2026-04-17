@@ -16,10 +16,10 @@ import {
   Wine, Zap, AlertTriangle, MapPin, ShoppingBag, Timer,
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import {
+import { Platform, 
   ActivityIndicator, Alert, StatusBar, StyleSheet,
   Text, TouchableOpacity, View,
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   FadeInUp,
   useSharedValue, useAnimatedStyle, withTiming,
@@ -578,8 +578,8 @@ export default function ConsumptionOrderScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
-  center: { flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
+  center: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303', justifyContent: 'center', alignItems: 'center' },
   orderIconWrapper: {
     width: 48, height: 48, borderRadius: 16,
     justifyContent: 'center', alignItems: 'center',

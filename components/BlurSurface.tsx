@@ -19,7 +19,36 @@ const ANDROID_BG: Record<string, string> = {
   systemChromeMaterial:    'rgba(14, 14, 14, 0.86)',
 };
 
-export function BlurView({ tint = 'default', intensity, style, children, ...rest }: BlurViewProps) {
+const WEB_BG: Record<string, string> = {
+  dark:                    'rgba(14, 14, 14, 0.35)',
+  light:                   'rgba(255, 255, 255, 0.12)',
+  extraLight:              'rgba(255, 255, 255, 0.25)',
+  default:                 'rgba(18, 18, 18, 0.35)',
+  systemMaterial:          'rgba(22, 22, 22, 0.35)',
+  systemThickMaterial:     'rgba(14, 14, 14, 0.45)',
+  systemThinMaterial:      'rgba(22, 22, 22, 0.25)',
+  systemUltraThinMaterial: 'rgba(22, 22, 22, 0.15)',
+  systemChromeMaterial:    'rgba(14, 14, 14, 0.35)',
+};
+
+export function BlurView({ tint = 'default', intensity = 20, style, children, ...rest }: BlurViewProps) {
+  if (Platform.OS === 'web') {
+    const bg = WEB_BG[tint as string] ?? WEB_BG.default;
+    // Un multiplicador de blur mucho mayor para el efecto de "frosted glass" extremo
+    const blurPx = Math.round((Math.max(intensity, 20) / 100) * 40);
+    return (
+      <View
+        style={[style, {
+          backgroundColor: bg,
+          backdropFilter: `blur(${blurPx}px)`,
+          WebkitBackdropFilter: `blur(${blurPx}px)`,
+        } as any]}
+        {...rest}
+      >
+        {children}
+      </View>
+    );
+  }
   if (Platform.OS === 'android') {
     const bg = ANDROID_BG[tint as string] ?? ANDROID_BG.default;
     const flatStyle = StyleSheet.flatten(style) ?? {};

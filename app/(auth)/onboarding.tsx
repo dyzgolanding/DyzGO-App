@@ -541,7 +541,7 @@ export default function OnboardingScreen() {
 
   if (needsUsername === null) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={COLORS.neonPink} />
       </View>
     );
@@ -631,7 +631,7 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' },
 
   // Header
   header: { paddingHorizontal: 24 },

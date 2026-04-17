@@ -41,12 +41,14 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from 'expo-router';
 import { useUserLocation } from '../../lib/useUserLocation';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
 import { formatEventDateTime } from '../../utils/format';
 import { useAppData } from '../../context/AppDataContext';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useMouseScroll } from '../../hooks/useMouseScroll';
 import Animated, {
   LinearTransition,
   runOnJS,
@@ -66,7 +68,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
 const CARD_W = width * 0.54;
 const CARD_GAP = 12;
 
@@ -300,6 +303,16 @@ const CatRowFocused = memo(function CatRowFocused({ group, rowIdx, scrollY, isTa
 
 export default function ExploreScreen() {
   const router = useRouter();
+  
+  // Ocultamiento seguro para Web
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  useFocusEffect(
+      useCallback(() => {
+          setIsScreenFocused(true);
+          return () => setIsScreenFocused(false);
+      }, [])
+  );
+  
   const { location } = useUserLocation();
   const { events: cachedEvents, clubs: cachedClubs, isLoaded: cacheLoaded, refresh: refreshCache } = useAppData();
 
@@ -317,6 +330,7 @@ export default function ExploreScreen() {
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
   const mapRef = useRef<MapView>(null);
   const flatListRef = useRef<FlatList>(null);
+  const mouseScrollParams = useMouseScroll(flatListRef);
 
   // 'map' = mapa + carrusel, 'catalog' = lista completa
   const [viewMode, setViewMode] = useState<'map' | 'catalog'>('catalog');
@@ -782,40 +796,46 @@ export default function ExploreScreen() {
   ].filter(Boolean).length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* MAPA — siempre montado para no perder el estado de Google Maps */}
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={StyleSheet.absoluteFillObject}
-        userInterfaceStyle="dark"
-        initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
-        mapType="hybrid"
-        showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
-      >
-        {viewMode === 'map' && currentData.map((item: any, idx: number) => {
-          const isSelected = activeCarouselIndex === idx;
-          return (
-            <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
-              {isSelected ? (
-                <View style={styles.activePinContainer}>
-                  <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
-                </View>
-              ) : (
-                <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
-              )}
-            </Marker>
-          );
-        })}
-      </MapView>
+      {/* MAPA — siempre montado para no perder el estado */}
+      <View style={[StyleSheet.absoluteFill, Platform.OS === 'web' && viewMode === 'catalog' && { opacity: 0, pointerEvents: 'none' }]}>
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={StyleSheet.absoluteFillObject}
+          userInterfaceStyle="dark"
+          initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
+          mapType="hybrid"
+          showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
+        >
+          {viewMode === 'map' && currentData.map((item: any, idx: number) => {
+            const isSelected = activeCarouselIndex === idx;
+            return (
+              <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
+                {isSelected ? (
+                  <View style={styles.activePinContainer}>
+                    <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
+                  </View>
+                ) : (
+                  <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
+                )}
+              </Marker>
+            );
+          })}
+        </MapView>
+      </View>
 
-      {/* FONDO CATÁLOGO — cubre el mapa cuando el modo es catálogo */}
+      {/* FONDO CATÁLOGO — cubre el mapa cuando el modo es catálogo (En Web es transparente para dejar ver el WebShell) */}
       <View style={[StyleSheet.absoluteFill, styles.catalogBg, { display: viewMode === 'catalog' ? 'flex' : 'none' }]} pointerEvents="none">
-        <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+        {Platform.OS !== 'web' && (
+           <>
+              <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+           </>
+        )}
       </View>
 
       {/* GRADIENTE SUPERIOR — solo en modo mapa */}
@@ -856,7 +876,7 @@ export default function ExploreScreen() {
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
               {/* Toggle Mapa / Catálogo */}
               <View {...viewModePan.panHandlers} style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
-                <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2, borderRadius: 22 }}>
                   <TouchableOpacity
                     onPress={() => setViewMode('catalog')}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: viewMode === 'catalog' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
@@ -878,7 +898,7 @@ export default function ExploreScreen() {
 
               {/* Tabs Eventos / Clubes */}
               <View {...tabPan.panHandlers} style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)', flex: 1 }}>
-                <BlurView intensity={40} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                <BlurView intensity={40} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2, borderRadius: 22 }}>
                   {tabs.map((t, idx) => (
                     <TouchableOpacity
                       key={t}
@@ -914,6 +934,7 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <AnimatedFlatList
+            {...mouseScrollParams}
             ref={flatListRef}
             data={loopedData}
             keyExtractor={(item: any, index: number) => `${item.id}-${index}`}
@@ -1114,9 +1135,9 @@ export default function ExploreScreen() {
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   topVignette: { position: 'absolute', top: 0, left: 0, right: 0, height: 220, zIndex: 1 },
-  catalogBg: { backgroundColor: '#030303' },
+  catalogBg: { backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
 
   // Catálogo — scroll vertical focus
   catBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, overflow: 'hidden', alignItems: 'center' },

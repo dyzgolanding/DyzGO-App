@@ -114,7 +114,7 @@ export default function EventDetailScreen() {
     const insets = useSafeAreaInsets();
     const headerBgAnim = useRef(new Animated.Value(0)).current;
 
-
+    const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
     const hasCachedParams = !!(optProducerName || optClubName);
     const [loading, setLoading] = useState(!hasCachedParams);
@@ -439,9 +439,33 @@ export default function EventDetailScreen() {
         return `${clean}${a}`;
     };
 
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof document !== 'undefined') {
+            const hex = activeBg1.startsWith('#') ? activeBg1 : `#${activeBg1}`;
+            let c = hex.replace('#', '');
+            if (c.length === 3) c = c.split('').map((x: string) => x + x).join('');
+            const num = parseInt(c, 16);
+            const r = (num >> 16) & 255;
+            const g = (num >> 8) & 255;
+            const b = num & 255;
+            
+            const prevBg = document.body.style.backgroundImage;
+            document.body.style.transition = 'background-image 0.5s ease-in-out';
+            document.body.style.backgroundImage = [
+                `radial-gradient(ellipse 90% 90% at 15% 20%, rgba(${r},${g},${b},0.30) 0%, transparent 65%)`,
+                `radial-gradient(ellipse 80% 80% at 85% 85%, rgba(${r},${g},${b},0.28) 0%, transparent 65%)`,
+                `radial-gradient(ellipse 60% 60% at 50% 0%, rgba(${r},${g},${b},0.15) 0%, transparent 50%)`
+            ].join(', ');
+            
+            return () => {
+                document.body.style.backgroundImage = prevBg;
+            };
+        }
+    }, [activeBg1]);
+
     if (loading && !event) {
         return (
-            <View style={{ flex: 1, backgroundColor: '#030303' }}>
+            <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
                 <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
                     <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
@@ -454,7 +478,7 @@ export default function EventDetailScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
                     {/* Imagen hero */}
                     <View style={[styles.imageWrapper, { paddingTop: insets.top + 64 }]}>
-                        <SkeletonBox height={width - 52} width={width - 52} borderRadius={24} style={{ alignSelf: 'center' }} />
+                        <SkeletonBox height={undefined} width="100%" borderRadius={24} style={{ aspectRatio: 1, maxWidth: 450, alignSelf: 'center' }} />
                     </View>
                     {/* Content card skeleton */}
                     <View style={styles.contentCard}>
@@ -511,6 +535,7 @@ export default function EventDetailScreen() {
 
 
             {/* Fondo — 3 capas de luz con accent_color del evento */}
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={[withAlpha(activeBg1, 0.2), 'transparent']}
@@ -532,11 +557,10 @@ export default function EventDetailScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+            )}
 
             <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
-                <Animated.View style={[styles.pillBg, { opacity: headerBgAnim }]}>
-                    <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 30, overflow: 'hidden' }]} />
-                </Animated.View>
+                <AnimatedBlurView intensity={50} tint="dark" style={[styles.pillBg, { opacity: headerBgAnim }]} />
                 <PressableScale scaleTo={0.82} haptic="light" onPress={() => router.back()} style={styles.iconBtn}>
                     <ArrowLeft color="#FBFBFB" size={20} />
                 </PressableScale>
@@ -952,12 +976,12 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     fixedHeader: { position: 'absolute', left: 16, right: 16, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 50, paddingHorizontal: 6 },
     pillBg: { overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 30, borderWidth: 1, borderColor: COLORS.glassBorder, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
     iconBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
-    imageWrapper: { width: width, paddingHorizontal: 20, paddingTop: 110, alignItems: 'center' },
-    squareImage: { width: width - 40, aspectRatio: 1, borderRadius: 32, backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
+    imageWrapper: { width: '100%', paddingHorizontal: 20, paddingTop: 110, alignItems: 'center' },
+    squareImage: { width: '100%', maxWidth: 450, aspectRatio: 1, borderRadius: 32, backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
     contentCard: { flex: 1, paddingHorizontal: SCALE.padding, paddingTop: 10 },
     titleSection: { marginBottom: SCALE.sectionGap },
     categoryCapsule: { alignSelf: 'flex-start', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: SCALE.sectionGap },

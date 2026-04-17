@@ -6,7 +6,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { ArrowRight, ChevronDown, ChevronUp, Info, Minus, Plus, UserCheck, X } from 'lucide-react-native';
 import React, { useCallback, useState, useEffect } from 'react';
-import {
+import { Platform, 
     Alert,
     Dimensions,
     InteractionManager,
@@ -18,7 +18,7 @@ import {
     Text,
     TouchableOpacity,
     View
-} from 'react-native';
+ } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 400;
@@ -548,7 +548,7 @@ export default function SelectTicketsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     
     scrollContent: { paddingHorizontal: 25, paddingBottom: 150 },

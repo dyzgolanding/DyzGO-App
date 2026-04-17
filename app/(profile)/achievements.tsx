@@ -4,7 +4,7 @@ import { CheckCheck, Copy, Crown, Gift, Lock, QrCode, Star, Ticket, Trophy, Wine
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
-import {
+import { Platform, 
   Dimensions,
   Modal,
   ScrollView,
@@ -12,7 +12,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   FadeInUp,
   useAnimatedStyle,
@@ -197,7 +197,7 @@ export default function AchievementsScreen() {
   const BG = ['#030303'] as const;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#030303' }}>
+    <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient
           colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
