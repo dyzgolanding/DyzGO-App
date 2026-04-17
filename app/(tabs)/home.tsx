@@ -191,6 +191,7 @@ export default function HomeScreen() {
 
     // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
     useEffect(() => {
+        if (Platform.OS === 'web') return; // En la web no queremos molestar con esto
         if (needsPermission && !loading) {
             const timer = setTimeout(() => setShowLocationModal(true), 600);
             return () => clearTimeout(timer);
@@ -461,9 +462,11 @@ export default function HomeScreen() {
                     </View>
 
                     {loading && featuredEvents.length === 0 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPadEvent}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined} contentContainerStyle={styles.horizontalPadEvent}>
                             {[1, 2].map(i => (
-                                <SkeletonBox key={i} height={CARD_BASE_WIDTH - 52} width={CARD_BASE_WIDTH - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                                <View key={i} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
+                                    <SkeletonBox height={CARD_BASE_WIDTH - 52} width={CARD_BASE_WIDTH - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                                </View>
                             ))}
                         </ScrollView>
                     ) : (
@@ -472,8 +475,10 @@ export default function HomeScreen() {
                             ref={featuredScrollRef}
                             horizontal
                             showsHorizontalScrollIndicator={false}
+                            style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined}
                             contentContainerStyle={styles.horizontalPadEvent}
                             snapToInterval={CARD_BASE_WIDTH - 40}
+                            snapToAlignment="center"
                             decelerationRate="fast"
                             disableIntervalMomentum
                             onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
@@ -489,8 +494,9 @@ export default function HomeScreen() {
                                 const minAge = Math.min(event.min_age_men || 18, event.min_age_women || 18);
 
                                 return (
-                                    <AnimatedEntry key={event.id} index={index} fromY={32} fromScale={0.96}>
-                                        <PressableScale
+                                    <View key={event.id} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
+                                        <AnimatedEntry index={index} fromY={32} fromScale={0.96}>
+                                            <PressableScale
                                             scaleTo={0.97}
                                             haptic="light"
                                             style={styles.bigEventCard}
@@ -542,7 +548,8 @@ export default function HomeScreen() {
                                                 </LinearGradient>
                                             </ImageBackground>
                                         </PressableScale>
-                                    </AnimatedEntry>
+                                        </AnimatedEntry>
+                                    </View>
                                 );
                             })}
                         </ScrollView>

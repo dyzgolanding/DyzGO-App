@@ -235,6 +235,12 @@ export default function ClubDetailScreen() {
         const lat = club?.latitude || region.latitude;
         const lng = club?.longitude || region.longitude;
         const label = encodeURIComponent(club?.name || "Club");
+        const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+        if (Platform.OS === 'web') {
+            window.open(fallbackMaps, '_blank');
+            return;
+        }
         
         const url = Platform.select({
             ios: `comgooglemaps://?q=${lat},${lng}(${label})`,
@@ -245,7 +251,7 @@ export default function ClubDetailScreen() {
             if (supported) {
                 Linking.openURL(url!);
             } else {
-                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                Linking.openURL(fallbackMaps);
             }
         });
     };
@@ -255,6 +261,12 @@ export default function ClubDetailScreen() {
         const lng = club?.longitude || region.longitude;
         const nickName = encodeURIComponent(club?.name || "Club");
         const formattedAddress = encodeURIComponent(club?.location || "Ubicación");
+        const webUrl = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
+
+        if (Platform.OS === 'web') {
+            window.open(webUrl, '_blank');
+            return;
+        }
 
         const uberUrl = `uber://?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
@@ -262,7 +274,6 @@ export default function ClubDetailScreen() {
             if (supported) {
                 Linking.openURL(uberUrl);
             } else {
-                const webUrl = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
                 Linking.openURL(webUrl);
             }
         });
@@ -308,6 +319,7 @@ export default function ClubDetailScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -329,6 +341,7 @@ export default function ClubDetailScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+            )}
             
             <ReAnimated.View style={screenStyle}>
 
@@ -416,20 +429,27 @@ export default function ClubDetailScreen() {
                         <AnimatedEntry index={3} style={styles.mbSection}>
                             <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                             <View style={[styles.glassCard, { marginBottom: 0 }]}>
-                                <View style={styles.mapContainer} pointerEvents="none">
-                                    <MapView 
-                                        provider={PROVIDER_GOOGLE} 
-                                        style={styles.map} 
-                                        scrollEnabled={false} 
-                                        zoomEnabled={false} 
-                                        region={region} 
-                                        mapType="hybrid"
-                                        liteMode={true} 
-                                    >
-                                        <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
-                                            <View style={styles.classicPin}><MapPin size={36} color="white" fill={COLORS.neonPink} /></View>
-                                        </Marker>
-                                    </MapView>
+                                <View style={[styles.mapContainer, Platform.OS === 'web' && { height: 320 }]} pointerEvents="none">
+                                    {Platform.OS === 'web' ? (
+                                        <iframe
+                                            src={`https://maps.google.com/maps?q=${region.latitude},${region.longitude}&t=k&z=15&ie=UTF8&iwloc=&output=embed`}
+                                            style={{ width: '100%', height: '100%', border: 0 }}
+                                        />
+                                    ) : (
+                                        <MapView 
+                                            provider={PROVIDER_GOOGLE} 
+                                            style={styles.map} 
+                                            scrollEnabled={false} 
+                                            zoomEnabled={false} 
+                                            region={region} 
+                                            mapType="hybrid"
+                                            liteMode={true} 
+                                        >
+                                            <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
+                                                <View style={styles.classicPin}><MapPin size={36} color="white" fill={COLORS.neonPink} /></View>
+                                            </Marker>
+                                        </MapView>
+                                    )}
                                 </View>
 
                                 {club?.location && (
@@ -556,9 +576,9 @@ const styles = StyleSheet.create({
         width: 38, height: 38, borderRadius: 19,
         justifyContent: 'center', alignItems: 'center',
     },
-    imageWrapper: { width: width, paddingHorizontal: 20, paddingTop: 110, alignItems: 'center' },
+    imageWrapper: { width: '100%', paddingHorizontal: 20, paddingTop: 110, alignItems: 'center' },
     squareImage: {
-        width: width - 40, aspectRatio: 1, borderRadius: 20, backgroundColor: '#111'
+        width: '100%', maxWidth: 450, aspectRatio: 1, borderRadius: 20, backgroundColor: '#111'
     },
 
     contentCard: { flex: 1, paddingHorizontal: SCALE.padding, paddingTop: SCALE.sectionGap },

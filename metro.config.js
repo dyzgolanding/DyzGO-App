@@ -23,7 +23,6 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       key => moduleName === key || moduleName.startsWith(key + '/')
     );
     if (stubKey) {
-      console.log(`[metro-stubs] Redirecting ${moduleName} → ${WEB_STUBS[stubKey]}`);
       return {
         type: 'sourceFile',
         filePath: path.resolve(__dirname, WEB_STUBS[stubKey]),

@@ -165,10 +165,12 @@ export default function SplashScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
-                <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.3, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            </View>
+            {Platform.OS !== 'web' && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
+                    <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.3, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                </View>
+            )}
             <View style={styles.centerStage}>
                 <View style={styles.logoRow}>
                     {LETTERS.map((letter, index) => (

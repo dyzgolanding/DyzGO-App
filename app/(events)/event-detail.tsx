@@ -287,12 +287,18 @@ export default function EventDetailScreen() {
         const lat = event.latitude || region.latitude;
         const lng = event.longitude || region.longitude;
         const label = encodeURIComponent(event.title || "Evento");
+        const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+        if (Platform.OS === 'web') {
+            Linking.openURL(fallbackMaps).catch(() => {});
+            return;
+        }
+
         const url = Platform.select({
             ios: `comgooglemaps://?q=${lat},${lng}(${label})`,
             android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`
         });
 
-        const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
         Linking.canOpenURL(url!).then(supported => {
             Linking.openURL(supported ? url! : fallbackMaps).catch(() => {});
         }).catch(() => {
@@ -306,8 +312,14 @@ export default function EventDetailScreen() {
         const lng = event.longitude || region.longitude;
         const nickName = encodeURIComponent(event.finalClubName || event.title || "Evento");
         const formattedAddress = encodeURIComponent(event.location || "Ubicación del evento");
-        const uberUrl = `uber://?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
         const fallbackUber = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
+
+        if (Platform.OS === 'web') {
+            window.open(fallbackUber, '_blank');
+            return;
+        }
+
+        const uberUrl = `uber://?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
         Linking.canOpenURL(uberUrl).then(supported => {
             Linking.openURL(supported ? uberUrl : fallbackUber).catch(() => {});
@@ -801,14 +813,20 @@ export default function EventDetailScreen() {
                                 <View style={styles.mbSection}>
                                     <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                                     <View style={[styles.glassCard, { marginBottom: 0 }]}>
-                                        <View style={styles.mapContainer} pointerEvents="none">
-                                            <MapView provider={PROVIDER_GOOGLE} style={styles.map} scrollEnabled={false} zoomEnabled={false} region={region} mapType="hybrid" liteMode={true}>
-                                                <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
-                                                    <View style={[styles.classicPin, { shadowColor: activeBg1 }]}><MapPin size={36} color="#FBFBFB" fill={activeBg1} /></View>
-                                                </Marker>
-                                            </MapView>
+                                        <View style={[styles.mapContainer,  Platform.OS === 'web' && { height: 320 }]} pointerEvents="none">
+                                            {Platform.OS === 'web' ? (
+                                                <iframe
+                                                    src={`https://maps.google.com/maps?q=${region.latitude},${region.longitude}&t=k&z=15&ie=UTF8&iwloc=&output=embed`}
+                                                    style={{ width: '100%', height: '100%', border: 0 }}
+                                                />
+                                            ) : (
+                                                <MapView provider={PROVIDER_GOOGLE} style={styles.map} scrollEnabled={false} zoomEnabled={false} region={region} mapType="hybrid" liteMode={true}>
+                                                    <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
+                                                        <View style={[styles.classicPin, { shadowColor: activeBg1 }]}><MapPin size={36} color="#FBFBFB" fill={activeBg1} /></View>
+                                                    </Marker>
+                                                </MapView>
+                                            )}
                                         </View>
-
                                         {event?.location && (
                                             <View style={styles.addressContainer}>
                                                 <Text style={styles.addressText} numberOfLines={1}>{event.location}</Text>

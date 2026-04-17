@@ -11,7 +11,7 @@ import {
     Filter, Gavel, Ghost, Plus, ShoppingBag, Tag, Trash, Users, X,
     Ticket, Landmark, User, Hash, CreditCard, Receipt, Music, Store
 } from 'lucide-react-native';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Alert, Dimensions, FlatList,
     InteractionManager, KeyboardAvoidingView, Modal, Platform,
@@ -229,10 +229,11 @@ export default function MarketplaceScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     
-    // Ocultamiento seguro para Web
+    // Ocultamiento seguro para native (en web, unmountOnBlur hace esto automáticamente)
     const [isScreenFocused, setIsScreenFocused] = useState(true);
     useFocusEffect(
         useCallback(() => {
+            if (Platform.OS === 'web') return;
             setIsScreenFocused(true);
             return () => setIsScreenFocused(false);
         }, [])
@@ -1041,11 +1042,13 @@ export default function MarketplaceScreen() {
     // ─────────────────────────────────────────────────────────────
     return (
         <View style={[{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' }, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
             </View>
+            )}
 
             <View style={{ position: 'absolute', zIndex: 100, left: 16, right: 16, top: insets.top + 10 }}>
                 <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 60, paddingHorizontal: 16, borderRadius: 30, borderWidth: 1, borderColor: 'rgba(251, 251, 251, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>

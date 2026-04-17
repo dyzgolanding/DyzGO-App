@@ -11,7 +11,6 @@
 import React from 'react';
 import { View } from 'react-native';
 
-console.log('[safe-area-context stub] ✅ web stub loaded');
 
 const DEFAULT_INSETS  = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_FRAME   = { x: 0, y: 0, width: 0, height: 0 };
