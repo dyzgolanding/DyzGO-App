@@ -54,6 +54,7 @@ import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
 import { isEventFinished } from '../../utils/format';
 import { SkeletonBox } from '../../components/SkeletonBox';
+import { setPendingNav } from '../../lib/pendingNav';
 
 const { height, width } = Dimensions.get('window');
 const isSmallScreen = width < 400;
@@ -342,7 +343,19 @@ export default function EventDetailScreen() {
     const handleGetTickets = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-            router.push({ pathname: '/login', params: { redirect: 'back' } } as any);
+            setPendingNav({
+                pathname: '/select-tickets',
+                params: Platform.OS === 'web'
+                    ? { eventId: String(event?.id || params.id) }
+                    : {
+                        eventId: String(event?.id || params.id),
+                        eventName: event?.title || optTitle || '',
+                        eventDate: event?.date || optDate || '',
+                        eventLocation: event?.location || '',
+                        accentColor: activeBg1,
+                    },
+            });
+            router.push('/login' as any);
             return;
         }
         router.push({

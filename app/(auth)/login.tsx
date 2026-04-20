@@ -40,6 +40,7 @@ import Animated, {
 import ConfirmHcaptcha from '@hcaptcha/react-native-hcaptcha'; // <-- MAGIA ANTIBOTS
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { consumePendingNav, markNavHandled } from '../../lib/pendingNav';
 
 const { width, height } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
@@ -207,7 +208,11 @@ export default function AuthScreen() {
           options: { captchaToken } // Pasamos el token a Supabase
         });
         if (error) throw error;
-        if (redirect === 'back') {
+        const pending = consumePendingNav();
+        if (pending) {
+          markNavHandled();
+          router.replace(pending as any);
+        } else if (redirect === 'back') {
           router.back();
         } else {
           router.replace((redirect as any) ?? '/(tabs)/home');

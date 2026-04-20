@@ -15,6 +15,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PermissionModal } from '../components/PermissionModal';
 import { registerForPushNotificationsAsync } from '../lib/push';
 import { supabase } from '../lib/supabase';
+import { consumePendingNav, wasNavHandled } from '../lib/pendingNav';
 
 // ─── Custom modal animation (native only) ────────────────────────────────────
 const NAV_EASING      = Easing.bezier(0.25, 0.46, 0.45, 0.94);
@@ -218,7 +219,13 @@ function RootLayout() {
       if (needsOnboarding && !inOnboarding) {
         router.replace('/onboarding');
       } else if (!needsOnboarding && segments[0] === '(auth)' && !inOnboarding) {
-        router.replace('/(tabs)/home');
+        if (wasNavHandled()) return;
+        const pending = consumePendingNav();
+        if (pending) {
+          router.replace(pending as any);
+        } else {
+          router.replace('/(tabs)/home');
+        }
       }
     }
   }, [session, segments, isReady, isRecoveryMode, isBiometricAuthorized, needsOnboarding]);
