@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import {
   Award,
   ChevronRight,
@@ -15,12 +15,12 @@ import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  View,
-  Platform
+  View
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -34,10 +34,9 @@ import { timing } from '../../lib/animation';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
-const _dim = Dimensions.get('window');
-const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
-const height = _dim.height;
-const S = width / 430;
+const { width: windowWidth } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
+const S = Platform.OS === 'web' ? 1 : width / 430;
 const isSmallScreen = width < 400;
 const isLargeScreen = width >= 428;
 
@@ -57,6 +56,15 @@ const COLORS = {
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // Ocultamiento seguro para Web
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  useFocusEffect(
+      useCallback(() => {
+          setIsScreenFocused(true);
+          return () => setIsScreenFocused(false);
+      }, [])
+  );
 
   const [loading, setLoading] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
@@ -83,6 +91,11 @@ export default function ProfileScreen() {
       if (!silent) setLoading(true);
 
       const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
 
       if (user) {
         const { data: profileData } = await supabase
@@ -125,9 +138,10 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
+      {Platform.OS !== 'web' && (
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient
           colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -149,6 +163,7 @@ export default function ProfileScreen() {
           style={StyleSheet.absoluteFill}
         />
       </View>
+      )}
 
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
 
@@ -300,7 +315,7 @@ const BentoCard = ({ icon, title, subtitle, onPress, style, isHorizontal }: any)
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   scrollContent: { padding: SCALE.padding, paddingBottom: isLargeScreen ? 36 : 24 },
 
   floatingHeader: { position: 'absolute', zIndex: 100, left: 16, right: 16 },

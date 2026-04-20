@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -11,7 +11,7 @@ import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import {
   ActivityIndicator, Alert, Dimensions, Modal, ScrollView,
-  StatusBar, StyleSheet, Text, TouchableOpacity, View,
+  StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
@@ -57,9 +57,7 @@ export default function ConsumptionPaymentScreen() {
   const [processing, setProcessing] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const xpAwarded = React.useRef(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [savedCards, setSavedCards] = useState<any[]>([]);
@@ -69,14 +67,6 @@ export default function ConsumptionPaymentScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const commitAttempted = useRef(false);
-
-  // Otorgar XP al confirmarse el pago (una sola vez por orden)
-  useEffect(() => {
-    if (!success || !orderId || xpAwarded.current) return;
-    xpAwarded.current = true;
-    supabase.rpc('award_consumption_xp', { p_order_id: orderId })
-      .then(({ error }) => { if (error) console.error('[XP] award_consumption_xp:', error.message); });
-  }, [success, orderId]);
 
   // Bloquear swipe-back durante el pago
   useFocusEffect(useCallback(() => {
@@ -164,7 +154,12 @@ export default function ConsumptionPaymentScreen() {
       if (!session) throw new Error('Sin sesión activa');
 
       const { data, error } = await supabase.functions.invoke('webpay', {
-        body: { action: 'init_webpay_consumption', order_id: orderId, user_id: session.user.id },
+        body: { 
+          action: 'init_webpay_consumption', 
+          order_id: orderId, 
+          user_id: session.user.id,
+          return_url: Platform.OS === 'web' ? window.location.origin + '/tbk-consumption' : undefined
+        },
       });
 
       if (error || !data?.url || !data?.token)
@@ -181,10 +176,13 @@ export default function ConsumptionPaymentScreen() {
   };
 
   const isCallbackUrl = (url: string): boolean => {
-    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST;
-    return callbackHost
-      ? url.includes(callbackHost) && url.includes('callback=dyzgo_final')
-      : url.includes('dyzgo_final') || url.includes('callback=dyzgo');
+    const callbackHost = process.env.EXPO_PUBLIC_CALLBACK_HOST ?? 'dyzgo.com';
+    return url.includes(callbackHost) && (
+      url.includes('/tbk-plus') ||
+      url.includes('/tbk-consumption') ||
+      url.includes('token_ws=') ||
+      url.includes('callback=dyzgo_final')
+    );
   };
 
   const commitConsumptionPayment = async () => {
@@ -201,7 +199,7 @@ export default function ConsumptionPaymentScreen() {
 
       const approved = data?.status === 'AUTHORIZED' && data?.response_code === 0;
       if (approved) {
-        setSuccess(true);
+        router.replace('/(consumption)/consumption-confirmation' as any);
       } else {
         Alert.alert('Pago rechazado', 'El banco no autorizó la transacción.', [
           { text: 'OK', onPress: () => router.back() },
@@ -253,7 +251,7 @@ export default function ConsumptionPaymentScreen() {
 
       if (error) throw error;
       if (data?.status === 'SUCCESS') {
-        setSuccess(true);
+        router.replace('/(consumption)/consumption-confirmation' as any);
       } else {
         throw new Error(data?.error || 'Pago rechazado');
       }
@@ -289,6 +287,10 @@ export default function ConsumptionPaymentScreen() {
 
   // Pantalla WebView
   if (paymentUrl) {
+    if (Platform.OS === 'web') {
+      return <WebRedirector url={paymentUrl} token={authToken} color={accentColor} />;
+    }
+
     return (
       <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
@@ -302,35 +304,22 @@ export default function ConsumptionPaymentScreen() {
           }}
           onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
           onNavigationStateChange={handleWebViewNav}
+          onLoadStart={(e) => {
+            const url = e.nativeEvent.url;
+            if (isCallbackUrl(url) && authToken && !commitAttempted.current) {
+              commitAttempted.current = true;
+              webViewRef.current?.stopLoading();
+              commitConsumptionPayment();
+            }
+          }}
           style={{ flex: 1 }}
           startInLoadingState
           renderLoading={() => (
             <ActivityIndicator size="large" color={accentColor} style={StyleSheet.absoluteFill} />
           )}
         />
-        <TouchableOpacity onPress={() => setPaymentUrl(null)} style={styles.floatingCloseBtn}>
+        <TouchableOpacity onPress={() => { setPaymentUrl(null); commitAttempted.current = false; }} style={styles.floatingCloseBtn}>
           <X color="#333" size={24} />
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Pantalla éxito
-  if (success) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
-        <View style={[styles.successIcon, { backgroundColor: COLORS.success + '20' }]}>
-          <CheckCircle2 size={60} color={COLORS.success} />
-        </View>
-        <Text style={styles.successTitle}>¡Compra Exitosa!</Text>
-        <Text style={styles.successSubtitle}>
-          Tus bebidas están en "Mis Consumos".{'\n'}Actívalas cuando quieras para entrar a la cola.
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.replace('/(tickets)/my-tickets' as any)}
-          style={[styles.successBtn, { backgroundColor: accentColor }]}
-        >
-          <Text style={styles.successBtnText}>Ver Mis Consumos</Text>
         </TouchableOpacity>
       </View>
     );
@@ -571,6 +560,29 @@ export default function ConsumptionPaymentScreen() {
   );
 }
 
+const WebRedirector = ({ url, token, color }: any) => {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'token_ws';
+    input.value = token || '';
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }, [url, token]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color={color} />
+      <Text style={{ color: 'white', marginTop: 20, fontWeight: '700', fontSize: 16 }}>Redirigiendo a Webpay Seguro...</Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bgDark },
   infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
@@ -601,7 +613,7 @@ const styles = StyleSheet.create({
   payBtnText: { fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
   floatingCloseBtn: { position: 'absolute', top: 55, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center' },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', padding: 24 },
-  modalCard: { width: '100%', borderRadius: 28, padding: 28, alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  modalCard: { width: '100%', maxWidth: Platform.OS === 'web' ? 400 : undefined, borderRadius: 28, padding: 28, alignItems: 'center', gap: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   modalIconBg: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginBottom: 4 },
   modalTitle: { color: '#fff', fontWeight: '900', fontSize: 20 },
   modalSubtitle: { color: COLORS.textGray, fontSize: 14, textAlign: 'center', lineHeight: 20 },
@@ -610,9 +622,4 @@ const styles = StyleSheet.create({
   modalBtnCancelText: { color: COLORS.textGray, fontWeight: '700', fontSize: 14 },
   modalBtnConfirm: { flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
   modalBtnConfirmText: { fontWeight: '900', fontSize: 14 },
-  successIcon: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  successTitle: { color: '#fff', fontWeight: '900', fontSize: 28, textAlign: 'center' },
-  successSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 8 },
-  successBtn: { paddingVertical: 16, paddingHorizontal: 40, borderRadius: 20, marginTop: 16 },
-  successBtnText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 });

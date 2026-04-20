@@ -1,12 +1,12 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { Calendar, Ghost, MapPin, Ticket, Wine, GlassWater, Clock, Zap, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image } from 'expo-image';
-import { FlatList, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform,  FlatList, RefreshControl, SectionList, StyleSheet, Text, TouchableOpacity, View  } from 'react-native';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import Animated, {
   useAnimatedStyle,
@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { PressableScale } from '../../components/animated/PressableScale';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 import { timing } from '../../lib/animation';
 import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { COLORS } from '../../constants/colors';
@@ -87,7 +88,8 @@ export default function MyTicketsScreen() {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tickets' | 'consumos'>('tickets');
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const [activeTab, setActiveTab] = useState<'tickets' | 'consumos'>(tab === 'consumos' ? 'consumos' : 'tickets');
   const [consumoItems, setConsumoItems] = useState<any[]>([]);
   const [consumosLoading, setConsumosLoading] = useState(false);
   const router = useRouter();
@@ -348,7 +350,8 @@ export default function MyTicketsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
@@ -369,6 +372,7 @@ export default function MyTicketsScreen() {
               style={StyleSheet.absoluteFill}
           />
       </View>
+)}
 
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
 
@@ -406,13 +410,11 @@ export default function MyTicketsScreen() {
                   ))}
                 </View>
               ) : (
-                <View style={styles.emptyContainer}>
-                  <View style={styles.emptyIconCircle}>
-                    <Ghost color={COLORS.neonPink} size={40} />
-                  </View>
-                  <Text style={styles.emptyTitle}>No tienes tickets disponibles</Text>
-                  <Text style={styles.emptySubtitle}>Tus próximas entradas aparecerán aquí.</Text>
-                </View>
+                <EmptyStateCard
+                  icon={<Ghost color={COLORS.neonPink} size={40} />}
+                  title="No tienes tickets disponibles"
+                  subtitle="Tus próximas entradas aparecerán aquí."
+                />
               )
             }
           />
@@ -427,7 +429,7 @@ export default function MyTicketsScreen() {
             initialNumToRender={6}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={consumosLoading} onRefresh={loadConsumos} tintColor="#a78bfa" colors={['#a78bfa']} progressBackgroundColor="#111" />
+              <RefreshControl refreshing={consumosLoading} onRefresh={loadConsumos} tintColor={COLORS.neonPink} colors={[COLORS.neonPink]} progressBackgroundColor="#111" />
             }
             renderItem={({ item: order }) => {
               const items = order.consumption_order_items ?? [];
@@ -447,7 +449,7 @@ export default function MyTicketsScreen() {
                   <View style={styles.cardContent}>
                     <View style={styles.leftSection}>
                       <Text style={styles.eventName} numberOfLines={1}>{eventData?.title ?? 'Evento'}</Text>
-                      <Text style={{ color: '#a78bfa', fontSize: 12, fontWeight: '900', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      <Text style={{ color: COLORS.neonPink, fontSize: 12, fontWeight: '900', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
                         {items.length} {items.length === 1 ? 'ítem' : 'ítems'} · ${order.total_amount?.toLocaleString('es-CL')}
                       </Text>
                       <View style={[styles.badge, { backgroundColor: cfg.color + '15', borderColor: cfg.color + '40' }]}>
@@ -474,19 +476,17 @@ export default function MyTicketsScreen() {
             }}
             ListEmptyComponent={
               !consumosLoading ? (
-                <View style={styles.emptyContainer}>
-                  <View style={[styles.emptyIconCircle, { borderColor: 'rgba(139,92,246,0.3)', backgroundColor: 'rgba(139,92,246,0.05)' }]}>
-                    <Wine color="#a78bfa" size={40} />
-                  </View>
-                  <Text style={styles.emptyTitle}>Sin consumos por ahora</Text>
-                  <Text style={styles.emptySubtitle}>Compra bebidas desde la carta de tu evento favorito.</Text>
-                </View>
+                <EmptyStateCard
+                  icon={<Wine color={COLORS.neonPink} size={40} />}
+                  title="Sin consumos por ahora"
+                  subtitle="Compra bebidas desde la carta de tu evento favorito."
+                />
               ) : null
             }
           />
         )}
 
-        <NavBar title="MIS TICKETS" onBack={() => router.back()} />
+        <NavBar title="MIS TICKETS" onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile')} />
 
         {/* Tabs flotando */}
         <View style={[styles.tabRow, { top: insets.top + 82 }]}>
@@ -520,12 +520,12 @@ export default function MyTicketsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   list: { paddingHorizontal: 20, paddingBottom: 40, flexGrow: 1 },
   
   // Headers normales
   sectionHeaderContainer: { marginTop: 20, marginBottom: 10, paddingLeft: 4 },
-  sectionHeaderText: { color: COLORS.neonPink, fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
+  sectionHeaderText: { color: '#ffffff', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
   
   // Header discreto del Historial
   historyDividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 25, opacity: 0.6 },
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   infoText: { color: COLORS.textZinc, fontSize: 13, fontWeight: '500' },
   
-  badge: { marginTop: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start', borderWidth: 1 },
+  badge: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignSelf: 'flex-start', borderWidth: 1 },
   badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   
   rightSection: { flexDirection: 'row', alignItems: 'center' },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   pastImageOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyIconCircle: { width: 86, height: 86, borderRadius: 43, backgroundColor: 'rgba(138, 43, 226, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(138, 43, 226, 0.3)' },
+  emptyIconCircle: { width: 86, height: 86, borderRadius: 43, backgroundColor: 'rgba(255, 49, 216, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255, 49, 216, 0.3)' },
   emptyTitle: { color: '#FBFBFB', fontSize: 20, fontWeight: '900', fontStyle: 'italic', marginBottom: 8, textAlign: 'center', letterSpacing: -1 },
   emptySubtitle: { color: COLORS.textZinc, fontSize: 14, textAlign: 'center', lineHeight: 22, fontWeight: '400' },
 

@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { COLORS } from '../constants/colors';
 
 interface Props {
@@ -10,17 +10,19 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  componentStack: string | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null };
+  state: State = { hasError: false, error: null, componentStack: null };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+    this.setState({ componentStack: info.componentStack ?? null });
   }
 
   handleReset = () => {
@@ -31,15 +33,27 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
+      const fullError = `ERROR: ${this.state.error?.message}\n\nSTACK:\n${this.state.error?.stack}\n\nCOMPONENT STACK:\n${this.state.componentStack}`;
       return (
-        <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container}>
           <Text style={styles.emoji}>⚡</Text>
           <Text style={styles.title}>Algo salió mal</Text>
           <Text style={styles.message}>{this.state.error?.message ?? 'Error inesperado'}</Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#333', marginBottom: 12 }]}
+            onPress={() => {
+              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(fullError);
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>📋 Copiar error completo</Text>
+          </TouchableOpacity>
+          <Text style={styles.stack}>{fullError}</Text>
           <TouchableOpacity style={styles.button} onPress={this.handleReset}>
             <Text style={styles.buttonText}>Reintentar</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       );
     }
 
@@ -84,5 +98,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 14,
     letterSpacing: 0.5,
+  },
+  stack: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    textAlign: 'left',
+    marginBottom: 12,
+    maxWidth: 380,
   },
 });

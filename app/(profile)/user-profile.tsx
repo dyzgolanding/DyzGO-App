@@ -10,11 +10,11 @@ import {
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import {
+import { Platform, 
   Alert,
   Dimensions, ScrollView, StatusBar,
   StyleSheet, Text, TouchableOpacity, View,
-} from 'react-native';
+ } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
@@ -215,8 +215,9 @@ export default function UserProfileScreen() {
   }[friendState];
 
   return (
-    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: '#030303' }}>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' }}>
       <StatusBar barStyle="light-content" />
+      {Platform.OS !== 'web' && (
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <LinearGradient
               colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -238,6 +239,7 @@ export default function UserProfileScreen() {
               style={StyleSheet.absoluteFill}
           />
       </View>
+      )}
 
       <NavBar onBack={() => router.back()} />
 
@@ -255,9 +257,8 @@ export default function UserProfileScreen() {
         <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
         <View style={s.heroSection}>
           {/* Anillo del avatar con color de nivel */}
-          <View style={[s.avatarOuter, { borderColor: lc, shadowColor: lc }]}>
-            <LinearGradient colors={[lc + '50', lc + '15', 'transparent']} style={StyleSheet.absoluteFill} />
-            <View style={s.avatarInner}>
+          <View style={[s.avatarOuter, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}>
+            <View style={[s.avatarInner, !profile.avatar_url && { backgroundColor: 'rgba(255,49,216,0.2)' }]}>
               {profile.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 : <Text style={s.avatarChar}>{initials}</Text>
@@ -391,7 +392,7 @@ const s = StyleSheet.create({
 
   // Action button
   actionBtn:    { height: 58, borderRadius: 22, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 10, borderWidth: 1, overflow: 'hidden', shadowColor: COLORS.neonPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
-  actionText:   { fontSize: 15, fontWeight: '900', letterSpacing: 1, fontStyle: 'italic' },
+  actionText:   { fontSize: 16, fontWeight: '900' },
 
   // Amigos en común
   mutualRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(251,251,251,0.05)' },

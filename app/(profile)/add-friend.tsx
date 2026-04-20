@@ -209,13 +209,14 @@ export default function AddFriendScreen() {
       <AmbientBg />
       <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()} style={styles.card}>
         <View style={styles.avatarContainer}>
-          <Image
-            source={sender?.avatar_url ? { uri: sender.avatar_url } : { uri: 'https://via.placeholder.com/150' }}
-            style={styles.avatar}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-          />
+          {sender?.avatar_url
+            ? <Image source={{ uri: sender.avatar_url }} style={styles.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
+            : <View style={[styles.avatar, { backgroundColor: 'rgba(255,49,216,0.2)', justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: '#FBFBFB', fontWeight: '800', fontSize: 36 }}>
+                  {sender?.full_name?.[0]?.toUpperCase() ?? '?'}
+                </Text>
+              </View>
+          }
           <View style={styles.badge}>
             <UserPlus color="white" size={18} />
           </View>

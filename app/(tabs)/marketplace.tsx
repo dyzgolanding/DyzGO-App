@@ -2,15 +2,16 @@ import { Image as ExpoImage } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import ReAnimated, { LinearTransition, Easing, Extrapolation, FadeIn, FadeOut, FadeInDown, FadeInRight, SlideInRight, SlideInDown, SlideOutDown, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { useFocusEffect } from 'expo-router';
 import {
     AlertCircle, ArrowLeft, ArrowUpDown, Calendar, Check, ChevronDown, ChevronRight, ChevronUp,
     Filter, Gavel, Ghost, Plus, ShoppingBag, Tag, Trash, Users, X,
-    Ticket, Landmark, User, Hash, CreditCard, Receipt, Music
+    Ticket, Landmark, User, Hash, CreditCard, Receipt, Music, Store
 } from 'lucide-react-native';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Alert, Dimensions, FlatList,
     InteractionManager, KeyboardAvoidingView, Modal, Platform,
@@ -24,8 +25,11 @@ import { isEventFinished } from '../../utils/format';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
+import { PressableScale } from '../../components/animated/PressableScale';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 
-const { width, height } = Dimensions.get('window');
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
 const TAB_W = (width - 48) / 2;
 
 // ── CONSTANTES DE FILTROS ──
@@ -224,6 +228,16 @@ const MarketCard = memo(function MarketCard({ item, index, cardH, scrollY, curre
 export default function MarketplaceScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    
+    // Ocultamiento seguro para que no se superpongan las pantallas en web
+    const [isScreenFocused, setIsScreenFocused] = useState(true);
+    useFocusEffect(
+        useCallback(() => {
+            setIsScreenFocused(true);
+            return () => setIsScreenFocused(false);
+        }, [])
+    );
+
 
     // ── DATA ──
     const [listings, setListings] = useState<any[]>([]);
@@ -400,7 +414,11 @@ export default function MarketplaceScreen() {
 
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) setCurrentUserId(user.id);
+        if (user) {
+            setCurrentUserId(user.id);
+        } else {
+            setLoading(false);
+        }
     };
 
     const fetchData = async () => {
@@ -1022,67 +1040,84 @@ export default function MarketplaceScreen() {
     // JSX PRINCIPAL
     // ─────────────────────────────────────────────────────────────
     return (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={[{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' }, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
             </View>
+            )}
 
             <View style={{ position: 'absolute', zIndex: 100, left: 16, right: 16, top: insets.top + 10 }}>
                 <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 60, paddingHorizontal: 16, borderRadius: 30, borderWidth: 1, borderColor: 'rgba(251, 251, 251, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={{ color: '#FBFBFB', fontSize: 24, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 }}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
                     </View>
-                    {tab === 'market' ? (
-                        <TouchableOpacity
-                            onPress={() => setShowFilterMenu(true)}
-                            style={{ position: 'relative', padding: 4 }}
-                        >
-                            <Filter size={24} color={activeFiltersCount > 0 ? '#FF31D8' : 'rgba(251,251,251,0.5)'} />
-                            {activeFiltersCount > 0 && (
-                                <View style={{ position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' }} />
-                            )}
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            onPress={() => { setLoadingTickets(true); setSellModal(true); fetchMyTickets(); }}
-                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)', justifyContent: 'center', alignItems: 'center' }}
-                        >
-                            <Plus color={COLORS.neonPink} size={20} />
-                        </TouchableOpacity>
-                    )}
+                    {currentUserId ? (
+                        tab === 'market' ? (
+                            <TouchableOpacity
+                                onPress={() => setShowFilterMenu(true)}
+                                style={{ position: 'relative', padding: 4 }}
+                            >
+                                <Filter size={24} color={activeFiltersCount > 0 ? '#FF31D8' : 'rgba(251,251,251,0.5)'} />
+                                {activeFiltersCount > 0 && (
+                                    <View style={{ position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' }} />
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => { setLoadingTickets(true); setSellModal(true); fetchMyTickets(); }}
+                                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,49,216,0.15)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)', justifyContent: 'center', alignItems: 'center' }}
+                            >
+                                <Plus color={COLORS.neonPink} size={20} />
+                            </TouchableOpacity>
+                        )
+                    ) : null}
                 </BlurView>
             </View>
 
             {/* ── PILL TABS flotando ── */}
-            <View style={{ position: 'absolute', zIndex: 99, top: insets.top + 80, left: 0, right: 0, alignItems: 'center' }}>
-                <View style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
-                    <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
-                        <TouchableOpacity
-                            onPress={() => switchTab('market')}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'market' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
-                            activeOpacity={0.8}
-                        >
-                            <ShoppingBag size={14} color={tab === 'market' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
-                            <Text style={{ color: tab === 'market' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'market' ? '800' : '600', fontSize: 13 }}>Explorar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => switchTab('selling')}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'selling' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
-                            activeOpacity={0.8}
-                        >
-                            <Tag size={14} color={tab === 'selling' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
-                            <Text style={{ color: tab === 'selling' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'selling' ? '800' : '600', fontSize: 13 }}>Mis Ventas</Text>
-                        </TouchableOpacity>
-                    </BlurView>
+            {currentUserId && (
+                <View style={{ position: 'absolute', zIndex: 99, top: insets.top + 80, left: 0, right: 0, alignItems: 'center' }}>
+                    <View style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
+                        <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                            <TouchableOpacity
+                                onPress={() => switchTab('market')}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'market' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                                activeOpacity={0.8}
+                            >
+                                <ShoppingBag size={14} color={tab === 'market' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
+                                <Text style={{ color: tab === 'market' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'market' ? '800' : '600', fontSize: 13 }}>Explorar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => switchTab('selling')}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: tab === 'selling' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
+                                activeOpacity={0.8}
+                            >
+                                <Tag size={14} color={tab === 'selling' ? '#FF31D8' : 'rgba(251,251,251,0.45)'} />
+                                <Text style={{ color: tab === 'selling' ? '#FBFBFB' : 'rgba(251,251,251,0.45)', fontWeight: tab === 'selling' ? '800' : '600', fontSize: 13 }}>Mis Ventas</Text>
+                            </TouchableOpacity>
+                        </BlurView>
+                    </View>
                 </View>
-            </View>
+            )}
 
             <ReAnimated.View style={[s.screen, contentStyle]}>
 
                 {/* ── LISTA — ocupa toda la pantalla ── */}
                 <View style={{ flex: 1 }} onLayout={e => setMarketListH(e.nativeEvent.layout.height)}>
+
+                    {!currentUserId && !loading && (
+                        <EmptyStateCard
+                            icon={<Store color={COLORS.neonPink} size={32} />}
+                            title="Marketplace"
+                            subtitle="Inicia sesión para vivir la experiencia del marketplace y conseguir tickets a los mejores precios de la comunidad."
+                            actionText="INICIAR SESIÓN"
+                            onAction={() => router.push({ pathname: '/login', params: { redirect: '/(tabs)/marketplace' } } as any)}
+                            marginTop={-60}
+                        />
+                    )}
 
                     {/* SKELETON — imita la forma de las cards de snap vertical */}
                     {loading && listings.length === 0 && tab === 'market' && (
@@ -1106,7 +1141,7 @@ export default function MarketplaceScreen() {
                     )}
 
                     {/* TAB EXPLORAR — siempre montado, display toggle */}
-                    <View style={{ flex: 1, display: tab === 'market' ? 'flex' : 'none' }}>
+                    <View style={{ flex: 1, display: (currentUserId && tab === 'market') ? 'flex' : 'none' }}>
                         {cardSnapH > 0 && (
                             <AnimatedFlatList
                                 style={{ flex: 1 }}
@@ -1124,11 +1159,12 @@ export default function MarketplaceScreen() {
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.neonPink} />}
                                 ListEmptyComponent={
-                                    <View style={[s.empty, { height: cardSnapH }]}>
-                                        <View style={s.emptyIconCircle}><Ghost color={COLORS.neonPink} size={38} /></View>
-                                        <Text style={s.emptyTitle}>Sin tickets en reventa</Text>
-                                        <Text style={s.emptySub}>No hay tickets disponibles ahora o intenta ajustar tus filtros.</Text>
-                                    </View>
+                                    <EmptyStateCard
+                                        height={cardSnapH}
+                                        icon={<Ghost color={COLORS.neonPink} size={38} />}
+                                        title="Sin tickets en reventa"
+                                        subtitle="No hay tickets disponibles ahora o intenta ajustar tus filtros."
+                                    />
                                 }
                                 renderItem={({ item, index }: { item: any; index: number }) => (
                                     <MarketCard
@@ -1150,7 +1186,7 @@ export default function MarketplaceScreen() {
                     </View>
 
                     {/* TAB MIS VENTAS — siempre montado, display toggle */}
-                    <View style={{ flex: 1, display: tab === 'selling' ? 'flex' : 'none' }}>
+                    <View style={{ flex: 1, display: (currentUserId && tab === 'selling') ? 'flex' : 'none' }}>
                         {cardSnapH > 0 && (
                             <AnimatedFlatList
                                 style={{ flex: 1 }}
@@ -1168,11 +1204,12 @@ export default function MarketplaceScreen() {
                                 contentContainerStyle={{ paddingTop: CARD_TOP_PAD, paddingBottom: CARD_BOT_PAD }}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.neonPink} />}
                                 ListEmptyComponent={
-                                    <View style={[s.empty, { height: cardSnapH }]}>
-                                        <View style={s.emptyIconCircle}><Ghost color={COLORS.neonPink} size={38} /></View>
-                                        <Text style={s.emptyTitle}>Nada publicado aún</Text>
-                                        <Text style={s.emptySub}>Toca + para publicar un ticket y empezar a vender.</Text>
-                                    </View>
+                                    <EmptyStateCard
+                                        height={cardSnapH}
+                                        icon={<Ghost color={COLORS.neonPink} size={38} />}
+                                        title="Nada publicado aún"
+                                        subtitle="Toca + para publicar un ticket y empezar a vender."
+                                    />
                                 }
                                 renderItem={({ item, index }: { item: any; index: number }) => (
                                     <MarketCard

@@ -87,7 +87,7 @@ export default function ConfirmationScreen() {
         </Animated.View>
 
         <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()} style={{ width: '100%', alignItems: 'center' }}>
-          <TouchableOpacity style={styles.btn} activeOpacity={0.85} onPress={() => router.replace('/my-tickets')}>
+          <TouchableOpacity style={styles.btn} activeOpacity={0.85} onPress={() => router.push('/my-tickets')}>
             <Text style={styles.btnText}>VER MIS ENTRADAS</Text>
           </TouchableOpacity>
         </ReAnimated.View>

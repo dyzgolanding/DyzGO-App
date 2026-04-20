@@ -1,11 +1,12 @@
-import { BlurView } from 'expo-blur';
-import { Tabs } from 'expo-router';
+import { BlurView } from '../../components/BlurSurface';
+import { Tabs, useRouter } from 'expo-router';
 import { Compass, House, Store, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LayoutChangeEvent, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { supabase } from '../../lib/supabase';
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -19,6 +20,8 @@ const ICONS: Record<string, { icon: React.ComponentType<any>; label: string }> =
 const TabItem = ({ route, index, state, navigation, tabWidth, leftEdge, rightEdge }: any) => {
   const isFocused = state.index === index;
   const { icon: Icon, label } = ICONS[route.name] || { icon: House, label: 'App' };
+  const router = useRouter();
+  const isNavigating = React.useRef(false);
 
   const animatedScaleStyle = useAnimatedStyle(() => {
     if (tabWidth === 0) return {};
@@ -39,7 +42,31 @@ const TabItem = ({ route, index, state, navigation, tabWidth, leftEdge, rightEdg
     };
   });
 
-  const handlePress = () => {
+  const handlePress = async () => {
+    if (isFocused || isNavigating.current) return;
+
+    // Tab Profile requiere autenticación
+    if (route.name === 'profile') {
+      isNavigating.current = true;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push({ pathname: '/login', params: { redirect: '/(tabs)/profile' } } as any);
+        // Evitaremos nuevos toques por 1 segundo mientras ocurre la animación de la ruta de login
+        setTimeout(() => {
+          isNavigating.current = false;
+        }, 1000);
+        return;
+      }
+      
+      isNavigating.current = false;
+    }
+
+    isNavigating.current = true;
+    setTimeout(() => {
+       isNavigating.current = false;
+    }, 500);
+
     const event = navigation.emit({
       type: 'tabPress',
       target: route.key,
@@ -113,36 +140,33 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     }
   };
 
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
-      isDragging.value = true;
-      // Al empezar a arrastrar, sincronizar edges con la posición actual de tap
-      leftEdge.value = tapPosition.value;
-      rightEdge.value = tapPosition.value + tabWidth;
-    })
-    .onUpdate((e) => {
-      const targetLeft = e.x - tabWidth / 2;
-      const maxTranslate = layout.width - tabWidth;
-      const clampedLeft = Math.max(0, Math.min(targetLeft, maxTranslate));
-      leftEdge.value = clampedLeft;
-      rightEdge.value = clampedLeft + tabWidth;
-    })
-    .onEnd((e) => {
-      const targetIndex = Math.round(e.x / tabWidth);
-      const index = Math.max(0, Math.min(targetIndex, totalTabs - 1));
-      const targetLeft = index * tabWidth;
-
-      // Sincronizar tapPosition con la posición actual del drag antes de cambiar el modo
-      tapPosition.value = leftEdge.value;
-      isDragging.value = false;
-
-      // Ahora animar desde la posición actual del drag hasta el destino
-      tapPosition.value = withSpring(targetLeft, { damping: 20, stiffness: 200, mass: 0.8 });
-      leftEdge.value = targetLeft;
-      rightEdge.value = targetLeft + tabWidth;
-
-      runOnJS(navigateToTab)(index);
-    });
+  // Pan gesture only on native — web doesn't support it reliably
+  const panGesture = Platform.OS !== 'web'
+    ? Gesture.Pan()
+        .onStart(() => {
+          isDragging.value = true;
+          leftEdge.value = tapPosition.value;
+          rightEdge.value = tapPosition.value + tabWidth;
+        })
+        .onUpdate((e) => {
+          const targetLeft = e.x - tabWidth / 2;
+          const maxTranslate = layout.width - tabWidth;
+          const clampedLeft = Math.max(0, Math.min(targetLeft, maxTranslate));
+          leftEdge.value = clampedLeft;
+          rightEdge.value = clampedLeft + tabWidth;
+        })
+        .onEnd((e) => {
+          const targetIndex = Math.round(e.x / tabWidth);
+          const index = Math.max(0, Math.min(targetIndex, totalTabs - 1));
+          const targetLeft = index * tabWidth;
+          tapPosition.value = leftEdge.value;
+          isDragging.value = false;
+          tapPosition.value = withSpring(targetLeft, { damping: 20, stiffness: 200, mass: 0.8 });
+          leftEdge.value = targetLeft;
+          rightEdge.value = targetLeft + tabWidth;
+          runOnJS(navigateToTab)(index);
+        })
+    : Gesture.Pan(); // no-op gesture on web
 
   const animatedIndicatorStyle = useAnimatedStyle(() => {
     if (isDragging.value) {
@@ -171,12 +195,40 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         <BlurView
           intensity={50}
           tint="dark"
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { borderRadius: 32 }]}
         />
         <View style={styles.glassBorder} />
 
         <View style={styles.paddingWrapper}>
-          <GestureDetector gesture={panGesture}>
+          {/* Pan gesture — native only; GestureDetector throws on web */}
+          {Platform.OS !== 'web' ? (
+            <GestureDetector gesture={panGesture}>
+              <View
+                style={styles.contentContainer}
+                onLayout={(e: LayoutChangeEvent) => setLayout(e.nativeEvent.layout)}
+              >
+                {layout.width > 0 && (
+                  <Animated.View style={[styles.activeIndicatorContainer, animatedIndicatorStyle]}>
+                    <View style={styles.indicatorPill}>
+                      <BlurView intensity={25} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 100 }]} />
+                    </View>
+                  </Animated.View>
+                )}
+                {state.routes.map((route: any, index: number) => (
+                  <TabItem
+                    key={route.key}
+                    route={route}
+                    index={index}
+                    state={state}
+                    navigation={navigation}
+                    tabWidth={tabWidth}
+                    leftEdge={leftEdge}
+                    rightEdge={rightEdge}
+                  />
+                ))}
+              </View>
+            </GestureDetector>
+          ) : (
             <View
               style={styles.contentContainer}
               onLayout={(e: LayoutChangeEvent) => setLayout(e.nativeEvent.layout)}
@@ -184,11 +236,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               {layout.width > 0 && (
                 <Animated.View style={[styles.activeIndicatorContainer, animatedIndicatorStyle]}>
                   <View style={styles.indicatorPill}>
-                    <BlurView intensity={25} tint="light" style={StyleSheet.absoluteFill} />
+                    <BlurView intensity={25} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 100 }]} />
                   </View>
                 </Animated.View>
               )}
-
               {state.routes.map((route: any, index: number) => (
                 <TabItem
                   key={route.key}
@@ -202,7 +253,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                 />
               ))}
             </View>
-          </GestureDetector>
+          )}
         </View>
       </View>
     </View>
@@ -210,14 +261,21 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const tabs = (
+    <Tabs tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false, unmountOnBlur: Platform.OS === 'web', sceneStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000000' } }}>
+      <Tabs.Screen name="home" />
+      <Tabs.Screen name="explore" />
+      <Tabs.Screen name="marketplace" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
+  );
+
+  // GestureHandlerRootView is native-only — causes 'loading' TDZ on web
+  if (Platform.OS === 'web') return tabs;
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000000' }}>
-      <Tabs tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#000000' } }}>
-        <Tabs.Screen name="home" />
-        <Tabs.Screen name="explore" />
-        <Tabs.Screen name="marketplace" />
-        <Tabs.Screen name="profile" />
-      </Tabs>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000000' }}>
+      {tabs}
     </GestureHandlerRootView>
   );
 }

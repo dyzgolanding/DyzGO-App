@@ -5,15 +5,13 @@ import {
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import {
-  Dimensions, PanResponder, ScrollView, StatusBar,
-  StyleSheet, Text, TouchableOpacity, View, Alert
-} from 'react-native';
+import { Platform, Dimensions, PanResponder, ScrollView, StatusBar,
+  StyleSheet, Text, TouchableOpacity, View, Alert, Switch } from 'react-native';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_H_PAD = 18;
-const CARD_SIZE = SCREEN_W - CARD_H_PAD * 2;
+const CARD_SIZE = Platform.OS === 'web' ? 400 : SCREEN_W - CARD_H_PAD * 2;
 import PagerView from 'react-native-pager-view';
 import ReAnimated, {
   FadeIn, FadeInDown,
@@ -23,7 +21,7 @@ import ReAnimated, {
 const AnimatedScrollView = ReAnimated.createAnimatedComponent(ScrollView);
 const SNAP = CARD_SIZE + CARD_GAP;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { NavBar } from '../../components/NavBar';
 import { StaggeredItem } from '../../components/StaggeredItem';
 import { COLORS } from '../../constants/colors';
@@ -33,7 +31,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
-import { CustomSwitch } from '../../components/CustomSwitch';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 
 const TABS = ['Productoras', 'Clubes'];
 
@@ -227,25 +225,27 @@ export default function SavedScreen() {
           <Text style={s.pushToggleSub}>Recibe notificaciones de nuevos eventos que tus productoras o clubes favoritos publiquen</Text>
         </View>
       </View>
-      </View>
-      <CustomSwitch
+      <Switch
         value={pushEnabled}
         onValueChange={toggleGlobalPush}
+        trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }}
+        thumbColor={pushEnabled ? COLORS.neonPink : '#FBFBFB'}
+        ios_backgroundColor='rgba(255,255,255,0.1)'
       />
     </View>
   );
 
   // ─── EMPTY STATE ────────────────────────────────────────────
   const EmptyState = ({ label, subtitle }: { label: string; subtitle: string }) => (
-    <ReAnimated.View entering={FadeIn.duration(250)} style={s.emptyWrap}>
-      <View style={s.emptyIcon}>
-        <Ghost color={COLORS.neonPink} size={40} strokeWidth={1.5} />
-      </View>
-      <Text style={s.emptyTitle}>{label}</Text>
-      <Text style={s.emptySubtitle}>{subtitle}</Text>
-      <TouchableOpacity onPress={() => router.navigate('/(tabs)/explore')} style={s.emptyBtn}>
-        <Text style={s.emptyBtnText}>Explorar ahora</Text>
-      </TouchableOpacity>
+    <ReAnimated.View entering={FadeIn.duration(250)} style={{ flex: 1, marginTop: 40 }}>
+      <EmptyStateCard
+        icon={<Ghost color={COLORS.neonPink} size={40} strokeWidth={1.5} />}
+        title={label}
+        subtitle={subtitle}
+        actionText="EXPLORAR AHORA"
+        onAction={() => router.navigate('/(tabs)/explore')}
+        marginTop={0}
+      />
     </ReAnimated.View>
   );
 
@@ -257,11 +257,13 @@ export default function SavedScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ANTIGRAVITY LIGHTING */}
+      {Platform.OS !== 'web' && (
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
         <LinearGradient colors={['rgba(255,49,216,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={['transparent', 'rgba(255,49,216,0.1)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={['transparent', 'rgba(255,49,216,0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFillObject} />
       </View>
+      )}
 
       <View style={s.leftEdge} {...leftEdgePan.panHandlers} />
 
@@ -271,7 +273,7 @@ export default function SavedScreen() {
         onPageSelected={e => setActiveTab(e.nativeEvent.position)}
       >
         {/* TAB 0: PRODUCTORAS */}
-        <View key="productoras" style={s.page}>
+        <View key="productoras" style={[s.page, Platform.OS === 'web' && activeTab !== 0 && { display: 'none' }]}>
           <AnimatedScrollView
             contentContainerStyle={[s.scrollContent, { paddingTop: HEADER_H }]}
             showsVerticalScrollIndicator={false}
@@ -289,7 +291,7 @@ export default function SavedScreen() {
         </View>
 
         {/* TAB 1: CLUBES */}
-        <View key="clubes" style={s.page}>
+        <View key="clubes" style={[s.page, Platform.OS === 'web' && activeTab !== 1 && { display: 'none' }]}>
           <AnimatedScrollView
             contentContainerStyle={[s.scrollContent, { paddingTop: HEADER_H }]}
             showsVerticalScrollIndicator={false}
@@ -336,10 +338,10 @@ export default function SavedScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+  root: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : COLORS.background },
   leftEdge: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 25, zIndex: 999 },
-  page: { flex: 1 },
-  scrollContent: { paddingHorizontal: 18, paddingBottom: 110 },
+  page: { flex: 1, width: Platform.OS === 'web' ? '100%' : undefined },
+  scrollContent: { paddingHorizontal: 18, paddingBottom: 110, alignItems: Platform.OS === 'web' ? 'center' : undefined },
 
   tabsFloating: { position: 'absolute', left: 0, right: 0, zIndex: 10, alignItems: 'center' },
   tabsContainer: {},
@@ -350,6 +352,8 @@ const s = StyleSheet.create({
 
   // ── Global Push Toggle ──
   pushToggleRow: {
+    width: Platform.OS === 'web' ? 400 : undefined,
+    alignSelf: Platform.OS === 'web' ? 'center' : 'auto',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 16, borderRadius: 20,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
@@ -366,7 +370,7 @@ const s = StyleSheet.create({
   pushToggleSub: { color: 'rgba(251,251,251,0.6)', fontSize: 11, marginTop: 3, lineHeight: 16 },
 
   // ── Marketplace-style Cards ──
-  cardsGrid: { gap: 0 },
+  cardsGrid: { gap: 0, alignItems: Platform.OS === 'web' ? 'center' : 'stretch' },
 
   cardShadowWrap: {
     paddingVertical: 8,
@@ -374,7 +378,7 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 10,
   },
   mktCard: {
-    height: CARD_SIZE,
+    width: CARD_SIZE, height: CARD_SIZE,
     borderRadius: 28, overflow: 'hidden',
     backgroundColor: '#0A0A0A',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',

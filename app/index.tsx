@@ -1,12 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../hooks/useNavRouter';
 import React, { useEffect, useState } from 'react';
-import {
+import { Platform, 
   Dimensions,
   StatusBar,
   StyleSheet,
   View
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
@@ -95,12 +95,12 @@ export default function SplashScreen() {
                     supabase.from('profiles').select('full_name, avatar_url').eq('id', session.user.id).single(),
                     supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10),
                     supabase.from('events')
-                        .select('*, clubs(latitude, longitude)')
+                        .select('*, clubs(latitude, longitude, name, image), experiences(id, name, logo_url)')
                         .eq('is_active', true)
-                        .eq('status', 'active')
-                        .gte('date', today)
+                        .in('status', ['active', 'info'])
+                        .not('image_url', 'is', null)
                         .order('date', { ascending: true })
-                        .limit(5)
+                        .limit(6)
                 ]);
 
                 let finalEvents = eventsRes.data || [];
@@ -146,13 +146,13 @@ export default function SplashScreen() {
 
     useEffect(() => {
         if (animationDone && dataLoaded) {
-            if (hasSession && preloadedData) {
+            if (hasSession && preloadedData && Platform.OS !== 'web') {
                 router.replace({
                     pathname: '/(tabs)/home',
                     params: { preloadedData: JSON.stringify(preloadedData) }
                 });
             } else {
-                router.replace('/login');
+                router.replace('/(tabs)/home');
             }
         }
     }, [animationDone, dataLoaded, hasSession]);
@@ -165,10 +165,12 @@ export default function SplashScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
-                <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.3, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            </View>
+            {Platform.OS !== 'web' && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
+                    <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.3, y: 0.4 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                </View>
+            )}
             <View style={styles.centerStage}>
                 <View style={styles.logoRow}>
                     {LETTERS.map((letter, index) => (
@@ -184,7 +186,7 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     centerStage: { flex: 1, justifyContent: 'center', alignItems: 'center', overflow: 'visible' },
     logoRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', marginLeft: 10, overflow: 'visible', paddingHorizontal: 20 },
     brandText: { color: COLORS.white, fontSize: 68, fontWeight: '900', fontStyle: 'italic', lineHeight: 90, height: 100, textAlignVertical: 'bottom', paddingHorizontal: 4, marginHorizontal: -3, includeFontPadding: false, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 10, overflow: 'visible', zIndex: 10 },

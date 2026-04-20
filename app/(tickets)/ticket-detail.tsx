@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import ReAnimated, { FadeInUp } from 'react-native-reanimated';
@@ -45,11 +45,12 @@ import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
 const { width, height } = Dimensions.get('window');
-const isSmallScreen = width < 400;
+const baseWidth = Platform.OS === 'web' && width > 500 ? 450 : width;
+const isSmallScreen = baseWidth < 400;
 
 // Card dimensions
 const CARD_MARGIN = 22;
-const CARD_WIDTH = width - CARD_MARGIN * 2;
+const CARD_WIDTH = baseWidth - CARD_MARGIN * 2;
 const CARD_HEIGHT = CARD_WIDTH;          // front face: square
 const CARD_HEIGHT_BACK = CARD_WIDTH * 1.3; // back face: taller for QR
 
@@ -559,31 +560,33 @@ export default function TicketDetailScreen() {
           <ReAnimated.View entering={FadeInUp.duration(350).delay(100).springify()}>
             <View style={styles.actionArea}>
 
-              <TouchableOpacity
-                style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAppleTransfer(); }}
-                disabled={isDisabled}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={blockReason
-                    ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']
-                    : ['rgba(255,49,216,0.18)', 'rgba(180,30,160,0.10)']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={[styles.actionBtnInner, { borderColor: blockReason ? 'rgba(255,255,255,0.08)' : 'rgba(255,49,216,0.4)' }]}
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAppleTransfer(); }}
+                  disabled={isDisabled}
+                  activeOpacity={0.8}
                 >
-                  {transferring ? (
-                    <ActivityIndicator color="#FF31D8" size="small" />
-                  ) : (
-                    <>
-                      <MoveHorizontal color={blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8'} size={18} />
-                      <Text style={[styles.actionBtnText, { color: blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8' }]}>
-                        {blockReason || (isListed ? 'BLOQUEADO (EN VENTA)' : 'TRANSFERIR POR APROXIMACIÓN')}
-                      </Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={blockReason
+                      ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,49,216,0.18)', 'rgba(180,30,160,0.10)']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={[styles.actionBtnInner, { borderColor: blockReason ? 'rgba(255,255,255,0.08)' : 'rgba(255,49,216,0.4)' }]}
+                  >
+                    {transferring ? (
+                      <ActivityIndicator color="#FF31D8" size="small" />
+                    ) : (
+                      <>
+                        <MoveHorizontal color={blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8'} size={18} />
+                        <Text style={[styles.actionBtnText, { color: blockReason ? 'rgba(255,255,255,0.3)' : '#FF31D8' }]}>
+                          {blockReason || (isListed ? 'BLOQUEADO (EN VENTA)' : 'TRANSFERIR POR APROXIMACIÓN')}
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
@@ -674,14 +677,14 @@ export default function TicketDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
 
   // ── Header pill ──
   fixedHeader: { position: 'absolute', left: 16, right: 16, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 50, paddingHorizontal: 6 },
   pillBg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 50, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', overflow: 'hidden' },
   iconBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 
-  scrollContent: { paddingBottom: 48, flexGrow: 1, justifyContent: 'center' },
+  scrollContent: { paddingBottom: 48, flexGrow: 1, justifyContent: 'center', alignItems: Platform.OS === 'web' ? 'center' : undefined },
 
   // ── Flip card wrapper ──
   flipWrapper: {
@@ -791,7 +794,7 @@ const styles = StyleSheet.create({
   flipBackHintText: { color: 'rgba(255,255,255,0.25)', fontSize: 11, fontWeight: '500' },
 
   // ── Action buttons ──
-  actionArea: { paddingHorizontal: CARD_MARGIN, paddingTop: 16, gap: 12 },
+  actionArea: { paddingHorizontal: CARD_MARGIN, paddingTop: 16, gap: 12, width: baseWidth },
   actionBtn: { width: '100%', borderRadius: 18, overflow: 'hidden' },
   actionBtnInner: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,

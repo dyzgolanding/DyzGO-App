@@ -12,10 +12,10 @@ import {
   Wine, Zap, AlertTriangle, MapPin, Timer,
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import {
+import { Platform, 
   ActivityIndicator, Alert, Dimensions, ScrollView,
   StatusBar, StyleSheet, Text, TouchableOpacity, View,
-} from 'react-native';
+ } from 'react-native';
 import Animated, {
   FadeInUp,
   useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming,
@@ -368,8 +368,8 @@ export default function ConsumptionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
-  center: { flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
+  center: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303', justifyContent: 'center', alignItems: 'center' },
   statusHero: { width: 140, height: 140, borderRadius: 70, justifyContent: 'center', alignItems: 'center', borderWidth: 2, marginBottom: 24, marginTop: 8 },
   statusLabel: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12 },
   itemName: { color: '#fff', fontSize: 26, fontWeight: '900', textAlign: 'center', letterSpacing: -0.5, marginBottom: 8 },

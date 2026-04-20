@@ -1,9 +1,10 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, ArrowRight, AtSign, Eye, EyeOff, KeyRound, Lock, LogIn, Mail, RefreshCw, User, UserPlus } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import React, { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -39,6 +40,7 @@ import Animated, {
 import ConfirmHcaptcha from '@hcaptcha/react-native-hcaptcha'; // <-- MAGIA ANTIBOTS
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { consumePendingNav, markNavHandled } from '../../lib/pendingNav';
 
 const _dim = Dimensions.get('window');
 const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
@@ -53,6 +55,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
 
   // --- ESTADOS ---
   const [isLogin, setIsLogin] = useState(true);
@@ -161,7 +164,7 @@ export default function AuthScreen() {
           throw new Error("Error creando perfil: " + profileError.message);
         }
 
-        router.replace('/onboarding');
+        router.replace({ pathname: '/onboarding', params: { redirect: redirect ?? '/(tabs)/home' } } as any);
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Código inválido o expirado.");
@@ -188,8 +191,12 @@ export default function AuthScreen() {
     }
 
     setLoading(true);
-    // Iniciamos la validación de hCaptcha
-    captchaRef.current?.show();
+    // Iniciamos la validación de hCaptcha (Saltamos en web por incompatibilidad con WebView nativo)
+    if (Platform.OS === 'web') {
+      executeAuthWithCaptcha('web-bypassed');
+    } else {
+      captchaRef.current?.show();
+    }
   };
 
   // --- EJECUCIÓN REAL CON TOKEN DE CAPTCHA ---
@@ -203,7 +210,15 @@ export default function AuthScreen() {
           options: { captchaToken } // Pasamos el token a Supabase
         });
         if (error) throw error;
-        router.replace('/(tabs)/home');
+        const pending = consumePendingNav();
+        if (pending) {
+          markNavHandled();
+          router.replace(pending as any);
+        } else if (redirect === 'back') {
+          router.back();
+        } else {
+          router.replace((redirect as any) ?? '/(tabs)/home');
+        }
       } else {
         // --- SIGNUP ---
         const { data: existingUser } = await supabase
@@ -437,15 +452,26 @@ export default function AuthScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
-      </View>
+      {Platform.OS !== 'web' && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+        </View>
+      )}
+
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={[styles.backButton, { top: insets.top + 12 }]}
+        activeOpacity={0.7}
+      >
+        <ArrowLeft size={16} color="rgba(251,251,251,0.6)" />
+        <Text style={styles.backButtonText}>Volver</Text>
+      </TouchableOpacity>
 
       <View style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]} keyboardShouldPersistTaps="handled">
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingTop: insets.top + 24 }]} keyboardShouldPersistTaps="handled">
 
             <Animated.View style={styles.header} layout={containerLayoutAnim}>
               <Text style={styles.logoText}>DyzGO<Text style={{ color: COLORS.neonPink }}>.</Text></Text>
@@ -479,7 +505,7 @@ export default function AuthScreen() {
               {!showOTP ? (
                 <>
                   {showNameUser && (
-                    <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                    <Animated.View entering={simpleFadeIn}>
                       <GlassInput label="NOMBRE COMPLETO" icon={<User color={COLORS.neonPink} size={18} />} placeholder="Nombre Apellido" value={fullName} onChangeText={handleNameInput} />
                       <GlassInput label="USERNAME" icon={<AtSign color={COLORS.neonPink} size={18} />} placeholder="tu_usuario" value={username} onChangeText={handleUsernameInput} autoCapitalize="none" />
                     </Animated.View>
@@ -498,7 +524,7 @@ export default function AuthScreen() {
                       </Text>
                       <View style={styles.inputContainer}>
                         <View style={styles.iconBox}><Lock color={COLORS.neonPink} size={18} /></View>
-                        <TextInput placeholder="••••••••" placeholderTextColor="#666" style={styles.input} secureTextEntry={!showPassword} value={password} onChangeText={handlePasswordInput} autoCapitalize="none" />
+                        <TextInput placeholder="••••••••" placeholderTextColor="#666" style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} secureTextEntry={!showPassword} value={password} onChangeText={handlePasswordInput} autoCapitalize="none" autoComplete="off" autoCorrect={false} />
                         <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ marginRight: 15 }}>
                           {showPassword ? <EyeOff color="#999" size={18} /> : <Eye color="#999" size={18} />}
                         </TouchableOpacity>
@@ -506,7 +532,7 @@ export default function AuthScreen() {
                       {(!isLogin || isResetting) && <View style={styles.strengthBarContainer}><Animated.View style={[styles.strengthBarFill, animatedBarStyle]} /></View>}
 
                       {showForgotLink && (
-                        <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                        <Animated.View entering={simpleFadeIn}>
                           <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: 10 }} onPress={() => { setIsResetting(true); setStep(1); }}>
                             <Text style={styles.forgotText}>¿OLVIDASTE TU CONTRASEÑA?</Text>
                           </TouchableOpacity>
@@ -516,13 +542,13 @@ export default function AuthScreen() {
                   )}
 
                   {showConfirmPassword && (
-                    <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut}>
+                    <Animated.View entering={simpleFadeIn}>
                       <GlassInput label="CONFIRMAR" icon={<Lock color={COLORS.neonPink} size={18} />} placeholder="••••••••" secureTextEntry={!showPassword} value={confirmPassword} onChangeText={setConfirmPassword} />
                     </Animated.View>
                   )}
                 </>
               ) : (
-                <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut} style={{ width: '100%', alignItems: 'center' }}>
+                <Animated.View entering={simpleFadeIn} style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={styles.otpInfo}>Código enviado a{"\n"}<Text style={{ color: '#fff', fontWeight: '800' }}>{email}</Text></Text>
                   <GlassInput label="CÓDIGO" icon={<KeyRound color={COLORS.neonPink} size={20} />} placeholder="000000" value={otpCode} onChangeText={setOtpCode} keyboardType="number-pad" maxLength={6} />
                   <View style={styles.resendContainer}>
@@ -561,7 +587,7 @@ export default function AuthScreen() {
             </Animated.View>
 
             {step === 1 && !isResetting && !isLogin && (
-              <Animated.View entering={simpleFadeIn} exiting={simpleFadeOut} layout={containerLayoutAnim} style={styles.termsContainer}>
+              <Animated.View entering={simpleFadeIn} layout={containerLayoutAnim} style={styles.termsContainer}>
                 <Text style={styles.termsText}>
                   Al crear una cuenta aceptas nuestros{' '}
                   <Text style={styles.termsLink} onPress={() => Linking.openURL('https://dyzgo.com/terms')}>
@@ -610,25 +636,27 @@ export default function AuthScreen() {
         </KeyboardAvoidingView>
       </View>
 
-      {/* COMPONENTE INVISIBLE DE HCAPTCHA */}
-      <ConfirmHcaptcha
-        ref={captchaRef}
-        siteKey="4e10b7a0-804e-4efa-89b4-5c6a29a43daa"
-        baseUrl="https://dyzgo.app" // Tu dominio base o uno ficticio para React Native
-        languageCode="es"
-        onMessage={(event: any) => {
-          if (event && event.nativeEvent.data) {
-            if (['cancel', 'error', 'expired'].includes(event.nativeEvent.data)) {
-              captchaRef.current?.hide();
-              setLoading(false);
-            } else {
-              captchaRef.current?.hide();
-              // ¡Pasó la prueba! Mandamos el token a Supabase
-              executeAuthWithCaptcha(event.nativeEvent.data);
+      {/* COMPONENTE INVISIBLE DE HCAPTCHA (Solo se renderiza en nativo) */}
+      {Platform.OS !== 'web' && (
+        <ConfirmHcaptcha
+          ref={captchaRef}
+          siteKey="4e10b7a0-804e-4efa-89b4-5c6a29a43daa"
+          baseUrl="https://dyzgo.app" // Tu dominio base o uno ficticio
+          languageCode="es"
+          onMessage={(event: any) => {
+            if (event && event.nativeEvent.data) {
+              if (['cancel', 'error', 'expired'].includes(event.nativeEvent.data)) {
+                captchaRef.current?.hide();
+                setLoading(false);
+              } else {
+                captchaRef.current?.hide();
+                // ¡Pasó la prueba! Mandamos el token a Supabase
+                executeAuthWithCaptcha(event.nativeEvent.data);
+              }
             }
-          }
-        }}
-      />
+          }}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -638,20 +666,22 @@ const GlassInput = ({ label, icon, placeholder, value, onChangeText, ...props }:
     <Text style={styles.label}>{label}</Text>
     <View style={styles.inputContainer}>
       <View style={styles.iconBox}>{icon}</View>
-      <TextInput placeholder={placeholder} placeholderTextColor="#666" style={styles.input} value={value} onChangeText={onChangeText} {...props} />
+      <TextInput placeholder={placeholder} placeholderTextColor="#666" style={[styles.input, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} value={value} onChangeText={onChangeText} autoComplete="off" autoCorrect={false} {...props} />
     </View>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' },
   content: {
     padding: CONTENT_PADDING,
     justifyContent: 'center',
     flexGrow: 1,
     alignItems: 'center'
   },
-  header: { alignItems: 'center', marginBottom: Math.round(16 * S) },
+  header: { alignItems: 'center', marginBottom: Platform.OS === 'web' ? 32 : Math.round(16 * S) },
+  backButton: { position: 'absolute', left: 20, flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
+  backButtonText: { color: 'rgba(251,251,251,0.6)', fontSize: 12, fontWeight: '600' },
   logoText: { fontSize: Math.round(54 * S), fontWeight: '900', color: 'white', fontStyle: 'italic', letterSpacing: -3 },
   subtitle: { color: COLORS.textZinc, fontSize: 13, fontWeight: '900', letterSpacing: 0, marginTop: 5 },
   tabsFloating: {

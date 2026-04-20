@@ -10,7 +10,7 @@
  *   </GlassCard>
  */
 
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';

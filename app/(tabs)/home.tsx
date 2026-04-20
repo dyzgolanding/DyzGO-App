@@ -33,7 +33,7 @@ import {
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
 import { PressableScale } from '../../components/animated/PressableScale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 
 import Animated, {
     Easing,
@@ -52,13 +52,14 @@ import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location'
 import { COLORS } from '../../constants/colors';
 import { safeFormatDate, formatDayShort } from '../../utils/format';
 import { PermissionModal } from '../../components/PermissionModal';
+import { useMouseScroll } from '../../hooks/useMouseScroll';
 
-const _dim = Dimensions.get('window');
-const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
-const height = _dim.height;
-const S = width / 430; // scale factor vs iPhone 15 Pro Max
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
+const S = Platform.OS === 'web' ? 1 : width / 430; // scale factor vs iPhone 15 Pro Max
 
-const ITEM_WIDTH = Math.round(width * 0.75); // Tarjetas de club más amplias
+const CARD_BASE_WIDTH = Platform.OS === 'web' ? 430 : width;
+const ITEM_WIDTH = Math.round(CARD_BASE_WIDTH * 0.75); // Tarjetas de club
 const SPACING = 16;
 const FULL_SIZE = ITEM_WIDTH + SPACING;
 
@@ -110,7 +111,7 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
         if (Math.abs(scrollX.value - targetX) > FULL_SIZE * 0.4) {
             onScrollTo(index);
         } else {
-            router.push({ pathname: '/club-detail', params: { id: item.id, imageUrl: item.image, name: item.name } });
+            router.push({ pathname: '/club-detail', params: Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image, name: item.name } });
         }
     };
 
@@ -147,14 +148,19 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
 export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    
+    // Ocultamiento seguro para Web
+    const [isScreenFocused, setIsScreenFocused] = useState(true);
+    useFocusEffect(
+        useCallback(() => {
+            setIsScreenFocused(true);
+            return () => setIsScreenFocused(false);
+        }, [])
+    );
+
     const params = useLocalSearchParams();
     const { location, needsPermission, requestPermission } = useUserLocation();
     const [showLocationModal, setShowLocationModal] = useState(false);
-
-    // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
-    useEffect(() => {
-        if (needsPermission) setShowLocationModal(true);
-    }, [needsPermission]);
 
     // --- DATOS PRECARGADOS ---
     const initialData = useMemo(() => {
@@ -175,16 +181,38 @@ export default function HomeScreen() {
         }));
     });
 
-    const [featuredEvents, setFeaturedEvents] = useState<any[]>(
-        (initialData?.events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info') && e.image_url)
-    );
+    const [featuredEvents, setFeaturedEvents] = useState<any[]>(() => {
+        const evs = (initialData?.events || []).filter((e: any) => e.is_active === true && (e.status === 'active' || e.status === 'info') && e.image_url);
+        return evs.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 6);
+    });
 
     const [loading, setLoading] = useState(!initialData);
     const [connecting, setConnecting] = useState(false);
+
+    // Mostrar modal de explicación cuando el permiso de ubicación no ha sido decidido
+    useEffect(() => {
+        if (Platform.OS === 'web') return; // En la web no queremos molestar con esto
+        if (needsPermission && !loading) {
+            const timer = setTimeout(() => setShowLocationModal(true), 600);
+            return () => clearTimeout(timer);
+        }
+    }, [needsPermission, loading]);
     const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true); // Controla el puntito magenta
+
+    // Redirige al login con param redirect si no hay sesión, retorna false
+    const requireAuth = async (destination: string): Promise<boolean> => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            router.push({ pathname: '/login', params: { redirect: destination } } as any);
+            return false;
+        }
+        return true;
+    };
 
     const flatListRef = useRef<FlatList>(null);
     const featuredScrollRef = useRef<ScrollView>(null);
+    const mouseScrollEvents = useMouseScroll(featuredScrollRef);
+    const mouseScrollClubs = useMouseScroll(flatListRef);
     const featuredScrollX = useRef(0);
     const hasCentered = useRef(false);
     const scrollX = useSharedValue(0);
@@ -211,7 +239,8 @@ export default function HomeScreen() {
         if (topClubs.length === 0 && featuredEvents.length === 0) setLoading(true);
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user ?? null;
             if (user) {
                 const { data: profile } = await supabase
                     .from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
@@ -220,6 +249,9 @@ export default function HomeScreen() {
                     setUserName(profile.full_name || '');
                     setAvatarUrl(profile.avatar_url || null);
                 }
+            } else {
+                setUserName('');
+                setAvatarUrl(null);
             }
 
             const { data: clubs } = await supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10);
@@ -247,35 +279,42 @@ export default function HomeScreen() {
                 .limit(6);
 
             if (events && events.length > 0) {
-                const [myFollowing, theirFollowing] = await Promise.all([
-                    user ? supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
-                    user ? supabase.from('follows').select('follower_id').eq('following_id', user.id).eq('status', 'accepted') : Promise.resolve({ data: [] }),
-                ]);
-                const iFollow = myFollowing.data?.map((f: any) => f.following_id) ?? [];
-                const theyFollow = theirFollowing.data?.map((f: any) => f.follower_id) ?? [];
-                const friendIds = iFollow.filter((id: string) => theyFollow.includes(id));
+                let eventsWithAttendees = events.map((event: any) => ({ ...event, attendeesAvatars: [], friendsCount: 0 }));
 
-                const eventIds = events.map(e => e.id);
-                const ticketQuery = supabase.from('tickets').select('event_id, user_id, profiles(avatar_url)').in('event_id', eventIds);
+                if (user) {
+                    const [myFollowing, theirFollowing] = await Promise.all([
+                        supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted'),
+                        supabase.from('follows').select('follower_id').eq('following_id', user.id).eq('status', 'accepted'),
+                    ]);
+                    const iFollow = myFollowing.data?.map((f: any) => f.following_id) ?? [];
+                    const theyFollow = theirFollowing.data?.map((f: any) => f.follower_id) ?? [];
+                    const friendIds = iFollow.filter((id: string) => theyFollow.includes(id));
 
-                const { data: tickets } = friendIds.length > 0
-                    ? await ticketQuery.in('user_id', friendIds)
-                    : await ticketQuery.in('user_id', ['00000000-0000-0000-0000-000000000000']);
+                    if (friendIds.length > 0) {
+                        const eventIds = events.map((e: any) => e.id);
+                        const { data: tickets } = await supabase
+                            .from('tickets')
+                            .select('event_id, user_id, profiles(avatar_url)')
+                            .in('event_id', eventIds)
+                            .in('user_id', friendIds);
 
-                const eventsWithAttendees = events.map(event => {
-                    const relevantTickets = tickets?.filter((t: any) => t.event_id === event.id) || [];
-                    const uniqueAvatars = new Set();
-                    const attendeesAvatars: string[] = [];
-                    relevantTickets.forEach((t: any) => {
-                        if (user && t.user_id === user.id) return;
-                        const url = t.profiles?.avatar_url;
-                        if (url && !uniqueAvatars.has(url)) {
-                            uniqueAvatars.add(url);
-                            attendeesAvatars.push(url);
-                        }
-                    });
-                    return { ...event, attendees: attendeesAvatars };
-                });
+                        eventsWithAttendees = events.map((event: any) => {
+                            const relevantTickets = tickets?.filter((t: any) => t.event_id === event.id) || [];
+                            const uniqueAvatars = new Set();
+                            const attendeesAvatars: string[] = [];
+                            relevantTickets.forEach((t: any) => {
+                                if (t.user_id === user.id) return;
+                                const url = t.profiles?.avatar_url;
+                                if (url && !uniqueAvatars.has(url)) {
+                                    uniqueAvatars.add(url);
+                                    attendeesAvatars.push(url);
+                                }
+                            });
+                            return { ...event, attendeesAvatars, friendsCount: attendeesAvatars.length };
+                        });
+                    }
+                }
+
                 setFeaturedEvents(eventsWithAttendees);
                 eventsWithAttendees.forEach((e: any) => {
                     const cl = Array.isArray(e.clubs) ? e.clubs[0] : e.clubs;
@@ -302,6 +341,18 @@ export default function HomeScreen() {
             return () => task.cancel();
         }, [fetchData])
     );
+
+    useEffect(() => {
+        if (!topClubs.length || !flatListRef.current || hasCentered.current) return;
+        const frame = requestAnimationFrame(() => {
+            if (flatListRef.current && infiniteClubs.length > startIndex) {
+                scrollX.value = startIndex * FULL_SIZE;
+                flatListRef.current.scrollToOffset({ offset: startIndex * FULL_SIZE, animated: false });
+                hasCentered.current = true;
+            }
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [startIndex]);
 
     const handleProximityConnect = async () => {
         try {
@@ -335,11 +386,13 @@ export default function HomeScreen() {
             }}
         />
     ), [scrollX, location]);
+    
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* GLOW ROJO SUTIL EN EL FONDO - Luces difuminadas sin oscurecer el negro */}
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 {/* Luz superior izquierda */}
                 <LinearGradient
@@ -364,6 +417,7 @@ export default function HomeScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+            )}
 
 
 
@@ -374,12 +428,12 @@ export default function HomeScreen() {
                         <Text style={styles.brandText}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                        <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={() => router.push('/notifications')}>
+                        <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={async () => { if (await requireAuth('/notifications')) router.push('/notifications'); }}>
                             <Bell color="rgba(251, 251, 251, 0.5)" size={24} />
                             {hasUnreadNotifs && <View style={styles.notifDot} />}
                         </PressableScale>
 
-                        <PressableScale scaleTo={0.88} haptic="light" onPress={() => router.push('/profile')}>
+                        <PressableScale scaleTo={0.88} haptic="light" onPress={async () => { if (await requireAuth('/profile')) router.push('/profile'); }}>
                             <View style={styles.avatarBorder}>
                                 {avatarUrl ? (
                                     <ExpoImage source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -401,7 +455,7 @@ export default function HomeScreen() {
                 {/* 1. HERO GREETING */}
                 <AnimatedEntry index={0} fromY={20} style={styles.heroSection}>
                     <Text style={styles.greetingText}>
-                        Hola, {userName.split(' ')[0] || 'usuario'}
+                        {userName ? `Hola, ${userName.split(' ')[0]}` : '\u00a1Hola!'}
                     </Text>
                     <Text style={styles.heroMainText}>
                         ¿Dónde salimos <Text style={styles.nocheText}>hoy?</Text>
@@ -420,18 +474,23 @@ export default function HomeScreen() {
                     </View>
 
                     {loading && featuredEvents.length === 0 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalPadEvent}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined} contentContainerStyle={styles.horizontalPadEvent}>
                             {[1, 2].map(i => (
-                                <SkeletonBox key={i} height={width - 52} width={width - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                                <View key={i} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
+                                    <SkeletonBox height={CARD_BASE_WIDTH - 52} width={CARD_BASE_WIDTH - 52} borderRadius={30} style={{ marginRight: 12 }} />
+                                </View>
                             ))}
                         </ScrollView>
                     ) : (
                         <ScrollView
+                            {...mouseScrollEvents}
                             ref={featuredScrollRef}
                             horizontal
                             showsHorizontalScrollIndicator={false}
+                            style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined}
                             contentContainerStyle={styles.horizontalPadEvent}
-                            snapToInterval={width - 40}
+                            snapToInterval={CARD_BASE_WIDTH - 40}
+                            snapToAlignment="center"
                             decelerationRate="fast"
                             disableIntervalMomentum
                             onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
@@ -447,18 +506,19 @@ export default function HomeScreen() {
                                 const minAge = Math.min(event.min_age_men || 18, event.min_age_women || 18);
 
                                 return (
-                                    <AnimatedEntry key={event.id} index={index} fromY={32} fromScale={0.96}>
-                                        <PressableScale
+                                    <View key={event.id} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
+                                        <AnimatedEntry index={index} fromY={32} fromScale={0.96}>
+                                            <PressableScale
                                             scaleTo={0.97}
                                             haptic="light"
                                             style={styles.bigEventCard}
                                             onPress={() => {
-                                                const FEATURED_INTERVAL = width - 40;
+                                                const FEATURED_INTERVAL = CARD_BASE_WIDTH - 40;
                                                 const targetX = index * FEATURED_INTERVAL;
                                                 if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
                                                     featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
                                                 } else {
-                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
+                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
                                                 }
                                             }}
                                         >
@@ -500,7 +560,8 @@ export default function HomeScreen() {
                                                 </LinearGradient>
                                             </ImageBackground>
                                         </PressableScale>
-                                    </AnimatedEntry>
+                                        </AnimatedEntry>
+                                    </View>
                                 );
                             })}
                         </ScrollView>
@@ -515,7 +576,7 @@ export default function HomeScreen() {
                         {/* FILA 1: Tickets y Radar */}
                         <View style={{ flexDirection: 'row', gap: 12, height: 160 }}>
                             {/* Tarjeta 1: Mis Tickets */}
-                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/my-tickets')}>
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={async () => { if (await requireAuth('/my-tickets')) router.push('/my-tickets'); }}>
                                 <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
                                 <View style={styles.bentoIconRounded}>
@@ -557,7 +618,7 @@ export default function HomeScreen() {
 
                         {/* FILA 2: Rankings */}
                         <View style={{ flexDirection: 'row', gap: 12, height: 110 }}>
-                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={() => router.push('/rankings')}>
+                            <PressableScale scaleTo={0.95} haptic="light" style={styles.bentoBox} onPress={async () => { if (await requireAuth('/rankings')) router.push('/rankings'); }}>
                                 <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
@@ -584,6 +645,7 @@ export default function HomeScreen() {
                         </ScrollView>
                     ) : topClubs.length > 0 && (
                         <AnimatedFlatList
+                            {...mouseScrollClubs}
                             ref={flatListRef}
                             data={infiniteClubs}
                             keyExtractor={(item: any, index) => `${item.id}-${index}`}
@@ -594,11 +656,9 @@ export default function HomeScreen() {
                             getItemLayout={getItemLayout}
                             initialScrollIndex={topClubs.length > 0 ? startIndex : undefined}
                             onLayout={() => {
-                                if (topClubs.length > 0 && flatListRef.current && !hasCentered.current) {
+                                if (topClubs.length > 0 && flatListRef.current && !hasCentered.current && infiniteClubs.length > startIndex) {
                                     scrollX.value = startIndex * FULL_SIZE;
-                                    if (flatListRef.current && infiniteClubs.length > startIndex) {
-                                        flatListRef.current.scrollToIndex({ index: startIndex, animated: false, viewPosition: 0.5 });
-                                    }
+                                    flatListRef.current.scrollToOffset({ offset: startIndex * FULL_SIZE, animated: false });
                                     hasCentered.current = true;
                                 }
                             }}
@@ -635,7 +695,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
 
     floatingHeader: { position: 'absolute', zIndex: 100, left: 16, right: 16 },
     blurNavbar: {
@@ -683,7 +743,7 @@ const styles = StyleSheet.create({
     horizontalPad: { paddingLeft: 24, paddingRight: 16 },
     horizontalPadEvent: { paddingLeft: 26, paddingRight: 14 },
 
-    bigEventCard: { width: width - 52, height: width - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    bigEventCard: { width: CARD_BASE_WIDTH - 52, height: CARD_BASE_WIDTH - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
     fullImg: { flex: 1, borderRadius: 32 },
     fullImgOverlay: { flex: 1, padding: 24, justifyContent: 'space-between' },
 
@@ -710,7 +770,7 @@ const styles = StyleSheet.create({
     bentoTitle: { color: '#FBFBFB', fontSize: 16, fontWeight: '800' },
     bentoSubtitle: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 12, marginTop: 2, fontWeight: '500' },
 
-    clubCardContainer: { flex: 1, borderRadius: 32, overflow: 'hidden', height: Math.round(340 * S), backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    clubCardContainer: { borderRadius: 32, overflow: 'hidden', height: Math.round(340 * S), backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
     clubImgRounded: { flex: 1, borderRadius: 32 },
     clubOverlay: { flex: 1, justifyContent: 'space-between', padding: 20 },
     clubHeaderRow: { flexDirection: 'row', justifyContent: 'flex-end' },

@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
+import { useLocalSearchParams } from 'expo-router';
 import {
     ArrowLeft,
     ArrowRight,
@@ -72,6 +73,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setNeedsOnboarding } = useOnboarding();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -117,9 +119,9 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleExit = async () => {
-    await supabase.auth.signOut();
-    router.replace('/login');
+  const handleExit = () => {
+    setNeedsOnboarding(false);
+    router.replace('/(tabs)/home');
   };
 
   const handleUsernameInput = (text: string) => {
@@ -300,7 +302,8 @@ export default function OnboardingScreen() {
 
       // Actualizar estado en el layout ANTES de navegar para evitar el bucle de redirección
       setNeedsOnboarding(false);
-      router.replace('/(tabs)/home');
+      const dest = (redirect as string) ?? '/(tabs)/home';
+      router.replace(dest as any);
 
     } catch (error: any) {
       Alert.alert("Error al guardar", error.message);
@@ -538,7 +541,7 @@ export default function OnboardingScreen() {
 
   if (needsUsername === null) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={COLORS.neonPink} />
       </View>
     );
@@ -628,7 +631,7 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#000' },
 
   // Header
   header: { paddingHorizontal: 24 },

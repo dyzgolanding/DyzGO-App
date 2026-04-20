@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
@@ -6,8 +6,7 @@ import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
 import { ArrowRight, CreditCard, Plus, Trash2 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import {
-    ActivityIndicator,
+import { Platform, ActivityIndicator,
     Alert,
     Dimensions,
     FlatList,
@@ -15,14 +14,14 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
-} from 'react-native';
+    View } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 400;
 import { supabase } from '../../lib/supabase';
 
 import { COLORS } from '../../constants/colors';
+import { EmptyStateCard } from '../../components/EmptyStateCard';
 const DANGER = '#ef4444';
 
 export default function PaymentMethodsScreen() {
@@ -96,11 +95,13 @@ export default function PaymentMethodsScreen() {
         <ReAnimated.View entering={FadeIn.duration(250)} style={styles.container}>
             <StatusBar barStyle="light-content" />
             
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
             </View>
+)}
             
             <View style={{ flex: 1 }}>
                 <NavBar title="MIS TARJETAS" onBack={() => router.back()} />
@@ -128,12 +129,12 @@ export default function PaymentMethodsScreen() {
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
                             loading ? null : (
-                                <View style={styles.emptyContainer}>
-                                    <View style={styles.emptyIconWrapper}>
-                                        <CreditCard color={COLORS.neonPink} size={40} />
-                                    </View>
-                                    <Text style={styles.emptyText}>No tienes tarjetas guardadas.</Text>
-                                </View>
+                                <EmptyStateCard
+                                    marginTop={40}
+                                    icon={<CreditCard color={COLORS.neonPink} size={40} />}
+                                    title="Sin tarjetas"
+                                    subtitle="No tienes tarjetas guardadas."
+                                />
                             )
                         }
                     />

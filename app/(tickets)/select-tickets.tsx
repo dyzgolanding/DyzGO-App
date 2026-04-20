@@ -1,4 +1,4 @@
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,7 +6,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { ArrowRight, ChevronDown, ChevronUp, Info, Minus, Plus, UserCheck, X } from 'lucide-react-native';
 import React, { useCallback, useState, useEffect } from 'react';
-import {
+import { Platform, 
     Alert,
     Dimensions,
     InteractionManager,
@@ -18,7 +18,7 @@ import {
     Text,
     TouchableOpacity,
     View
-} from 'react-native';
+ } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 400;
@@ -92,7 +92,7 @@ export default function SelectTicketsScreen() {
     const fetchEventSettings = async () => {
         const { data } = await supabase
             .from('events')
-            .select('max_tickets_per_person, image_url, date, end_date, hour, end_time, location, club_name, accent_color, experience_id, clubs(name), experiences(name)')
+            .select('max_tickets_per_person, image_url, date, end_date, hour, end_time, location, club_name, title, accent_color, experience_id, clubs(name), experiences(name)')
             .eq('id', eventId)
             .single();
 
@@ -179,18 +179,29 @@ export default function SelectTicketsScreen() {
                 };
             });
 
-        router.push({
-            pathname: '/payment',
-            params: {
-                eventId,
-                eventName,
-                eventDate,
-                cartData: JSON.stringify(cleanCart),
-                totalToPay: totalToPay.toString(),
-                serviceFee: Math.round(serviceFee).toString(),
-                accentColor,
-            }
-        });
+        const resolvedName = eventDetails?.title || eventName;
+        const resolvedDate = eventDetails?.date || eventDate;
+        if (Platform.OS === 'web') {
+            sessionStorage.setItem('dyzgo_cart', JSON.stringify({
+                cartData: cleanCart,
+                totalToPay,
+                serviceFee: Math.round(serviceFee),
+            }));
+            router.push({ pathname: '/payment', params: { eventId } });
+        } else {
+            router.push({
+                pathname: '/payment',
+                params: {
+                    eventId,
+                    eventName: resolvedName,
+                    eventDate: resolvedDate,
+                    cartData: JSON.stringify(cleanCart),
+                    totalToPay: totalToPay.toString(),
+                    serviceFee: Math.round(serviceFee).toString(),
+                    accentColor,
+                }
+            });
+        }
     };
 
     const formatEventDateTime = (evt: any) => {
@@ -250,7 +261,8 @@ export default function SelectTicketsScreen() {
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Fondo — 3 capas de luz con accent_color */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {Platform.OS !== 'web' && (
+<View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={[withAlpha(accentColor, 0.2), 'transparent']}
                     start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }}
@@ -268,6 +280,7 @@ export default function SelectTicketsScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
+)}
             
             <View style={{ flex: 1 }}>
                 <NavBar title="SELECCIONAR ENTRADAS" onBack={() => router.back()} />
@@ -548,7 +561,7 @@ export default function SelectTicketsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#030303' },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     
     scrollContent: { paddingHorizontal: 25, paddingBottom: 150 },

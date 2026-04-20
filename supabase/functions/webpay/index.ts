@@ -60,7 +60,7 @@ serve(async (req) => {
         // 1. VENTA PRIMARIA (Usa WEBPAY PLUS)
         // =================================================================
         if (action === 'create') {
-            const { cart, user_id, event_id } = body;
+            const { cart, user_id, event_id, promo_code } = body;
 
             if (!cart || cart.length === 0) throw new Error("Carrito vacío");
 
@@ -108,11 +108,12 @@ serve(async (req) => {
                 }
             }
 
-            // --- NIVEL 1: DESCUENTO 10% PRIMERA COMPRA ---
+            // --- NIVEL 2: DESCUENTO 10% CÓDIGO PROMO ---
             let promoApplied = false;
-            if (totalAmount > 0) {
-                const { data: promoReserved } = await supabaseClient.rpc('reserve_level1_promo', {
+            if (totalAmount > 0 && promo_code) {
+                const { data: promoReserved } = await supabaseClient.rpc('reserve_level2_promo', {
                     p_user_id: user_id,
+                    p_code: promo_code,
                     p_buy_order: buyOrder
                 });
                 if (promoReserved) {
@@ -149,7 +150,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: finalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}?callback=dyzgo_final`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 
@@ -211,7 +212,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: finalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}?callback=dyzgo_final`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 
@@ -369,8 +370,8 @@ serve(async (req) => {
                         .update({ status: 'valid', purchased_at: new Date().toISOString() })
                         .eq('buy_order', buyOrder).eq('status', 'pending');
                     if (dbError) return new Response(JSON.stringify({ ...tbkData, db_error: dbError.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    // Confirmar promo nivel 1 si aplica
-                    await supabaseClient.rpc('confirm_level1_promo', { p_buy_order: buyOrder });
+                    // Confirmar promo nivel 2 si aplica
+                    await supabaseClient.rpc('confirm_level2_promo', { p_buy_order: buyOrder });
 
                     // Enviar correo con QR a cada ticket confirmado
                     try {
@@ -393,8 +394,8 @@ serve(async (req) => {
                     }
                 } else {
                     await supabaseClient.from('tickets').update({ status: 'failed' }).eq('buy_order', buyOrder);
-                    // Liberar promo nivel 1 para que pueda ser usada en el siguiente intento
-                    await supabaseClient.rpc('release_level1_promo', { p_buy_order: buyOrder });
+                    // Liberar promo nivel 2 para que pueda ser usada en el siguiente intento
+                    await supabaseClient.rpc('release_level2_promo', { p_buy_order: buyOrder });
                 }
             }
 
@@ -407,7 +408,7 @@ serve(async (req) => {
         if (action === 'cancel') {
             const { user_id, event_id } = body;
             await supabaseClient.from('tickets').delete().eq('user_id', user_id).eq('event_id', event_id).eq('status', 'pending');
-            await supabaseClient.rpc('release_level1_promo_by_user', { p_user_id: user_id });
+            await supabaseClient.rpc('release_level2_promo_by_user', { p_user_id: user_id });
             return new Response(JSON.stringify({ message: "Liberado" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
@@ -527,7 +528,7 @@ serve(async (req) => {
                     buy_order: order.payment_buy_order,
                     session_id: order.payment_session_id,
                     amount: order.total_amount,
-                    return_url: `${DYZGO_CALLBACK_URL}?callback=dyzgo_final`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-consumption`
                 })
             });
 
@@ -591,7 +592,7 @@ serve(async (req) => {
                     buy_order: buyOrder,
                     session_id: sessionId,
                     amount: totalAmount,
-                    return_url: `${DYZGO_CALLBACK_URL}?callback=dyzgo_final`
+                    return_url: body.return_url || `${DYZGO_CALLBACK_URL}/tbk-plus`
                 })
             });
 
@@ -644,7 +645,7 @@ serve(async (req) => {
                 body: JSON.stringify({
                     username: user_id,
                     email: email,
-                    response_url: `${DYZGO_CALLBACK_URL}?callback=dyzgo_oneclick`
+                    response_url: `${DYZGO_CALLBACK_URL}/tbk-enroll`
                 })
             });
 
@@ -782,10 +783,10 @@ serve(async (req) => {
                     console.error('[ERROR EMAIL ONECLICK]', emailErr);
                 }
 
-                await supabaseClient.rpc('confirm_level1_promo_by_user', { p_user_id: user_id });
+                await supabaseClient.rpc('confirm_level2_promo_by_user', { p_user_id: user_id });
                 return new Response(JSON.stringify({ status: 'SUCCESS', buy_order: buyOrderParent }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             } else {
-                await supabaseClient.rpc('release_level1_promo_by_user', { p_user_id: user_id });
+                await supabaseClient.rpc('release_level2_promo_by_user', { p_user_id: user_id });
                 return new Response(JSON.stringify({ status: 'FAILED', error: 'Pago rechazado por el banco', details: tbkData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
         }
@@ -911,6 +912,68 @@ serve(async (req) => {
                 await supabaseClient.from('consumption_orders').update({ status: 'failed', payment_buy_order: buyOrderParent }).eq('id', order_id);
                 return new Response(JSON.stringify({ status: 'FAILED', error: 'Pago rechazado por el banco', details: tbkData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
+        }
+
+        // =================================================================
+        // 8.6 ACTIVATE CONSUMPTION GROUP
+        // =================================================================
+        if (action === 'activate_consumption_group') {
+            const { order_id, item_ids, user_id } = body;
+            
+            const { data: order } = await supabaseClient.from('consumption_orders')
+                .select('id').eq('id', order_id).eq('user_id', user_id).single();
+            if (!order) throw new Error("Orden no autorizada.");
+            if (!item_ids || item_ids.length === 0) throw new Error("No hay items para activar.");
+
+            const { data: items } = await supabaseClient.from('consumption_order_items')
+                .select('id, status, item_id, bar_id')
+                .eq('order_id', order_id)
+                .in('id', item_ids)
+                .eq('status', 'inactive');
+
+            if (!items || items.length === 0) throw new Error("Los ítems ya no están disponibles.");
+
+            const groupId = crypto.randomUUID();
+            const pickupCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+            // Intentar determinar la barra
+            let barIdToUse = items[0].bar_id;
+            let barName = "La Barra";
+
+            if (barIdToUse) {
+                const { data: bar } = await supabaseClient.from('bars').select('name').eq('id', barIdToUse).single();
+                if (bar) barName = bar.name;
+            } else {
+                const { data: cItem } = await supabaseClient.from('consumption_items').select('bar_id').eq('id', items[0].item_id).single();
+                if (cItem && cItem.bar_id) {
+                    barIdToUse = cItem.bar_id;
+                    const { data: bar } = await supabaseClient.from('bars').select('name').eq('id', barIdToUse).single();
+                    if (bar) barName = bar.name;
+                }
+            }
+
+            const updateData: any = {
+                status: 'queued',
+                activation_group_id: groupId,
+                pickup_code: pickupCode,
+                activated_at: new Date().toISOString()
+            };
+            
+            if (barIdToUse) updateData.bar_id = barIdToUse;
+
+            const { error: updErr } = await supabaseClient
+                .from('consumption_order_items')
+                .update(updateData)
+                .in('id', items.map((i: any) => i.id));
+
+            if (updErr) throw new Error("Error activando: " + updErr.message);
+
+            return new Response(JSON.stringify({ 
+                success: true, 
+                item_count: items.length, 
+                bar_name: barName, 
+                pickup_code: pickupCode 
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // =================================================================

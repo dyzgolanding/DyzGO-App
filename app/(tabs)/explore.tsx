@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
 import { eventCache } from '../../lib/eventCache';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { BlurView } from '../../components/BlurSurface';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
   ArrowLeft,
@@ -40,13 +40,16 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import WebLeafletMap from '../../components/WebLeafletMap';
 import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from 'expo-router';
 import { useUserLocation } from '../../lib/useUserLocation';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
 import { formatEventDateTime } from '../../utils/format';
 import { useAppData } from '../../context/AppDataContext';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useMouseScroll } from '../../hooks/useMouseScroll';
 import Animated, {
   LinearTransition,
   runOnJS,
@@ -66,9 +69,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 
-const _dim = Dimensions.get('window');
-const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
-const height = _dim.height;
+const { width: windowWidth, height } = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(windowWidth, 800) : windowWidth;
 const CARD_W = width * 0.54;
 const CARD_GAP = 12;
 
@@ -198,7 +200,7 @@ function buildCatCardParams(item: any, isTabEv: boolean) {
   if (cleanDate?.includes('T')) cleanDate = cleanDate.split('T')[0];
   const venue = isTabEv ? (clubObj?.name || item.club_name) : (item.location || item.address);
   const price = isTabEv
-    ? (item.minTicketPrice > 0 ? `Desde $${item.minTicketPrice.toLocaleString()}` : item.minTicketPrice === 0 ? 'By List' : null)
+    ? (item.minTicketPrice >= 0 ? `Desde $${item.minTicketPrice.toLocaleString()}` : null)
     : null;
   return { exp, clubObj, cleanDate, venue, price };
 }
@@ -220,15 +222,17 @@ function renderCatCard(item: any, isTabEv: boolean, router: any, big = true) {
         if (isTabEv) eventCache.set(String(item.id), item);
         router.push({
           pathname: isTabEv ? '/event-detail' : '/club-detail',
-          params: isTabEv ? {
-            id: item.id, imageUrl: item.image_url || item.image || '',
-            title: item.title || item.name, date: cleanDate, hour: item.hour,
-            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
-            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-            themeColorEnd: item.theme_color_end || '#0a0014',
-            category: item.category || item.area, area: item.area || item.category,
-            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
-          } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: opt(item.instagram || item.instagram_url) },
+          params: isTabEv
+            ? (Platform.OS === 'web' ? { id: item.id } : {
+                id: item.id, imageUrl: item.image_url || item.image || '',
+                title: item.title || item.name, date: cleanDate, hour: item.hour,
+                clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+                accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+                themeColorEnd: item.theme_color_end || '#0a0014',
+                category: item.category || item.area, area: item.area || item.category,
+                producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+              })
+            : (Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: opt(item.instagram || item.instagram_url) }),
         });
       }}
     >
@@ -302,6 +306,16 @@ const CatRowFocused = memo(function CatRowFocused({ group, rowIdx, scrollY, isTa
 
 export default function ExploreScreen() {
   const router = useRouter();
+  
+  // Ocultamiento seguro para Web
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  useFocusEffect(
+      useCallback(() => {
+          setIsScreenFocused(true);
+          return () => setIsScreenFocused(false);
+      }, [])
+  );
+  
   const { location } = useUserLocation();
   const { events: cachedEvents, clubs: cachedClubs, isLoaded: cacheLoaded, refresh: refreshCache } = useAppData();
 
@@ -317,8 +331,9 @@ export default function ExploreScreen() {
 
   // NUEVO: Índice del item activo en el Carrusel Inferior
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const flatListRef = useRef<FlatList>(null);
+  const mouseScrollParams = useMouseScroll(flatListRef, CARD_W + CARD_GAP);
 
   // 'map' = mapa + carrusel, 'catalog' = lista completa
   const [viewMode, setViewMode] = useState<'map' | 'catalog'>('catalog');
@@ -586,21 +601,16 @@ export default function ExploreScreen() {
   const SNAP = CARD_W + CARD_GAP;
   const N = catalogData.length;
 
-  // Carrusel circular: triplicamos los datos para que haya items a ambos lados
+  // 200 copias → el usuario nunca llega al borde en uso normal.
+  // FlatList virtualiza los items (solo ~windowSize en memoria), sin costo extra.
+  const LOOP_MULTIPLIER = N > 1 ? 200 : 1;
+  const LOOP_MID = Math.floor(LOOP_MULTIPLIER / 2); // copia central = índice 100
+
   const loopedData = useMemo(() => {
     if (N === 0) return [];
-    return [...catalogData, ...catalogData, ...catalogData];
-  }, [catalogData]);
-
-  // Salta silenciosamente al tramo del medio si llegamos a los extremos
-  const checkAndWrapLoop = useCallback((loopedIdx: number) => {
-    if (N === 0) return;
-    if (loopedIdx < N) {
-      flatListRef.current?.scrollToOffset({ offset: (loopedIdx + N) * SNAP, animated: false });
-    } else if (loopedIdx >= 2 * N) {
-      flatListRef.current?.scrollToOffset({ offset: (loopedIdx - N) * SNAP, animated: false });
-    }
-  }, [N, SNAP]);
+    if (N === 1) return [...catalogData];
+    return Array.from({ length: LOOP_MULTIPLIER }, () => catalogData).flat();
+  }, [catalogData, LOOP_MULTIPLIER]);
 
   // ANIMATED MAP CENTERING
   const animateMapToIndex = useCallback((loopedIdx: number) => {
@@ -617,7 +627,7 @@ export default function ExploreScreen() {
     }
   }, [currentData, N]);
 
-  // Dispara al soltar el dedo — predice el snap target sin esperar la inercia
+  // Predice el destino del snap antes de que termine la inercia (mueve el mapa ya)
   const onScrollEndDrag = useCallback((event: any) => {
     const { contentOffset, velocity } = event.nativeEvent;
     let loopedIdx = Math.round(contentOffset.x / SNAP);
@@ -625,20 +635,33 @@ export default function ExploreScreen() {
     else if (velocity?.x < -0.3) loopedIdx = Math.max(0, Math.ceil(contentOffset.x / SNAP) - 1);
     loopedIdx = Math.max(0, Math.min(loopedData.length - 1, loopedIdx));
     animateMapToIndex(loopedIdx);
-    checkAndWrapLoop(loopedIdx);
-  }, [animateMapToIndex, checkAndWrapLoop, loopedData.length, SNAP]);
+    if (Platform.OS === 'web') {
+      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+    }
+  }, [animateMapToIndex, loopedData.length, SNAP]);
 
-  // Corrección final por si la predicción no fue exacta
+  // Corrección final cuando el snap se detiene
   const onMomentumScrollEnd = useCallback((event: any) => {
     const loopedIdx = Math.round(event.nativeEvent.contentOffset.x / SNAP);
     animateMapToIndex(loopedIdx);
-    checkAndWrapLoop(loopedIdx);
-  }, [animateMapToIndex, checkAndWrapLoop, SNAP]);
+    if (Platform.OS === 'web') {
+      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+    }
+  }, [animateMapToIndex, SNAP]);
 
-  // Resetear al cambiar de tab (Eventos <-> Clubes) — siempre al item 0 del tramo del medio
+  // Aplicar CSS scroll-snap en web para touch móvil
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (flatListRef.current as any)?.getScrollableNode?.() ?? flatListRef.current;
+    if (!node) return;
+    node.style.scrollSnapType = 'x mandatory';
+    node.style.webkitOverflowScrolling = 'touch';
+  }, []);
+
+  // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
     setActiveCarouselIndex(0);
-    const startOffset = N * SNAP;
+    const startOffset = LOOP_MID * N * SNAP;
     flatListRef.current?.scrollToOffset({ offset: startOffset, animated: false });
     if (catalogData.length > 0) {
       const item = catalogData[0];
@@ -791,40 +814,60 @@ export default function ExploreScreen() {
   ].filter(Boolean).length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* MAPA — siempre montado para no perder el estado de Google Maps */}
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={StyleSheet.absoluteFillObject}
-        userInterfaceStyle="dark"
-        initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
-        mapType="hybrid"
-        showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
-      >
-        {viewMode === 'map' && currentData.map((item: any, idx: number) => {
-          const isSelected = activeCarouselIndex === idx;
-          return (
-            <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
-              {isSelected ? (
-                <View style={styles.activePinContainer}>
-                  <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
-                </View>
-              ) : (
-                <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
-              )}
-            </Marker>
-          );
-        })}
-      </MapView>
+      {/* MAPA — siempre montado para no perder el estado */}
+      <View style={[StyleSheet.absoluteFill, Platform.OS === 'web' && viewMode === 'catalog' && { opacity: 0, pointerEvents: 'none' }]}>
+        {Platform.OS === 'web' ? (
+          <WebLeafletMap
+            ref={mapRef}
+            style={StyleSheet.absoluteFillObject}
+            initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693 }}
+            markers={currentData.filter((item: any) => item.latitude && item.longitude).map((item: any, idx: number) => ({
+              id: item.id,
+              latitude: item.latitude,
+              longitude: item.longitude,
+              isSelected: activeCarouselIndex === idx,
+            }))}
+          />
+        ) : (
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={StyleSheet.absoluteFillObject}
+            userInterfaceStyle="dark"
+            initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
+            mapType="hybrid"
+            showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
+          >
+            {viewMode === 'map' && currentData.map((item: any, idx: number) => {
+              const isSelected = activeCarouselIndex === idx;
+              return (
+                <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
+                  {isSelected ? (
+                    <View style={styles.activePinContainer}>
+                      <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
+                    </View>
+                  ) : (
+                    <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
+                  )}
+                </Marker>
+              );
+            })}
+          </MapView>
+        )}
+      </View>
 
-      {/* FONDO CATÁLOGO — cubre el mapa cuando el modo es catálogo */}
+      {/* FONDO CATÁLOGO — cubre el mapa cuando el modo es catálogo (En Web es transparente para dejar ver el WebShell) */}
       <View style={[StyleSheet.absoluteFill, styles.catalogBg, { display: viewMode === 'catalog' ? 'flex' : 'none' }]} pointerEvents="none">
-        <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+        {Platform.OS !== 'web' && (
+           <>
+              <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
+           </>
+        )}
       </View>
 
       {/* GRADIENTE SUPERIOR — solo en modo mapa */}
@@ -865,7 +908,7 @@ export default function ExploreScreen() {
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
               {/* Toggle Mapa / Catálogo */}
               <View {...viewModePan.panHandlers} style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)' }}>
-                <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                <BlurView intensity={50} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2, borderRadius: 22 }}>
                   <TouchableOpacity
                     onPress={() => setViewMode('catalog')}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 18, backgroundColor: viewMode === 'catalog' ? 'rgba(255,255,255,0.12)' : 'transparent' }}
@@ -887,7 +930,7 @@ export default function ExploreScreen() {
 
               {/* Tabs Eventos / Clubes */}
               <View {...tabPan.panHandlers} style={{ overflow: 'hidden', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(251,251,251,0.06)', flex: 1 }}>
-                <BlurView intensity={40} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2 }}>
+                <BlurView intensity={40} tint="dark" style={{ flexDirection: 'row', height: 44, padding: 4, gap: 2, borderRadius: 22 }}>
                   {tabs.map((t, idx) => (
                     <TouchableOpacity
                       key={t}
@@ -923,6 +966,7 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <AnimatedFlatList
+            {...mouseScrollParams}
             ref={flatListRef}
             data={loopedData}
             keyExtractor={(item: any, index: number) => `${item.id}-${index}`}
@@ -930,13 +974,14 @@ export default function ExploreScreen() {
             showsHorizontalScrollIndicator={false}
             snapToInterval={SNAP}
             decelerationRate="fast"
+            disableIntervalMomentum={true}
             removeClippedSubviews={true}
             maxToRenderPerBatch={8}
             windowSize={5}
             initialNumToRender={6}
             getItemLayout={(_: any, index: number) => ({ length: SNAP, offset: (width - CARD_W) / 2 + index * SNAP, index })}
             onLayout={() => {
-              if (N > 0) flatListRef.current?.scrollToOffset({ offset: N * SNAP, animated: false });
+              if (N > 1) flatListRef.current?.scrollToOffset({ offset: LOOP_MID * N * SNAP, animated: false });
             }}
             onScrollEndDrag={onScrollEndDrag}
             onMomentumScrollEnd={onMomentumScrollEnd}
@@ -966,16 +1011,16 @@ export default function ExploreScreen() {
                     router.push({
                       pathname: isTabEv ? '/event-detail' : '/club-detail',
                       params: isTabEv
-                        ? {
-                          id: item.id, imageUrl: item.image_url || item.image || '',
-                          title: item.title || item.name, date: cleanDate, hour: item.hour,
-                          clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
-                          accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
-                          themeColorEnd: item.theme_color_end || '#0a0014',
-                          category: item.category || item.area, area: item.area || item.category,
-                          producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
-                        }
-                        : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url },
+                        ? (Platform.OS === 'web' ? { id: item.id } : {
+                            id: item.id, imageUrl: item.image_url || item.image || '',
+                            title: item.title || item.name, date: cleanDate, hour: item.hour,
+                            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+                            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+                            themeColorEnd: item.theme_color_end || '#0a0014',
+                            category: item.category || item.area, area: item.area || item.category,
+                            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+                          })
+                        : (Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url }),
                     });
                   }}
                 />
@@ -1122,9 +1167,9 @@ export default function ExploreScreen() {
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#030303' },
+  container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
   topVignette: { position: 'absolute', top: 0, left: 0, right: 0, height: 220, zIndex: 1 },
-  catalogBg: { backgroundColor: '#030303' },
+  catalogBg: { backgroundColor: Platform.OS === 'web' ? 'transparent' : '#030303' },
 
   // Catálogo — scroll vertical focus
   catBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, overflow: 'hidden', alignItems: 'center' },
@@ -1160,7 +1205,7 @@ const styles = StyleSheet.create({
 
   // Carrusel
   carouselContainer: { position: 'absolute', left: 0, right: 0, height: 210, zIndex: 10 },
-  cardWrapper: { width: CARD_W, height: 210, marginRight: CARD_GAP },
+  cardWrapper: { width: CARD_W, height: 210, marginRight: CARD_GAP, ...Platform.select({ web: { scrollSnapAlign: 'center' } as any }) },
   card: { flex: 1, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   cardImg: { flex: 1 },
   cardGradient: { flex: 1, padding: 16, justifyContent: 'space-between' },

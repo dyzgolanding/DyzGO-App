@@ -3,7 +3,7 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'DyzGO',
-  slug: 'dyzgoapp',
+  slug: 'dyzgot',
   version: '1.0.0',
   updates: { enabled: false },
   scheme: 'dyzgo',
@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '36',
+    buildNumber: '57',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
@@ -61,6 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'USE_BIOMETRIC',
       'USE_FINGERPRINT',
     ],
+    blockedPermissions: ['android.permission.ACTIVITY_RECOGNITION'],
     intentFilters: [
       {
         action: 'VIEW',
@@ -76,7 +77,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   web: {
-    favicon: './assets/favicon.png',
+    bundler: 'metro',
+    output: 'single',
+    favicon: './assets/images/favicon.png',
   },
   plugins: [
     'expo-router',
@@ -93,8 +96,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     router: {},
     eas: {
-      projectId: 'b1fb1a4a-cb3b-4309-a430-26bd062f4fc6',
+      projectId: '0a423597-b7cd-4ef4-9219-9a27ec056001',
     },
   },
-  owner: 'contadorcito',
+  owner: 'topincito',
 });
