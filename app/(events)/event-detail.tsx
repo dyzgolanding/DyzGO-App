@@ -55,7 +55,9 @@ import { COLORS } from '../../constants/colors';
 import { isEventFinished } from '../../utils/format';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
-const { height, width } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const isSmallScreen = width < 400;
 
 const SCALE = {

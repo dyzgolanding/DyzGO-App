@@ -50,14 +50,16 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSaved } from '../../context/SavedContext';
 import { supabase } from '../../lib/supabase';
 
-const { height, width } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const isSmallScreen = width < 400;
 
 const SCALE = {
     padding: isSmallScreen ? 20 : 24,
     cardPadding: isSmallScreen ? 20 : 24,
     gap: isSmallScreen ? 8 : 12,
-    titleSize: isSmallScreen ? 28 : 34, 
+    titleSize: isSmallScreen ? 28 : 34,
     subtitleSize: isSmallScreen ? 13 : 14,
     labelSize: isSmallScreen ? 9 : 10,
     valueSize: isSmallScreen ? 16 : 20,
@@ -65,15 +67,15 @@ const SCALE = {
     buttonIconSize: isSmallScreen ? 16 : 18,
     buttonTextSize: isSmallScreen ? 14 : 16,
     sectionGap: isSmallScreen ? 25 : 30,
-    dateMonthSize: isSmallScreen ? 13 : 13.5, 
-    dateDaySize: isSmallScreen ? 26 : 29,    
+    dateMonthSize: isSmallScreen ? 13 : 13.5,
+    dateDaySize: isSmallScreen ? 26 : 29,
 };
 
 const COLORS = {
     deepPurple: '#2d0a3d',
     neonPink: '#FF31D8',
     neonPurple: '#FF31D8',
-    glassBg: 'rgba(255, 255, 255, 0.05)', 
+    glassBg: 'rgba(255, 255, 255, 0.05)',
     glassBorder: 'rgba(251, 251, 251, 0.05)',
     neonBorderPurple: 'rgba(251, 251, 251, 0.05)',
     textZinc: 'rgba(251, 251, 251, 0.6)'
@@ -87,26 +89,26 @@ const INITIAL_REGION = {
 };
 
 const isEventFinished = (evt: any) => {
-  if (!evt) return false;
-  if (evt.is_active === false) return true;
-  if (evt.status === 'finished' || evt.status === 'inactive') return true;
-  
-  const dateStr = evt.end_date || evt.date;
-  const timeStr = evt.end_time || '05:00';
+    if (!evt) return false;
+    if (evt.is_active === false) return true;
+    if (evt.status === 'finished' || evt.status === 'inactive') return true;
 
-  if (dateStr && timeStr) {
-      try {
-          const [year, month, day] = dateStr.split('-');
-          const [hour, minute] = timeStr.split(':');
-          
-          const eventDateTime = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-          const now = new Date();
-          return eventDateTime < now;
-      } catch (e) {
-          return false;
-      }
-  }
-  return false;
+    const dateStr = evt.end_date || evt.date;
+    const timeStr = evt.end_time || '05:00';
+
+    if (dateStr && timeStr) {
+        try {
+            const [year, month, day] = dateStr.split('-');
+            const [hour, minute] = timeStr.split(':');
+
+            const eventDateTime = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+            const now = new Date();
+            return eventDateTime < now;
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
 };
 
 const getMinPrice = (evt: any) => {
@@ -114,7 +116,7 @@ const getMinPrice = (evt: any) => {
         const prices = evt.ticket_tiers
             .map((t: any) => Number(t.price || 0))
             .filter((p: number) => !isNaN(p) && p > 0);
-            
+
         if (prices.length > 0) return Math.min(...prices);
     }
     return evt.min_price || evt.price || 0;
@@ -122,7 +124,7 @@ const getMinPrice = (evt: any) => {
 
 const formatDate = (dateString: string) => {
     try {
-        const cleanDate = dateString.split('T')[0]; 
+        const cleanDate = dateString.split('T')[0];
         const [year, month, day] = cleanDate.split('-');
         const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
         const monthStr = dateObj.toLocaleString('es-ES', { month: 'short' }).toUpperCase();
@@ -138,14 +140,14 @@ export default function ClubDetailScreen() {
     const { toggleSave, savedItems } = useSaved();
 
     // ── Optimistic UI: datos visuales pasados por parámetro ──
-    const optImageUrl     = params.imageUrl as string | undefined;
-    const optName         = params.name as string | undefined;
+    const optImageUrl = params.imageUrl as string | undefined;
+    const optName = params.name as string | undefined;
     const optInstagramUrl = params.instagramUrl as string | undefined;
     const hasOptimisticData = !!(optImageUrl || optName);
 
     const insets = useSafeAreaInsets();
-    const screenStyle  = useScreenEntry();
-    const scrollY      = useSharedValue(0);
+    const screenStyle = useScreenEntry();
+    const scrollY = useSharedValue(0);
     const scrollHandler = useAnimatedScrollHandler(e => { scrollY.value = e.contentOffset.y; });
     const headerBgStyle = useAnimatedStyle(() => ({
         opacity: interpolate(scrollY.value, [0, 150], [0, 1], 'clamp'),
@@ -180,7 +182,7 @@ export default function ClubDetailScreen() {
         try {
             // Durante pull-to-refresh no reseteamos a loading=true para evitar el flash
             if (!isRefresh) setLoading(true);
-            
+
             const { data: clubData, error: clubError } = await supabase
                 .from('clubs')
                 .select('*')
@@ -212,9 +214,9 @@ export default function ClubDetailScreen() {
 
             const { data: eventsData, error: eventsError } = await supabase
                 .from('events')
-                .select('*, ticket_tiers(*), experiences(id, name, logo_url)') 
+                .select('*, ticket_tiers(*), experiences(id, name, logo_url)')
                 .eq('club_name', clubData.name)
-                .gte('end_date', today) 
+                .gte('end_date', today)
                 .order('date', { ascending: true });
 
             if (eventsData) {
@@ -235,7 +237,7 @@ export default function ClubDetailScreen() {
         const lat = club?.latitude || region.latitude;
         const lng = club?.longitude || region.longitude;
         const label = encodeURIComponent(club?.name || "Club");
-        
+
         const url = Platform.select({
             ios: `comgooglemaps://?q=${lat},${lng}(${label})`,
             android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`
@@ -277,18 +279,18 @@ export default function ClubDetailScreen() {
 
     const handleToggleSave = () => {
         if (!club) return;
-        toggleSave(club.id, club, 'club'); 
+        toggleSave(club.id, club, 'club');
     };
 
     const handleShare = async () => {
         try {
             if (!club) return;
             const deepLink = `dyzgo://club-detail?id=${club.id}`;
-            
+
             await Share.share({
                 title: club.name,
-                message: `¡Mira este club en DyzGO! 🪩\n\n${club.name}\n📍 ${club.location}\n\nAbrelo en la app: ${deepLink}`, 
-                url: deepLink 
+                message: `¡Mira este club en DyzGO! 🪩\n\n${club.name}\n📍 ${club.location}\n\nAbrelo en la app: ${deepLink}`,
+                url: deepLink
             });
         } catch (error) {
             // El usuario canceló el share — ignoramos este caso específico
@@ -298,7 +300,7 @@ export default function ClubDetailScreen() {
     const openLink = (url: string) => {
         if (url) {
             const finalUrl = url.startsWith('http') ? url : `https://${url}`;
-            Linking.openURL(finalUrl).catch(() => {});
+            Linking.openURL(finalUrl).catch(() => { });
         }
     };
 
@@ -307,7 +309,7 @@ export default function ClubDetailScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-            
+
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient
                     colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
@@ -329,14 +331,14 @@ export default function ClubDetailScreen() {
                     style={StyleSheet.absoluteFill}
                 />
             </View>
-            
+
             <ReAnimated.View style={screenStyle}>
 
                 {/* NavBar pill — fondo transparente arriba, opaco al hacer scroll */}
                 <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
                     <ReAnimated.View style={[styles.pillBg, headerBgStyle]}>
                         <BlurView intensity={70} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]} />
-                      </ReAnimated.View>
+                    </ReAnimated.View>
 
                     <PressableScale scaleTo={0.82} haptic="light" onPress={() => router.back()} style={styles.iconBtn}>
                         <ArrowLeft color="white" size={20} />
@@ -417,14 +419,14 @@ export default function ClubDetailScreen() {
                             <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                             <View style={[styles.glassCard, { marginBottom: 0 }]}>
                                 <View style={styles.mapContainer} pointerEvents="none">
-                                    <MapView 
-                                        provider={PROVIDER_GOOGLE} 
-                                        style={styles.map} 
-                                        scrollEnabled={false} 
-                                        zoomEnabled={false} 
-                                        region={region} 
+                                    <MapView
+                                        provider={PROVIDER_GOOGLE}
+                                        style={styles.map}
+                                        scrollEnabled={false}
+                                        zoomEnabled={false}
+                                        region={region}
                                         mapType="hybrid"
-                                        liteMode={true} 
+                                        liteMode={true}
                                     >
                                         <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
                                             <View style={styles.classicPin}><MapPin size={36} color="white" fill={COLORS.neonPink} /></View>
@@ -535,14 +537,15 @@ export default function ClubDetailScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#030303' },
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    
+
     // 'top' se aplica inline con insets.top + 10 para respetar el safe area real del dispositivo
     fixedHeader: {
         position: 'absolute', left: 16, right: 16, zIndex: 10,
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         height: 50, paddingHorizontal: 6,
     },
-    pillBg: { overflow: 'hidden',
+    pillBg: {
+        overflow: 'hidden',
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
         borderRadius: 50,
         borderWidth: 1,
@@ -560,7 +563,7 @@ const styles = StyleSheet.create({
     contentCard: { flex: 1, paddingHorizontal: SCALE.padding, paddingTop: SCALE.sectionGap },
     headerSection: { marginBottom: SCALE.sectionGap / 1.5, alignItems: 'flex-start' },
     title: { color: '#FBFBFB', fontWeight: '900', fontStyle: 'italic', letterSpacing: -1, marginBottom: 8 },
-    
+
     tagsRow: { flexDirection: 'row', gap: 10, marginTop: 14, flexWrap: 'wrap' },
     instagramLiquidGlass: {
         flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -572,7 +575,7 @@ const styles = StyleSheet.create({
     instagramTagText: { color: 'rgba(251,251,251,0.7)', fontSize: 13, fontWeight: '700' },
 
     divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: SCALE.sectionGap },
-    
+
     mbSection: { marginBottom: SCALE.sectionGap },
     sectionHeader: { color: 'white', fontWeight: '900', marginBottom: 15 },
     descriptionText: { color: COLORS.textZinc, lineHeight: 24 },
@@ -589,7 +592,7 @@ const styles = StyleSheet.create({
     transportDualRow: { flexDirection: 'row', gap: 12 },
     transportButtonHalf: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.glassBg, paddingVertical: 14, paddingHorizontal: 8, borderRadius: 16, borderWidth: 1, borderColor: COLORS.glassBorder, gap: 10 },
     transportButtonText: { color: 'white', fontSize: 13, fontWeight: '800' },
-    
+
     uberIconBox: { backgroundColor: 'black', width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     uberIconText: { color: 'white', fontWeight: '900', fontSize: 9 },
     mapsIconBox: { backgroundColor: 'rgba(66, 133, 244, 0.15)', width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(66, 133, 244, 0.3)', justifyContent: 'center', alignItems: 'center' },
@@ -597,9 +600,9 @@ const styles = StyleSheet.create({
     eventsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
     countBadge: { backgroundColor: '#8A2BE2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
     countText: { color: 'white', fontWeight: '800', fontSize: 12 },
-    
+
     horizontalEventsContainer: { gap: 15, paddingRight: SCALE.padding, paddingBottom: 10, paddingLeft: SCALE.padding },
-    
+
     glassEventCard: {
         width: 255,
         borderRadius: 26,
@@ -622,9 +625,9 @@ const styles = StyleSheet.create({
     glassEventTitle: { color: 'white', fontSize: 18, fontWeight: '800', fontStyle: 'italic', letterSpacing: -0.3, marginBottom: 8 },
     glassEventSub: { color: COLORS.neonPink, fontSize: 13, fontWeight: '700' },
 
-    emptyState: { 
-        alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.02)', 
-        borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', borderStyle: 'dashed' 
+    emptyState: {
+        alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.02)',
+        borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', borderStyle: 'dashed'
     },
     emptyText: { color: '#444', marginTop: 10, fontWeight: '500' },
 

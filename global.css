@@ -1,0 +1,64 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  color: white;
+  width: 100vw;
+  height: 100dvh;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  justify-content: center;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px;
+  height: 100dvh;
+  position: relative;
+  background-color: #000000;
+  box-shadow: 0 0 20px rgba(255, 49, 216, 0.1); /* Subtle pink glow for modern feel */
+}
+
+/* Ocultar las scrollbars nativas de navegadores en desktop pero permitir hacer scroll */
+::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+* {
+  -ms-overflow-style: none; /* IE 10+ */
+  scrollbar-width: none; /* Firefox */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* ─── Card shadows: React Native Web converts iOS shadow props crudely. Override them. ─── */
+
+/* Approximate blur-heavy shadows that look premium on-screen */
+[style*="border-radius: 28px"],
+[style*="border-radius: 24px"],
+[style*="border-radius: 22px"],
+[style*="border-radius: 20px"] {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.22);
+}
+
+/* Tab bar glass pill look in web (BlurView doesn't blur in web by default) */
+[style*="border-radius: 32px"] {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(20,20,20,0.82) !important;
+}
+
+/* BlurView fallback for dark tint */
+[data-testid="blur-view"],
+.expo-blur {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(10,10,10,0.7);
+}
+
+/* Smooth cursor behaviour for interactive elements */
+button, [role="button"] {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}

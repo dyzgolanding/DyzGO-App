@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   Dimensions, PanResponder, ScrollView, StatusBar,
-  StyleSheet, Text, TouchableOpacity, View, Alert, Switch
+  StyleSheet, Text, TouchableOpacity, View, Alert
 } from 'react-native';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -33,6 +33,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
+import { CustomSwitch } from '../../components/CustomSwitch';
 
 const TABS = ['Productoras', 'Clubes'];
 
@@ -226,12 +227,10 @@ export default function SavedScreen() {
           <Text style={s.pushToggleSub}>Recibe notificaciones de nuevos eventos que tus productoras o clubes favoritos publiquen</Text>
         </View>
       </View>
-      <Switch
+      </View>
+      <CustomSwitch
         value={pushEnabled}
         onValueChange={toggleGlobalPush}
-        trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }}
-        thumbColor={pushEnabled ? COLORS.neonPink : '#FBFBFB'}
-        ios_backgroundColor='rgba(255,255,255,0.1)'
       />
     </View>
   );

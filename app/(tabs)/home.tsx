@@ -53,7 +53,9 @@ import { COLORS } from '../../constants/colors';
 import { safeFormatDate, formatDayShort } from '../../utils/format';
 import { PermissionModal } from '../../components/PermissionModal';
 
-const { width, height } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const S = width / 430; // scale factor vs iPhone 15 Pro Max
 
 const ITEM_WIDTH = Math.round(width * 0.75); // Tarjetas de club más amplias

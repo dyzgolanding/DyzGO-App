@@ -48,11 +48,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     adaptiveIcon: {
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
+      foregroundImage: './assets/images/icon.png',
+      backgroundColor: '#000000',
     },
     package: 'com.dyzgo.app',
-    versionCode: 1,
+    versionCode: 4,
     permissions: [
       'ACCESS_COARSE_LOCATION',
       'ACCESS_FINE_LOCATION',
@@ -65,7 +65,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         action: 'VIEW',
         autoVerify: true,
-        data: [{ scheme: 'dizgo' }],
+        data: [{ scheme: 'dyzgo' }],
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],

@@ -11,7 +11,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReAnimated from 'react-native-reanimated';
 import {
   Animated, Dimensions, FlatList, ImageBackground, InteractionManager, Linking,
-  Share, StatusBar, StyleSheet, Text, TouchableOpacity, View
+  Share, StatusBar, StyleSheet, Text, TouchableOpacity, View, Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
@@ -21,7 +21,8 @@ import { useUserLocation } from '../../lib/useUserLocation';
 import { getDistanceFromLatLonInKm, formatDistance } from '../../utils/location';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
-const { width } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
 const BANNER_H = Math.round((width / 3) * 1.5);
 
 const isEventFinished = (evt: any) => {
@@ -84,7 +85,7 @@ export default function BrandProfileScreen() {
     if (!brand) return;
     try {
       await Share.share({ message: `${brand.name} — DyzGO\ndyzgo.app/brand/${experienceId}` });
-    } catch {}
+    } catch { }
   };
 
   const handleFollow = () => {
@@ -146,7 +147,7 @@ export default function BrandProfileScreen() {
         .trim()
         .replace(/[^a-zA-Z0-9_.]/g, '');
       if (handle) {
-        Linking.openURL(`https://instagram.com/${handle}`).catch(() => {});
+        Linking.openURL(`https://instagram.com/${handle}`).catch(() => { });
       }
     }
   };
@@ -155,7 +156,7 @@ export default function BrandProfileScreen() {
     if (brand?.website_url) {
       let url = brand.website_url.trim();
       if (!url.startsWith('http')) url = `https://${url}`;
-      Linking.openURL(url).catch(() => {});
+      Linking.openURL(url).catch(() => { });
     }
   };
 
@@ -179,22 +180,24 @@ export default function BrandProfileScreen() {
     if (Math.abs(currentOffset - targetOffset) > UPCOMING_SNAP / 2) {
       upcomingListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: {
-        id: event.id,
-        status: event.status,
-        imageUrl: event.image_url,
-        title: event.title,
-        date: event.date,
-        hour: event.hour,
-        accentColor: event.accent_color,
-        category: event.category,
-        clubName: event.club_name || event.clubs?.name,
-        clubImage: event.clubs?.image,
-        producerName: brand?.name,
-        producerLogo: brand?.logo_url,
-        producerId: brand?.id,
-        instagramUrl: event.instagram_url,
-      }});
+      router.push({
+        pathname: '/event-detail', params: {
+          id: event.id,
+          status: event.status,
+          imageUrl: event.image_url,
+          title: event.title,
+          date: event.date,
+          hour: event.hour,
+          accentColor: event.accent_color,
+          category: event.category,
+          clubName: event.club_name || event.clubs?.name,
+          clubImage: event.clubs?.image,
+          producerName: brand?.name,
+          producerLogo: brand?.logo_url,
+          producerId: brand?.id,
+          instagramUrl: event.instagram_url,
+        }
+      });
     }
   };
 
@@ -208,22 +211,24 @@ export default function BrandProfileScreen() {
     if (Math.abs(currentOffset - targetOffset) > PAST_SNAP / 2) {
       pastListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
     } else {
-      router.push({ pathname: '/event-detail', params: {
-        id: event.id,
-        status: event.status,
-        imageUrl: event.image_url,
-        title: event.title,
-        date: event.date,
-        hour: event.hour,
-        accentColor: event.accent_color,
-        category: event.category,
-        clubName: event.club_name || event.clubs?.name,
-        clubImage: event.clubs?.image,
-        producerName: brand?.name,
-        producerLogo: brand?.logo_url,
-        producerId: brand?.id,
-        instagramUrl: event.instagram_url,
-      }});
+      router.push({
+        pathname: '/event-detail', params: {
+          id: event.id,
+          status: event.status,
+          imageUrl: event.image_url,
+          title: event.title,
+          date: event.date,
+          hour: event.hour,
+          accentColor: event.accent_color,
+          category: event.category,
+          clubName: event.club_name || event.clubs?.name,
+          clubImage: event.clubs?.image,
+          producerName: brand?.name,
+          producerLogo: brand?.logo_url,
+          producerId: brand?.id,
+          instagramUrl: event.instagram_url,
+        }
+      });
     }
   };
 
@@ -289,39 +294,39 @@ export default function BrandProfileScreen() {
           </View>
         ) : (
           <View>
-          <View style={s.profileSection}>
-            <View style={[s.logoRing, { shadowColor: pColor }]}>
-              <View style={s.logoContainer}>
-                {brand?.logo_url
-                  ? <Image source={{ uri: brand.logo_url }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
-                  : (
-                    <LinearGradient colors={[pColor, '#bc1888']} style={s.logoImg}>
-                      <Layers color="white" size={38} />
-                    </LinearGradient>
-                  )}
+            <View style={s.profileSection}>
+              <View style={[s.logoRing, { shadowColor: pColor }]}>
+                <View style={s.logoContainer}>
+                  {brand?.logo_url
+                    ? <Image source={{ uri: brand.logo_url }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                    : (
+                      <LinearGradient colors={[pColor, '#bc1888']} style={s.logoImg}>
+                        <Layers color="white" size={38} />
+                      </LinearGradient>
+                    )}
+                </View>
               </View>
+
+              <Text style={s.brandName}>{brand?.name}</Text>
+
+              <TouchableOpacity
+                onPress={handleFollow}
+                activeOpacity={0.8}
+                style={[s.statPill, { overflow: 'hidden', borderWidth: 0 }]}
+              >
+                <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFillObject, { backgroundColor: followed ? `${pColor}1A` : 'rgba(255,255,255,0.05)' }]} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <UserCheck size={12} color={followed ? pColor : 'white'} />
+                  <Text style={[s.statLabel, { color: followed ? pColor : 'white' }]}>
+                    {followed ? 'Siguiendo' : 'Seguir'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {brand?.description ? (
+                <Text style={s.brandDesc} numberOfLines={4}>{brand.description}</Text>
+              ) : null}
             </View>
-
-            <Text style={s.brandName}>{brand?.name}</Text>
-
-            <TouchableOpacity
-              onPress={handleFollow}
-              activeOpacity={0.8}
-              style={[s.statPill, { overflow: 'hidden', borderWidth: 0 }]}
-            >
-              <BlurView intensity={30} tint="dark" style={[StyleSheet.absoluteFillObject, { backgroundColor: followed ? `${pColor}1A` : 'rgba(255,255,255,0.05)' }]} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <UserCheck size={12} color={followed ? pColor : 'white'} />
-                <Text style={[s.statLabel, { color: followed ? pColor : 'white' }]}>
-                  {followed ? 'Siguiendo' : 'Seguir'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {brand?.description ? (
-              <Text style={s.brandDesc} numberOfLines={4}>{brand.description}</Text>
-            ) : null}
-          </View>
           </View>
         )}
 
@@ -353,163 +358,163 @@ export default function BrandProfileScreen() {
         ) : null}
 
         <Animated.View style={{ opacity: hasCachedParams ? eventsOpacity : 1 }}>
-        {/* 4. PRÓXIMOS EVENTOS */}
-        {loading ? (
-          <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
-            <SkeletonBox height={14} width={140} borderRadius={5} />
-            <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
-          </View>
-        ) : (
-          <View>
-            <View style={s.sectionHeader}>
-              <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
-                <Calendar color={pColor} size={15} />
-              </View>
-              <Text style={s.sectionTitle}>Próximos eventos</Text>
-              <View style={s.sectionLine} />
+          {/* 4. PRÓXIMOS EVENTOS */}
+          {loading ? (
+            <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
+              <SkeletonBox height={14} width={140} borderRadius={5} />
+              <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
             </View>
+          ) : (
+            <View>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
+                  <Calendar color={pColor} size={15} />
+                </View>
+                <Text style={s.sectionTitle}>Próximos eventos</Text>
+                <View style={s.sectionLine} />
+              </View>
 
-            {fetchingEvents ? (
-              <View style={{ paddingHorizontal: 26, marginTop: 4 }}>
-                <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
-              </View>
-            ) : events.length === 0 ? (
-              <View style={s.emptyEvents}>
-                <Text style={s.emptyEventsText}>Sin eventos próximos</Text>
-              </View>
-            ) : (
-            <FlatList
-              ref={upcomingListRef}
-              horizontal
-              data={events}
-              keyExtractor={item => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 26, paddingRight: 14, gap: UPCOMING_GAP }}
-              snapToInterval={UPCOMING_SNAP}
-              decelerationRate="fast"
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={8}
-              windowSize={5}
-              initialNumToRender={6}
-              onScroll={e => upcomingScrollX.current = e.nativeEvent.contentOffset.x}
-              scrollEventThrottle={16}
-              renderItem={({ item, index }) => {
-                const titleLen = (item.title || '').length;
-                const titleSize = titleLen <= 12 ? 36 : titleLen <= 20 ? 28 : titleLen <= 30 ? 22 : 18;
-                return (
-                  <TouchableOpacity
-                    style={s.eventCard}
-                    activeOpacity={0.9}
-                    onPress={() => handleUpcomingPress(index, item)}
-                  >
-                    <ImageBackground source={item.image_url ? { uri: item.image_url } : undefined} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
-                      <LinearGradient
-                        colors={item.image_url ? ['transparent', 'rgba(3,3,3,0.7)', '#030303'] : [pColor + '44', 'rgba(3,3,3,0.85)', '#030303']}
-                        locations={[0.4, 0.8, 1]}
-                        style={s.eventCardOverlay}
+              {fetchingEvents ? (
+                <View style={{ paddingHorizontal: 26, marginTop: 4 }}>
+                  <SkeletonBox height={width - 52} width={width - 52} borderRadius={28} />
+                </View>
+              ) : events.length === 0 ? (
+                <View style={s.emptyEvents}>
+                  <Text style={s.emptyEventsText}>Sin eventos próximos</Text>
+                </View>
+              ) : (
+                <FlatList
+                  ref={upcomingListRef}
+                  horizontal
+                  data={events}
+                  keyExtractor={item => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingLeft: 26, paddingRight: 14, gap: UPCOMING_GAP }}
+                  snapToInterval={UPCOMING_SNAP}
+                  decelerationRate="fast"
+                  removeClippedSubviews={true}
+                  maxToRenderPerBatch={8}
+                  windowSize={5}
+                  initialNumToRender={6}
+                  onScroll={e => upcomingScrollX.current = e.nativeEvent.contentOffset.x}
+                  scrollEventThrottle={16}
+                  renderItem={({ item, index }) => {
+                    const titleLen = (item.title || '').length;
+                    const titleSize = titleLen <= 12 ? 36 : titleLen <= 20 ? 28 : titleLen <= 30 ? 22 : 18;
+                    return (
+                      <TouchableOpacity
+                        style={s.eventCard}
+                        activeOpacity={0.9}
+                        onPress={() => handleUpcomingPress(index, item)}
                       >
-                        <View style={[s.eventTopRow, { justifyContent: 'space-between' }]}>
-                          <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <BlurView intensity={30} tint="dark" style={s.glassDateBadge}>
-                              <Text style={s.glassDateText}>{formatDateTimeFull(item.date, item.hour)}</Text>
-                            </BlurView>
-                            {(item.min_age_men || item.min_age_women) && (
-                              <BlurView intensity={30} tint="dark" style={s.glassDateBadge}>
-                                <Text style={s.glassDateText}>{Math.min(item.min_age_men || 18, item.min_age_women || 18)}+</Text>
-                              </BlurView>
-                            )}
-                          </View>
-                          {(() => {
-                            const lat = item.latitude ?? item.clubs?.latitude;
-                            const lon = item.longitude ?? item.clubs?.longitude;
-                            if (!location || !lat || !lon) return null;
-                            const dist = getDistanceFromLatLonInKm(location.coords.latitude, location.coords.longitude, lat, lon);
-                            return (
-                              <BlurView intensity={30} tint="dark" style={[s.glassDateBadge, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                                <MapPin size={12} color="rgba(251,251,251,0.5)" />
-                                <Text style={s.glassDateText}>{formatDistance(dist)}</Text>
-                              </BlurView>
-                            );
-                          })()}
-                        </View>
-                        <View>
-                          <Text style={[s.eventCardTitle, { fontSize: titleSize, lineHeight: titleSize * 1.1 }]} numberOfLines={3}>
-                            {item.title}
-                          </Text>
-                          <Text style={s.eventCardPlace} numberOfLines={1}>
-                            {item.club_name || item.clubs?.name || ''}
-                          </Text>
-                        </View>
-                      </LinearGradient>
-                    </ImageBackground>
-                  </TouchableOpacity>
-                );
-              }}
-            />
+                        <ImageBackground source={item.image_url ? { uri: item.image_url } : undefined} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
+                          <LinearGradient
+                            colors={item.image_url ? ['transparent', 'rgba(3,3,3,0.7)', '#030303'] : [pColor + '44', 'rgba(3,3,3,0.85)', '#030303']}
+                            locations={[0.4, 0.8, 1]}
+                            style={s.eventCardOverlay}
+                          >
+                            <View style={[s.eventTopRow, { justifyContent: 'space-between' }]}>
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <BlurView intensity={30} tint="dark" style={s.glassDateBadge}>
+                                  <Text style={s.glassDateText}>{formatDateTimeFull(item.date, item.hour)}</Text>
+                                </BlurView>
+                                {(item.min_age_men || item.min_age_women) && (
+                                  <BlurView intensity={30} tint="dark" style={s.glassDateBadge}>
+                                    <Text style={s.glassDateText}>{Math.min(item.min_age_men || 18, item.min_age_women || 18)}+</Text>
+                                  </BlurView>
+                                )}
+                              </View>
+                              {(() => {
+                                const lat = item.latitude ?? item.clubs?.latitude;
+                                const lon = item.longitude ?? item.clubs?.longitude;
+                                if (!location || !lat || !lon) return null;
+                                const dist = getDistanceFromLatLonInKm(location.coords.latitude, location.coords.longitude, lat, lon);
+                                return (
+                                  <BlurView intensity={30} tint="dark" style={[s.glassDateBadge, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                                    <MapPin size={12} color="rgba(251,251,251,0.5)" />
+                                    <Text style={s.glassDateText}>{formatDistance(dist)}</Text>
+                                  </BlurView>
+                                );
+                              })()}
+                            </View>
+                            <View>
+                              <Text style={[s.eventCardTitle, { fontSize: titleSize, lineHeight: titleSize * 1.1 }]} numberOfLines={3}>
+                                {item.title}
+                              </Text>
+                              <Text style={s.eventCardPlace} numberOfLines={1}>
+                                {item.club_name || item.clubs?.name || ''}
+                              </Text>
+                            </View>
+                          </LinearGradient>
+                        </ImageBackground>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              )}
+            </View>
           )}
-          </View>
-        )}
 
-        {/* 5. EVENTOS PASADOS */}
-        {loading ? (
-          <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
-            <SkeletonBox height={14} width={130} borderRadius={5} />
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              <SkeletonBox height={310} width={255} borderRadius={26} />
-              <SkeletonBox height={310} width={255} borderRadius={26} />
-            </View>
-          </View>
-        ) : fetchingEvents ? null : pastEvents.length > 0 ? (
-          <View style={{ marginTop: 16 }}>
-            <View style={s.sectionHeader}>
-              <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
-                <Clock color={pColor} size={15} />
+          {/* 5. EVENTOS PASADOS */}
+          {loading ? (
+            <View style={{ paddingHorizontal: 20, marginTop: 28, gap: 12 }}>
+              <SkeletonBox height={14} width={130} borderRadius={5} />
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                <SkeletonBox height={310} width={255} borderRadius={26} />
+                <SkeletonBox height={310} width={255} borderRadius={26} />
               </View>
-              <Text style={s.sectionTitle}>Eventos pasados</Text>
-              <View style={s.sectionLine} />
             </View>
+          ) : fetchingEvents ? null : pastEvents.length > 0 ? (
+            <View style={{ marginTop: 16 }}>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: `${pColor}1A`, borderColor: `${pColor}40` }]}>
+                  <Clock color={pColor} size={15} />
+                </View>
+                <Text style={s.sectionTitle}>Eventos pasados</Text>
+                <View style={s.sectionLine} />
+              </View>
 
-            <FlatList
-              ref={pastListRef}
-              horizontal
-              data={pastEvents}
-              keyExtractor={item => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 24, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
-              snapToInterval={PAST_SNAP}
-              decelerationRate="fast"
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={8}
-              windowSize={5}
-              initialNumToRender={6}
-              onScroll={e => pastScrollX.current = e.nativeEvent.contentOffset.x}
-              scrollEventThrottle={16}
-              renderItem={({ item, index }) => {
-                const { day, month } = formatDateBadge(item.date);
-                return (
-                  <TouchableOpacity
-                    style={s.pastCard}
-                    activeOpacity={0.85}
-                    onPress={() => handlePastPress(index, item)}
-                  >
-                    <View style={s.pastImgWrap}>
-                      <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
-                      <View style={s.pastOverlay} />
-                      <BlurView intensity={30} tint="dark" style={s.pastDateBadge}>
-                        <Text style={s.pastDateDay}>{day}</Text>
-                        <Text style={s.pastDateMonth}>{month}</Text>
-                      </BlurView>
-                    </View>
-                    <View style={s.pastInfo}>
-                      <Text style={s.pastTitle} numberOfLines={2}>{item.title}</Text>
-                      <Text style={[s.pastSub, { color: pColor }]}>Ver detalles →</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        ) : null}
+              <FlatList
+                ref={pastListRef}
+                horizontal
+                data={pastEvents}
+                keyExtractor={item => item.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingLeft: 24, paddingRight: 16, gap: PAST_GAP, paddingBottom: 4 }}
+                snapToInterval={PAST_SNAP}
+                decelerationRate="fast"
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={8}
+                windowSize={5}
+                initialNumToRender={6}
+                onScroll={e => pastScrollX.current = e.nativeEvent.contentOffset.x}
+                scrollEventThrottle={16}
+                renderItem={({ item, index }) => {
+                  const { day, month } = formatDateBadge(item.date);
+                  return (
+                    <TouchableOpacity
+                      style={s.pastCard}
+                      activeOpacity={0.85}
+                      onPress={() => handlePastPress(index, item)}
+                    >
+                      <View style={s.pastImgWrap}>
+                        <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                        <View style={s.pastOverlay} />
+                        <BlurView intensity={30} tint="dark" style={s.pastDateBadge}>
+                          <Text style={s.pastDateDay}>{day}</Text>
+                          <Text style={s.pastDateMonth}>{month}</Text>
+                        </BlurView>
+                      </View>
+                      <View style={s.pastInfo}>
+                        <Text style={s.pastTitle} numberOfLines={2}>{item.title}</Text>
+                        <Text style={[s.pastSub, { color: pColor }]}>Ver detalles →</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          ) : null}
         </Animated.View>
       </Animated.ScrollView>
     </ReAnimated.View>

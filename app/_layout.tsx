@@ -7,7 +7,10 @@ import { withLayoutContext, useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useRef, useState } from 'react';
-import { Easing, StatusBar, View } from 'react-native';
+import { Easing, StatusBar, View, Platform } from 'react-native';
+
+// Import globals CSS for web
+import '../global.css';
 import { Bell } from 'lucide-react-native';
 import { AppDataProvider, useAppData } from '../context/AppDataContext';
 import { SavedProvider } from '../context/SavedContext';
@@ -24,16 +27,16 @@ const Stack = withLayoutContext(Navigator);
 // ─── Navigation transition — timing-based (predictable duration, no spring jank)
 // Uses a custom interpolator: new screen fades in + slides 15% from right.
 // Previous screen is untouched (no scale/dim) — less GPU work = no frame drops.
-const NAV_EASING       = Easing.bezier(0.25, 0.46, 0.45, 0.94); // ease-out-quad
-const NAV_BACK_EASING  = Easing.bezier(0.55, 0, 0.45, 1);       // ease-in-out-quad
+const NAV_EASING = Easing.bezier(0.25, 0.46, 0.45, 0.94); // ease-out-quad
+const NAV_BACK_EASING = Easing.bezier(0.55, 0, 0.45, 1);       // ease-in-out-quad
 
 const pushTransitionSpec = {
-  open:  { animation: 'timing' as const, config: { duration: 120, easing: NAV_EASING      } },
+  open: { animation: 'timing' as const, config: { duration: 120, easing: NAV_EASING } },
   close: { animation: 'timing' as const, config: { duration: 100, easing: NAV_BACK_EASING } },
 };
 
 const modalTransitionSpec = {
-  open:  { animation: 'timing' as const, config: { duration: 200, easing: NAV_EASING      } },
+  open: { animation: 'timing' as const, config: { duration: 200, easing: NAV_EASING } },
   close: { animation: 'timing' as const, config: { duration: 160, easing: NAV_BACK_EASING } },
 };
 
@@ -44,7 +47,7 @@ const pushInterpolator = ({ current, layouts }: any) => ({
   cardStyle: {
     transform: [{
       translateX: current.progress.interpolate({
-        inputRange:  [0, 1],
+        inputRange: [0, 1],
         outputRange: [layouts.screen.width, 0],
         extrapolate: 'clamp',
       }),
@@ -57,7 +60,7 @@ const modalInterpolator = ({ current, layouts }: any) => ({
   cardStyle: {
     transform: [{
       translateY: current.progress.interpolate({
-        inputRange:  [0, 1],
+        inputRange: [0, 1],
         outputRange: [layouts.screen.height, 0],
         extrapolate: 'clamp',
       }),
@@ -65,7 +68,7 @@ const modalInterpolator = ({ current, layouts }: any) => ({
   },
   overlayStyle: {
     opacity: current.progress.interpolate({
-      inputRange:  [0, 1],
+      inputRange: [0, 1],
       outputRange: [0, 0.5],
       extrapolate: 'clamp',
     }),
@@ -84,7 +87,7 @@ const PureBlackTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    background: '#000000', 
+    background: '#000000',
     card: '#000000',
     border: '#222222',
   },
@@ -138,7 +141,7 @@ function RootLayout() {
       }
     });
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => { });
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any;
       if (data?.url) {
@@ -163,11 +166,11 @@ function RootLayout() {
         pendingPushUserId.current = userId;
         setShowPushModal(true);
       } else {
-        registerForPushNotificationsAsync(userId).catch(() => {});
+        registerForPushNotificationsAsync(userId).catch(() => { });
       }
     } catch {
       // Si falla la verificación, intentamos igual de forma silenciosa
-      registerForPushNotificationsAsync(userId).catch(() => {});
+      registerForPushNotificationsAsync(userId).catch(() => { });
     }
   };
 
@@ -186,6 +189,12 @@ function RootLayout() {
 
   const handleBiometricCheck = async () => {
     try {
+      if (Platform.OS === 'web') {
+        setIsBiometricAuthorized(true);
+        setIsReady(true);
+        return;
+      }
+      
       const bioEnabled = await SecureStore.getItemAsync('biometrics_enabled');
       if (bioEnabled === 'true') {
         const result = await LocalAuthentication.authenticateAsync({
@@ -195,8 +204,8 @@ function RootLayout() {
         });
         if (result.success) {
           setIsBiometricAuthorized(true);
-          setIsReady(true); 
-        } 
+          setIsReady(true);
+        }
       } else {
         setIsBiometricAuthorized(true);
         setIsReady(true);
@@ -210,7 +219,7 @@ function RootLayout() {
   useEffect(() => {
     if (!isReady || !isBiometricAuthorized || needsOnboarding === null) return;
     const inProtectedArea = segments[0] !== undefined && segments[0] !== '(auth)';
-    const inOnboarding    = segments[1] === 'onboarding';
+    const inOnboarding = segments[1] === 'onboarding';
 
     if (!session && inProtectedArea) {
       router.replace('/login');
@@ -224,48 +233,48 @@ function RootLayout() {
   }, [session, segments, isReady, isRecoveryMode, isBiometricAuthorized, needsOnboarding]);
 
   if (!isReady || !isBiometricAuthorized) {
-    return <View style={{flex: 1, backgroundColor: '#030303'}} />;
+    return <View style={{ flex: 1, backgroundColor: '#030303' }} />;
   }
 
   return (
     <ErrorBoundary>
       <OnboardingContext.Provider value={{ setNeedsOnboarding }}>
-      <AppDataProvider>
-        <SessionPreloader session={session} />
-        <SavedProvider>
-          <ThemeProvider value={PureBlackTheme}>
-            <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <AppDataProvider>
+          <SessionPreloader session={session} />
+          <SavedProvider>
+            <ThemeProvider value={PureBlackTheme}>
+              <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-            {/* Modal de permisos push — aparece antes del diálogo del sistema iOS */}
-            <PermissionModal
-              visible={showPushModal}
-              icon={<Bell color="#FF31D8" size={36} />}
-              title="Mantente al día"
-              description="Activa las notificaciones para enterarte primero de nuevos eventos, preventas y actualizaciones de tus tickets."
-              allowLabel="Activar notificaciones"
-              denyLabel="Ahora no"
-              onAllow={() => {
-                setShowPushModal(false);
-                if (pendingPushUserId.current) {
-                  registerForPushNotificationsAsync(pendingPushUserId.current).catch(() => {});
+              {/* Modal de permisos push — aparece antes del diálogo del sistema iOS */}
+              <PermissionModal
+                visible={showPushModal}
+                icon={<Bell color="#FF31D8" size={36} />}
+                title="Mantente al día"
+                description="Activa las notificaciones para enterarte primero de nuevos eventos, preventas y actualizaciones de tus tickets."
+                allowLabel="Activar notificaciones"
+                denyLabel="Ahora no"
+                onAllow={() => {
+                  setShowPushModal(false);
+                  if (pendingPushUserId.current) {
+                    registerForPushNotificationsAsync(pendingPushUserId.current).catch(() => { });
+                    pendingPushUserId.current = null;
+                  }
+                }}
+                onDeny={() => {
+                  setShowPushModal(false);
                   pendingPushUserId.current = null;
-                }
-              }}
-              onDeny={() => {
-                setShowPushModal(false);
-                pendingPushUserId.current = null;
-              }}
-            />
-            
-            <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    cardStyle: { backgroundColor: '#000000' },
-                    gestureEnabled: true,
-                    gestureDirection: 'horizontal',
-                    ...TransitionPresets.SlideFromRightIOS,
-                  }}
-                >
+                }}
+              />
+
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  cardStyle: { backgroundColor: '#000000' },
+                  gestureEnabled: true,
+                  gestureDirection: 'horizontal',
+                  ...TransitionPresets.SlideFromRightIOS,
+                }}
+              >
                 <StackScreen name="(auth)" />
                 <StackScreen name="(tabs)" />
                 <StackScreen name="(events)" />
@@ -277,8 +286,8 @@ function RootLayout() {
                     presentation: 'transparentModal',
                     cardStyle: { backgroundColor: 'transparent' },
                     animationEnabled: true,
-                    transitionSpec:        modalTransitionSpec,
-                    cardStyleInterpolator:  modalInterpolator,
+                    transitionSpec: modalTransitionSpec,
+                    cardStyleInterpolator: modalInterpolator,
                     gestureEnabled: true,
                     gestureDirection: 'vertical',
                   }}
@@ -290,9 +299,9 @@ function RootLayout() {
                 <StackScreen name="(staff)" />
               </Stack>
 
-          </ThemeProvider>
-        </SavedProvider>
-      </AppDataProvider>
+            </ThemeProvider>
+          </SavedProvider>
+        </AppDataProvider>
       </OnboardingContext.Provider>
     </ErrorBoundary>
   );

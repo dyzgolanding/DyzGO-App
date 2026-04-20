@@ -40,7 +40,9 @@ import ConfirmHcaptcha from '@hcaptcha/react-native-hcaptcha'; // <-- MAGIA ANTI
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
-const { width, height } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const CONTENT_PADDING = 24;
 const S = Math.min(height / 932, 1); // scale factor normalized to iPhone 15 Pro Max
 const GAP = Math.round(15 * S);
@@ -261,6 +263,47 @@ export default function AuthScreen() {
 
   const handleAppleAuth = async () => {
     try {
+      if (Platform.OS === 'web') {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+        });
+        if (error || !data.url) throw error || new Error('Error iniciando autenticación Web de Apple');
+
+        const result = await WebBrowser.openAuthSessionAsync(data.url, window.location.origin);
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          return;
+        }
+
+        if (result.type !== 'success') {
+          throw new Error('No se pudo completar el inicio de sesión con Apple en Web.');
+        }
+
+        const fragmentStr = result.url.includes('#')
+          ? result.url.split('#')[1]
+          : result.url.split('?')[1] || '';
+        const params = new URLSearchParams(fragmentStr);
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token') || '';
+        if (!accessToken) throw new Error('No se recibió sesión de Apple. Intenta nuevamente.');
+
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) throw sessionError;
+
+        const user = sessionData.session?.user;
+        if (user) {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+          }, { onConflict: 'id', ignoreDuplicates: true });
+        }
+        return;
+      }
+
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -295,7 +338,7 @@ export default function AuthScreen() {
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
-      const redirectTo = 'dizgo://';
+      const redirectTo = Platform.OS === 'web' ? window.location.origin : 'dizgo://';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },

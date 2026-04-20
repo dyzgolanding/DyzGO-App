@@ -1,6 +1,7 @@
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
+import { CustomSwitch } from '../../components/CustomSwitch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
@@ -30,7 +31,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -447,12 +447,9 @@ const SettingSwitch = ({ icon, title, subtitle, value, onValueChange }: any) => 
             <Text style={styles.rowTitle}>{title}</Text>
             {subtitle ? <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>{subtitle}</Text> : null}
         </View>
-        <Switch
+        <CustomSwitch
             value={value}
             onValueChange={onValueChange}
-            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }}
-            thumbColor={value ? COLORS.neonPink : '#FBFBFB'}
-            ios_backgroundColor='rgba(255,255,255,0.1)'
         />
     </View>
 );

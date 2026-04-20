@@ -19,7 +19,8 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  View
+  View,
+  Platform
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -33,7 +34,9 @@ import { timing } from '../../lib/animation';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
-const { width } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const S = width / 430;
 const isSmallScreen = width < 400;
 const isLargeScreen = width >= 428;

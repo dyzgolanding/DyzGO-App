@@ -66,7 +66,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 
-const { width, height } = Dimensions.get('window');
+const _dim = Dimensions.get('window');
+const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
+const height = _dim.height;
 const CARD_W = width * 0.54;
 const CARD_GAP = 12;
 

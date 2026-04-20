@@ -24,13 +24,13 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
-    Switch,
     Text,
     TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { CustomSwitch } from '../../components/CustomSwitch';
 import Animated, {
     Easing,
     FadeInUp,
@@ -106,8 +106,11 @@ export default function SecurityScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.email) setUserEmail(user.email);
 
-        // 2. Verificar Biometría en Storage Local
-        const bioState = await SecureStore.getItemAsync('biometrics_enabled');
+        // 2. Verificar Biometría en Storage Local (Solo No Web)
+        let bioState: string | null = null;
+        if (Platform.OS !== 'web') {
+            bioState = await SecureStore.getItemAsync('biometrics_enabled');
+        }
         setFaceId(bioState === 'true');
 
         // 3. Verificar 2FA por email en metadata del usuario
@@ -118,6 +121,11 @@ export default function SecurityScreen() {
 
     // --- LÓGICA BIOMETRÍA (FACE ID / HUELLA) ---
     const toggleFaceId = async (value: boolean) => {
+        if (Platform.OS === 'web') {
+            Alert.alert("No Soportado", "La biometría no se soporta en navegadores web.");
+            return;
+        }
+
         if (value) {
             // Activar
             const hasHardware = await LocalAuthentication.hasHardwareAsync();
@@ -316,6 +324,7 @@ export default function SecurityScreen() {
 
                 </Animated.View>
 
+                {Platform.OS !== 'web' && (
                 <Animated.View entering={FadeInUp.duration(300).delay(160).springify()}>
                 <Text style={styles.sectionLabel}>Acceso Biométrico</Text>
                 <View style={styles.glassCard}>
@@ -325,14 +334,14 @@ export default function SecurityScreen() {
                             <Text style={styles.rowTitle}>{Platform.OS === 'ios' ? 'Face ID' : 'Huella Digital'}</Text>
                             <Text style={styles.rowSub}>Acceso rápido y seguro</Text>
                         </View>
-                        <Switch
+                        <CustomSwitch
                             value={faceId} onValueChange={toggleFaceId}
-                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }} thumbColor={faceId ? COLORS.neonPink : '#FBFBFB'}
                         />
                     </View>
                 </View>
 
                 </Animated.View>
+                )}
 
                 <Animated.View entering={FadeInUp.duration(300).delay(240).springify()}>
                 <Text style={styles.sectionLabel}>Avanzado</Text>
@@ -343,9 +352,8 @@ export default function SecurityScreen() {
                             <Text style={styles.rowTitle}>Verificación en 2 pasos</Text>
                             <Text style={styles.rowSub}>Código por Email</Text>
                         </View>
-                        <Switch
+                        <CustomSwitch
                             value={twoStep} onValueChange={toggleTwoStep}
-                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }} thumbColor={twoStep ? COLORS.neonPink : '#FBFBFB'}
                         />
                     </View>
                 </View>
