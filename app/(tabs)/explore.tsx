@@ -40,6 +40,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import WebLeafletMap from '../../components/WebLeafletMap';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useUserLocation } from '../../lib/useUserLocation';
@@ -330,9 +331,9 @@ export default function ExploreScreen() {
 
   // NUEVO: Índice del item activo en el Carrusel Inferior
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const flatListRef = useRef<FlatList>(null);
-  const mouseScrollParams = useMouseScroll(flatListRef);
+  const mouseScrollParams = useMouseScroll(flatListRef, CARD_W + CARD_GAP);
 
   // 'map' = mapa + carrusel, 'catalog' = lista completa
   const [viewMode, setViewMode] = useState<'map' | 'catalog'>('catalog');
@@ -634,13 +635,28 @@ export default function ExploreScreen() {
     else if (velocity?.x < -0.3) loopedIdx = Math.max(0, Math.ceil(contentOffset.x / SNAP) - 1);
     loopedIdx = Math.max(0, Math.min(loopedData.length - 1, loopedIdx));
     animateMapToIndex(loopedIdx);
+    if (Platform.OS === 'web') {
+      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+    }
   }, [animateMapToIndex, loopedData.length, SNAP]);
 
   // Corrección final cuando el snap se detiene
   const onMomentumScrollEnd = useCallback((event: any) => {
     const loopedIdx = Math.round(event.nativeEvent.contentOffset.x / SNAP);
     animateMapToIndex(loopedIdx);
+    if (Platform.OS === 'web') {
+      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+    }
   }, [animateMapToIndex, SNAP]);
+
+  // Aplicar CSS scroll-snap en web para touch móvil
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (flatListRef.current as any)?.getScrollableNode?.() ?? flatListRef.current;
+    if (!node) return;
+    node.style.scrollSnapType = 'x mandatory';
+    node.style.webkitOverflowScrolling = 'touch';
+  }, []);
 
   // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
@@ -803,30 +819,44 @@ export default function ExploreScreen() {
 
       {/* MAPA — siempre montado para no perder el estado */}
       <View style={[StyleSheet.absoluteFill, Platform.OS === 'web' && viewMode === 'catalog' && { opacity: 0, pointerEvents: 'none' }]}>
-        <MapView
-          ref={mapRef}
-          provider={PROVIDER_GOOGLE}
-          style={StyleSheet.absoluteFillObject}
-          userInterfaceStyle="dark"
-          initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
-          mapType="hybrid"
-          showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
-        >
-          {viewMode === 'map' && currentData.map((item: any, idx: number) => {
-            const isSelected = activeCarouselIndex === idx;
-            return (
-              <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
-                {isSelected ? (
-                  <View style={styles.activePinContainer}>
-                    <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
-                  </View>
-                ) : (
-                  <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
-                )}
-              </Marker>
-            );
-          })}
-        </MapView>
+        {Platform.OS === 'web' ? (
+          <WebLeafletMap
+            ref={mapRef}
+            style={StyleSheet.absoluteFillObject}
+            initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693 }}
+            markers={currentData.filter((item: any) => item.latitude && item.longitude).map((item: any, idx: number) => ({
+              id: item.id,
+              latitude: item.latitude,
+              longitude: item.longitude,
+              isSelected: activeCarouselIndex === idx,
+            }))}
+          />
+        ) : (
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={StyleSheet.absoluteFillObject}
+            userInterfaceStyle="dark"
+            initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
+            mapType="hybrid"
+            showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
+          >
+            {viewMode === 'map' && currentData.map((item: any, idx: number) => {
+              const isSelected = activeCarouselIndex === idx;
+              return (
+                <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
+                  {isSelected ? (
+                    <View style={styles.activePinContainer}>
+                      <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
+                    </View>
+                  ) : (
+                    <View style={styles.inactivePin}><View style={styles.inactivePinDot} /></View>
+                  )}
+                </Marker>
+              );
+            })}
+          </MapView>
+        )}
       </View>
 
       {/* FONDO CATÁLOGO — cubre el mapa cuando el modo es catálogo (En Web es transparente para dejar ver el WebShell) */}
@@ -1175,7 +1205,7 @@ const styles = StyleSheet.create({
 
   // Carrusel
   carouselContainer: { position: 'absolute', left: 0, right: 0, height: 210, zIndex: 10 },
-  cardWrapper: { width: CARD_W, height: 210, marginRight: CARD_GAP },
+  cardWrapper: { width: CARD_W, height: 210, marginRight: CARD_GAP, ...Platform.select({ web: { scrollSnapAlign: 'center' } as any }) },
   card: { flex: 1, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   cardImg: { flex: 1 },
   cardGradient: { flex: 1, padding: 16, justifyContent: 'space-between' },

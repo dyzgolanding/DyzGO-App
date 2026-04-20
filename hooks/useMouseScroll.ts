@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Platform } from 'react-native';
 
-export function useMouseScroll(externalRef?: any) {
+export function useMouseScroll(externalRef?: any, snapInterval?: number) {
   if (Platform.OS !== 'web') return {};
 
   const isDown = useRef(false);
@@ -17,6 +17,12 @@ export function useMouseScroll(externalRef?: any) {
     return ref.current;
   };
 
+  const snapToNearest = (node: any) => {
+    if (!snapInterval) return;
+    const nearest = Math.round(node.scrollLeft / snapInterval) * snapInterval;
+    node.scrollTo({ left: nearest, behavior: 'smooth' });
+  };
+
   const onMouseDown = (e: any) => {
     const node = getScrollableNode();
     if (!node) return;
@@ -26,11 +32,17 @@ export function useMouseScroll(externalRef?: any) {
   };
 
   const onMouseLeave = () => {
+    if (!isDown.current) return;
     isDown.current = false;
+    const node = getScrollableNode();
+    if (node) snapToNearest(node);
   };
 
   const onMouseUp = () => {
+    if (!isDown.current) return;
     isDown.current = false;
+    const node = getScrollableNode();
+    if (node) snapToNearest(node);
   };
 
   const onMouseMove = (e: any) => {
@@ -39,7 +51,7 @@ export function useMouseScroll(externalRef?: any) {
     const node = getScrollableNode();
     if (!node) return;
     const x = e.pageX - node.offsetLeft;
-    const walk = (x - startX.current) * 1.5; // Scroll-fast multiplier
+    const walk = (x - startX.current) * 1.5;
     node.scrollLeft = scrollLeft.current - walk;
   };
 
@@ -49,7 +61,6 @@ export function useMouseScroll(externalRef?: any) {
     onMouseLeave,
     onMouseUp,
     onMouseMove,
-    // Provide styles to change the cursor
     style: { cursor: isDown.current ? 'grabbing' : 'grab' } as any
   };
 }
