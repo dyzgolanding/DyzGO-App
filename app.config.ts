@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '57',
+    buildNumber: '58',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:

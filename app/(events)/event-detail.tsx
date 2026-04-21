@@ -395,7 +395,7 @@ export default function EventDetailScreen() {
     const handleShare = async () => {
         try {
             const eventId = event?.id || params.id;
-            const shareUrl = `https://dyzgo.com/event/${eventId}`;
+            const shareUrl = `https://app.dyzgo.com/event-detail?id=${eventId}`;
             const venue = event?.finalClubName || event?.location || '';
             const text = `¡Vamos a ${event?.title || optTitle}! 🚀${venue ? `\nEn: ${venue}` : ''}\n\n${shareUrl}`;
             if (Platform.OS === 'web') {
@@ -1015,7 +1015,7 @@ export default function EventDetailScreen() {
             {Platform.OS === 'web' && (
                 <WebShareSheet
                     visible={showWebShare}
-                    url={`https://dyzgo.com/event/${event?.id || params.id}`}
+                    url={`https://app.dyzgo.com/event-detail?id=${event?.id || params.id}`}
                     title={event?.title || optTitle || ''}
                     onClose={() => setShowWebShare(false)}
                 />
