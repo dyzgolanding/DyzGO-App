@@ -1015,7 +1015,7 @@ export default function EventDetailScreen() {
             {Platform.OS === 'web' && (
                 <WebShareSheet
                     visible={showWebShare}
-                    url={`https://app.dyzgo.com/event-detail?id=${event?.id || params.id}`}
+                    url={`https://dyzgo.com/event/${event?.id || params.id}`}
                     title={event?.title || optTitle || ''}
                     onClose={() => setShowWebShare(false)}
                 />
