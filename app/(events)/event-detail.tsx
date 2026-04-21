@@ -137,6 +137,11 @@ export default function EventDetailScreen() {
     const [showWebShare, setShowWebShare] = useState(false);
     const [showDownloadSheet, setShowDownloadSheet] = useState(false);
 
+    const handleBack = () => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/(tabs)/home');
+    };
+
     useEffect(() => {
         if (Platform.OS !== 'web') return;
         const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -284,7 +289,8 @@ export default function EventDetailScreen() {
                 if (!friendsError && friends && friends.length > 0) setFriendsGoing(friends);
             }
         } catch (error) {
-            router.back();
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/home');
         } finally {
             if (!isRefresh) setLoading(false);
         }
@@ -603,7 +609,7 @@ export default function EventDetailScreen() {
 
             <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
                 <AnimatedBlurView intensity={50} tint="dark" style={[styles.pillBg, { opacity: headerBgAnim }]} />
-                <PressableScale scaleTo={0.82} haptic="light" onPress={() => router.back()} style={styles.iconBtn}>
+                <PressableScale scaleTo={0.82} haptic="light" onPress={handleBack} style={styles.iconBtn}>
                     <ArrowLeft color="#FBFBFB" size={20} />
                 </PressableScale>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
