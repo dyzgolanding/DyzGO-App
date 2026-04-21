@@ -835,7 +835,7 @@ export default function EventDetailScreen() {
                                 <View style={styles.mbSection}>
                                     <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                                     <View style={[styles.glassCard, { marginBottom: 0 }]}>
-                                        <View style={[styles.mapContainer,  Platform.OS === 'web' && { height: 320 }]} pointerEvents="none">
+                                        <View style={[styles.mapContainer,  Platform.OS === 'web' && { height: 200 }]} pointerEvents="none">
                                             {Platform.OS === 'web' ? (
                                                 <iframe
                                                     src={`https://maps.google.com/maps?q=${region.latitude},${region.longitude}&t=k&z=15&ie=UTF8&iwloc=&output=embed`}
