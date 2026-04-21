@@ -395,7 +395,7 @@ export default function EventDetailScreen() {
     const handleShare = async () => {
         try {
             const eventId = event?.id || params.id;
-            const shareUrl = `https://app.dyzgo.com/event-detail?id=${eventId}`;
+            const shareUrl = `https://dyzgo.com/event/${eventId}`;
             const venue = event?.finalClubName || event?.location || '';
             const text = `¡Vamos a ${event?.title || optTitle}! 🚀${venue ? `\nEn: ${venue}` : ''}\n\n${shareUrl}`;
             if (Platform.OS === 'web') {
