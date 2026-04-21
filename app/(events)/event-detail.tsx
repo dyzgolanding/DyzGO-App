@@ -54,6 +54,7 @@ import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
 import { isEventFinished } from '../../utils/format';
 import WebShareSheet from '../../components/WebShareSheet';
+import AppDownloadSheet from '../../components/AppDownloadSheet';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { setPendingNav } from '../../lib/pendingNav';
 
@@ -134,6 +135,13 @@ export default function EventDetailScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [hasConsumptionMenu, setHasConsumptionMenu] = useState(false);
     const [showWebShare, setShowWebShare] = useState(false);
+    const [showDownloadSheet, setShowDownloadSheet] = useState(false);
+
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        if (params.get('from') === 'share') setShowDownloadSheet(true);
+    }, []);
 
     const modalOffset = useSharedValue(height);
     const modalSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: modalOffset.value }] }));
@@ -1018,6 +1026,12 @@ export default function EventDetailScreen() {
                     url={`https://dyzgo.com/event/${event?.id || params.id}`}
                     title={event?.title || optTitle || ''}
                     onClose={() => setShowWebShare(false)}
+                />
+            )}
+            {Platform.OS === 'web' && (
+                <AppDownloadSheet
+                    visible={showDownloadSheet}
+                    onDismiss={() => setShowDownloadSheet(false)}
                 />
             )}
         </View>
