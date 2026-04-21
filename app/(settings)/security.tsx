@@ -106,9 +106,11 @@ export default function SecurityScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.email) setUserEmail(user.email);
 
-        // 2. Verificar Biometría en Storage Local
-        const bioState = await SecureStore.getItemAsync('biometrics_enabled');
-        setFaceId(bioState === 'true');
+        // 2. Verificar Biometría en Storage Local (SecureStore no disponible en web)
+        if (Platform.OS !== 'web') {
+            const bioState = await SecureStore.getItemAsync('biometrics_enabled');
+            setFaceId(bioState === 'true');
+        }
 
         // 3. Verificar 2FA por email en metadata del usuario
         if (user) {
@@ -283,11 +285,13 @@ export default function SecurityScreen() {
 
     return (
         <View style={styles.container}>
+            {Platform.OS !== 'web' && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <LinearGradient colors={['rgba(255, 49, 216, 0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
                 <LinearGradient colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} locations={[0.3, 0.5, 0.7]} style={StyleSheet.absoluteFill} />
             </View>
+            )}
 
             <NavBar title="SEGURIDAD" onBack={() => router.back()} />
 
@@ -453,7 +457,7 @@ const ActionButton = ({ onPress, loading, text }: any) => (
 );
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : COLORS.background },
 
     scrollContent: { paddingHorizontal: 20, paddingBottom: 20 },
 

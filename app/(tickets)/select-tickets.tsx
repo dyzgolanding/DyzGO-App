@@ -286,6 +286,7 @@ export default function SelectTicketsScreen() {
                 <NavBar title="SELECCIONAR ENTRADAS" onBack={() => router.back()} />
 
                 <ScrollView
+                        showsVerticalScrollIndicator={false}
                         contentContainerStyle={[styles.scrollContent, { paddingTop: navTop }]}
                         refreshControl={
                             <RefreshControl

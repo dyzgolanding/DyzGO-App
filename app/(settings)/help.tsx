@@ -396,7 +396,7 @@ export default function HelpScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : COLORS.background },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 60 },
 
     heroTitle: {

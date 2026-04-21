@@ -53,6 +53,7 @@ import RenderHtml from 'react-native-render-html';
 import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
 import { isEventFinished } from '../../utils/format';
+import WebShareSheet from '../../components/WebShareSheet';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { setPendingNav } from '../../lib/pendingNav';
 
@@ -132,6 +133,7 @@ export default function EventDetailScreen() {
     const [friendsGoing, setFriendsGoing] = useState<any[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [hasConsumptionMenu, setHasConsumptionMenu] = useState(false);
+    const [showWebShare, setShowWebShare] = useState(false);
 
     const modalOffset = useSharedValue(height);
     const modalSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: modalOffset.value }] }));
@@ -395,9 +397,12 @@ export default function EventDetailScreen() {
             const eventId = event?.id || params.id;
             const shareUrl = `https://dyzgo.com/event/${eventId}`;
             const venue = event?.finalClubName || event?.location || '';
-            await Share.share({
-                message: `¡Vamos a ${event?.title || optTitle}! 🚀${venue ? `\nEn: ${venue}` : ''}\n\n${shareUrl}`,
-            });
+            const text = `¡Vamos a ${event?.title || optTitle}! 🚀${venue ? `\nEn: ${venue}` : ''}\n\n${shareUrl}`;
+            if (Platform.OS === 'web') {
+                setShowWebShare(true);
+                return;
+            }
+            await Share.share({ message: text });
         } catch (error) { }
     };
 
@@ -1006,6 +1011,15 @@ export default function EventDetailScreen() {
                     </View>
                 </Modal>
             </View>
+
+            {Platform.OS === 'web' && (
+                <WebShareSheet
+                    visible={showWebShare}
+                    url={`https://dyzgo.com/event/${event?.id || params.id}`}
+                    title={event?.title || optTitle || ''}
+                    onClose={() => setShowWebShare(false)}
+                />
+            )}
         </View>
     );
 }

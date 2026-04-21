@@ -116,7 +116,7 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
     };
 
     return (
-        <Animated.View style={[{ width: ITEM_WIDTH, marginRight: SPACING }, animatedStyle]}>
+        <Animated.View style={[{ width: ITEM_WIDTH, marginRight: SPACING }, animatedStyle, Platform.OS === 'web' && { scrollSnapAlign: 'center' } as any]}>
             <PressableScale
                 scaleTo={0.97}
                 haptic="light"
@@ -212,7 +212,7 @@ export default function HomeScreen() {
     const flatListRef = useRef<FlatList>(null);
     const featuredScrollRef = useRef<ScrollView>(null);
     const mouseScrollEvents = useMouseScroll(featuredScrollRef);
-    const mouseScrollClubs = useMouseScroll(flatListRef);
+    const mouseScrollClubs = useMouseScroll(flatListRef, FULL_SIZE);
     const featuredActiveIndex = useRef(0);
     const hasCentered = useRef(false);
     const scrollX = useSharedValue(0);
@@ -353,6 +353,14 @@ export default function HomeScreen() {
         });
         return () => cancelAnimationFrame(frame);
     }, [startIndex]);
+
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const node = (flatListRef.current as any)?.getScrollableNode?.() ?? flatListRef.current;
+        if (!node) return;
+        node.style.scrollSnapType = 'x mandatory';
+        node.style.webkitOverflowScrolling = 'touch';
+    }, [topClubs]);
 
     const handleProximityConnect = async () => {
         try {
@@ -671,6 +679,20 @@ export default function HomeScreen() {
                             onScroll={onScrollHandler}
                             scrollEventThrottle={16}
                             renderItem={renderClubItem}
+                            onScrollEndDrag={() => {
+                                if (Platform.OS === 'web') {
+                                    const offset = scrollX.value;
+                                    const idx = Math.round(offset / FULL_SIZE);
+                                    flatListRef.current?.scrollToOffset({ offset: idx * FULL_SIZE, animated: true });
+                                }
+                            }}
+                            onMomentumScrollEnd={() => {
+                                if (Platform.OS === 'web') {
+                                    const offset = scrollX.value;
+                                    const idx = Math.round(offset / FULL_SIZE);
+                                    flatListRef.current?.scrollToOffset({ offset: idx * FULL_SIZE, animated: true });
+                                }
+                            }}
                         />
                     )}
                 </View>

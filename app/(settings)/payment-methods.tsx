@@ -154,7 +154,7 @@ export default function PaymentMethodsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
+    container: { flex: 1, backgroundColor: Platform.OS === 'web' ? 'transparent' : COLORS.background },
     
     // Info Box
     infoBox: {

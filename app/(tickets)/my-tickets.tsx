@@ -102,6 +102,15 @@ export default function MyTicketsScreen() {
     if (!loading) fadeAnim.value = withTiming(1, timing.enter);
   }, [loading]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const style = document.createElement('style');
+    style.id = 'my-tickets-no-scroll';
+    style.textContent = 'body{overflow:hidden!important}::-webkit-scrollbar{display:none!important}*{scrollbar-width:none!important}';
+    document.head.appendChild(style);
+    return () => { document.getElementById('my-tickets-no-scroll')?.remove(); };
+  }, []);
+
   // useFocusEffect: recarga cada vez que el usuario navega a esta pantalla
   // (ej: vuelve desde comprar un ticket y ve el nuevo inmediatamente)
   useFocusEffect(
@@ -379,6 +388,7 @@ export default function MyTicketsScreen() {
         {activeTab === 'tickets' ? (
           <SectionList
             style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
             sections={sections}
             keyExtractor={(item) => item.id}
             renderItem={renderTicket}

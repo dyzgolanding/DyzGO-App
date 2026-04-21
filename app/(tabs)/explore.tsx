@@ -649,14 +649,17 @@ export default function ExploreScreen() {
     }
   }, [animateMapToIndex, SNAP]);
 
-  // Aplicar CSS scroll-snap en web para touch móvil
+  // Aplicar CSS scroll-snap en web para touch móvil — re-run al entrar a modo mapa
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const node = (flatListRef.current as any)?.getScrollableNode?.() ?? flatListRef.current;
-    if (!node) return;
-    node.style.scrollSnapType = 'x mandatory';
-    node.style.webkitOverflowScrolling = 'touch';
-  }, []);
+    if (Platform.OS !== 'web' || viewMode !== 'map') return;
+    const frame = requestAnimationFrame(() => {
+      const node = (flatListRef.current as any)?.getScrollableNode?.() ?? flatListRef.current;
+      if (!node) return;
+      node.style.scrollSnapType = 'x mandatory';
+      node.style.webkitOverflowScrolling = 'touch';
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [viewMode]);
 
   // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
