@@ -213,7 +213,7 @@ export default function HomeScreen() {
     const featuredScrollRef = useRef<ScrollView>(null);
     const mouseScrollEvents = useMouseScroll(featuredScrollRef);
     const mouseScrollClubs = useMouseScroll(flatListRef);
-    const featuredScrollX = useRef(0);
+    const featuredActiveIndex = useRef(0);
     const hasCentered = useRef(false);
     const scrollX = useSharedValue(0);
 
@@ -493,7 +493,7 @@ export default function HomeScreen() {
                             snapToAlignment="center"
                             decelerationRate="fast"
                             disableIntervalMomentum
-                            onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
+                            onScroll={(e) => { featuredActiveIndex.current = Math.round(e.nativeEvent.contentOffset.x / (CARD_BASE_WIDTH - 40)); }}
                             scrollEventThrottle={16}
                         >
                             {featuredEvents.map((event, index) => {
@@ -515,7 +515,8 @@ export default function HomeScreen() {
                                             onPress={() => {
                                                 const FEATURED_INTERVAL = CARD_BASE_WIDTH - 40;
                                                 const targetX = index * FEATURED_INTERVAL;
-                                                if (Math.abs(featuredScrollX.current - targetX) > FEATURED_INTERVAL * 0.4) {
+                                                if (index !== featuredActiveIndex.current) {
+                                                    featuredActiveIndex.current = index;
                                                     featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
                                                 } else {
                                                     { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }

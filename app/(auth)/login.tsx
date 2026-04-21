@@ -72,6 +72,7 @@ export default function AuthScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passStrength, setPassStrength] = useState(0);
+  const [webError, setWebError] = useState('');
 
   const animValue = useSharedValue(0);
   const strengthAnim = useSharedValue(0);
@@ -125,6 +126,7 @@ export default function AuthScreen() {
     const toValue = type === 'login' ? 0 : 1;
     animValue.value = withTiming(toValue, { duration: 220, easing: Easing.out(Easing.cubic) });
     setIsLogin(type === 'login');
+    setWebError('');
     resetForm();
   };
 
@@ -135,9 +137,14 @@ export default function AuthScreen() {
     strengthAnim.value = withTiming(0);
   };
 
+  const showError = (msg: string) => {
+    if (Platform.OS === 'web') setWebError(msg);
+    else Alert.alert('Error', msg);
+  };
+
   // --- VERIFICACIÓN + CREACIÓN DE PERFIL ---
   const handleVerifyCode = async () => {
-    if (otpCode.length < 6) return Alert.alert("Error", "Código incompleto.");
+    if (otpCode.length < 6) return showError("Código incompleto.");
     setLoading(true);
     try {
       const verifyType: 'signup' | 'recovery' = isResetting ? 'recovery' : 'signup';
@@ -167,7 +174,7 @@ export default function AuthScreen() {
         router.replace({ pathname: '/onboarding', params: { redirect: redirect ?? '/(tabs)/home' } } as any);
       }
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Código inválido o expirado.");
+      showError(error.message || "Código inválido o expirado.");
     } finally {
       setLoading(false);
     }
@@ -183,11 +190,11 @@ export default function AuthScreen() {
     }
     if (!isLogin && step === 2) return handleVerifyCode();
 
-    if (!EMAIL_REGEX.test(email)) return Alert.alert("Error", "Formato de email inválido.");
+    if (!EMAIL_REGEX.test(email)) return showError("Formato de email inválido.");
 
     if (!isLogin) {
-      if (password.length < 8) return Alert.alert("Error", "La contraseña debe tener al menos 8 caracteres");
-      if (fullName.length < 3 || username.length < 4) return Alert.alert("Error", "Revisa los campos (min: nombre 3, user 4).");
+      if (password.length < 8) return showError("La contraseña debe tener al menos 8 caracteres");
+      if (fullName.length < 3 || username.length < 4) return showError("Revisa los campos (min: nombre 3, user 4).");
     }
 
     setLoading(true);
@@ -229,7 +236,7 @@ export default function AuthScreen() {
 
         if (existingUser) {
           setLoading(false);
-          return Alert.alert("Error", "El nombre de usuario ya está en uso.");
+          return showError("El nombre de usuario ya está en uso.");
         }
 
         const { data: existingEmail } = await supabase
@@ -240,7 +247,7 @@ export default function AuthScreen() {
 
         if (existingEmail) {
           setLoading(false);
-          return Alert.alert("Error", "Este correo ya está registrado. Intenta iniciar sesión.");
+          return showError("Este correo ya está registrado. Intenta iniciar sesión.");
         }
 
         const { data, error } = await supabase.auth.signUp({
@@ -259,7 +266,7 @@ export default function AuthScreen() {
         setResendTimer(60); // INICIA EL CONTADOR AL REGISTRARSE
       }
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      showError(error.message);
     } finally {
       setLoading(false);
     }
@@ -272,7 +279,7 @@ export default function AuthScreen() {
       if (error) throw error;
       setStep(2);
       setResendTimer(60); // INICIA EL CONTADOR AL PEDIR RECUPERACIÓN
-    } catch (error: any) { Alert.alert("Error", error.message); }
+    } catch (error: any) { showError(error.message); }
     finally { setLoading(false); }
   };
 
@@ -408,7 +415,7 @@ export default function AuthScreen() {
       if (error) throw error;
       Alert.alert("Éxito", "Contraseña actualizada.");
       setIsResetting(false); setStep(1); setIsLogin(true);
-    } catch (error: any) { Alert.alert("Error", error.message); }
+    } catch (error: any) { showError(error.message); }
     finally { setLoading(false); }
   };
 
@@ -431,9 +438,9 @@ export default function AuthScreen() {
       setResendTimer(60); // REINICIA EL CONTADOR TRAS EL ENVÍO EXITOSO
     } catch (error: any) {
       if (error.status === 429) {
-        Alert.alert("Demasiados intentos", "Por favor, espera 60 segundos antes de pedir otro código.");
+        showError("Por favor, espera 60 segundos antes de pedir otro código.");
       } else {
-        Alert.alert("Error", error.message || "No se pudo reenviar el código.");
+        showError(error.message || "No se pudo reenviar el código.");
       }
     } finally {
       setLoading(false);
@@ -570,6 +577,12 @@ export default function AuthScreen() {
                 </Animated.View>
               )}
             </Animated.View>
+
+            {Platform.OS === 'web' && webError ? (
+              <Animated.View entering={simpleFadeIn} style={styles.webErrorBanner}>
+                <Text style={styles.webErrorText}>{webError}</Text>
+              </Animated.View>
+            ) : null}
 
             <Animated.View layout={containerLayoutAnim} style={{ width: '100%' }}>
               <TouchableOpacity style={styles.mainButton} onPress={handleMainAction} disabled={loading} activeOpacity={0.9}>
@@ -773,4 +786,6 @@ const styles = StyleSheet.create({
   termsContainer: { width: '100%', alignItems: 'center', marginTop: Math.round(14 * S) },
   termsText: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '500', textAlign: 'center', lineHeight: 17 },
   termsLink: { color: COLORS.neonPink, fontWeight: '700' },
+  webErrorBanner: { width: '100%', backgroundColor: 'rgba(255,60,60,0.12)', borderWidth: 1, borderColor: 'rgba(255,60,60,0.35)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 8 },
+  webErrorText: { color: '#ff6b6b', fontSize: 13, fontWeight: '700', textAlign: 'center' },
 });

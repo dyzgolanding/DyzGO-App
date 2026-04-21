@@ -7,7 +7,7 @@
  */
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { COLORS } from '../constants/colors'
 
@@ -42,12 +42,38 @@ export default function TbkPlusCallback() {
       if (data?.status === 'AUTHORIZED' && data?.response_code === 0) {
         setStatus('success')
         setTimeout(() => {
-          router.dismissAll()
-          router.replace('/(tabs)/profile')
-          router.push({
-            pathname: '/ticket-confirmation',
-            params: { eventId: '', eventName: 'Tu evento', quantity: '1' }
-          })
+          if (Platform.OS === 'web') {
+            let returnData = { eventId: '', eventName: 'Tu evento', quantity: '1' }
+            try {
+              const stored = sessionStorage.getItem('dyzgo_event_return')
+              if (stored) returnData = JSON.parse(stored)
+            } catch {}
+            sessionStorage.removeItem('dyzgo_event_return')
+            sessionStorage.setItem('dyzgo_payment_done', '1')
+            // Reemplazar la entrada de tbk-plus por select-tickets en el historial
+            // del browser, para que back desde ticket-confirmation lleve ahí.
+            const selectUrl = returnData.eventId
+              ? `/select-tickets?eventId=${encodeURIComponent(returnData.eventId)}`
+              : '/'
+            window.history.replaceState(null, '', selectUrl)
+            // router.push agrega ticket-confirmation ENCIMA (pushState),
+            // sin full reload ni pérdida del historial manipulado.
+            router.push({
+              pathname: '/ticket-confirmation' as any,
+              params: {
+                eventId: returnData.eventId,
+                eventName: returnData.eventName,
+                quantity: returnData.quantity,
+              },
+            })
+          } else {
+            router.dismissAll()
+            router.replace('/(tabs)/profile')
+            router.push({
+              pathname: '/ticket-confirmation',
+              params: { eventId: '', eventName: 'Tu evento', quantity: '1' }
+            })
+          }
         }, 1500)
       } else {
         setStatus('error')

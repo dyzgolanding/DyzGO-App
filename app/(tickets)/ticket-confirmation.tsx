@@ -28,6 +28,7 @@ export default function ConfirmationScreen() {
     createPurchaseNotification();
   }, []);
 
+
   const createPurchaseNotification = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();

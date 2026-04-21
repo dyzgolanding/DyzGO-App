@@ -44,6 +44,10 @@ import { sendPushNotification } from '../../lib/push';
 import { COLORS } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 
+// ── Cambiar por los links reales cuando la app esté publicada ──
+const APP_STORE_URL = 'https://apps.apple.com/app/dyzgo';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.dyzgo';
+
 const { width, height } = Dimensions.get('window');
 const baseWidth = Platform.OS === 'web' && width > 500 ? 450 : width;
 const isSmallScreen = baseWidth < 400;
@@ -141,6 +145,7 @@ export default function TicketDetailScreen() {
   const [isListed, setIsListed] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isUsed, setIsUsed] = useState(false);
+  const [downloadModalVisible, setDownloadModalVisible] = useState(false);
 
   const router = useRouter();
 
@@ -560,7 +565,8 @@ export default function TicketDetailScreen() {
           <ReAnimated.View entering={FadeInUp.duration(350).delay(100).springify()}>
             <View style={styles.actionArea}>
 
-              {Platform.OS === 'ios' && (
+              {/* 1. AIRDROP — iOS nativo / web redirige a app */}
+              {Platform.OS === 'ios' ? (
                 <TouchableOpacity
                   style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAppleTransfer(); }}
@@ -586,8 +592,26 @@ export default function TicketDetailScreen() {
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
-              )}
+              ) : Platform.OS === 'web' ? (
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => setDownloadModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['rgba(255,49,216,0.18)', 'rgba(180,30,160,0.10)']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={[styles.actionBtnInner, { borderColor: 'rgba(255,49,216,0.4)' }]}
+                  >
+                    <MoveHorizontal color="#FF31D8" size={18} />
+                    <Text style={[styles.actionBtnText, { color: '#FF31D8' }]}>
+                      TRANSFERIR POR APROXIMACIÓN
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ) : null}
 
+              {/* 2. TRANSFERIR A AMIGO — todas las plataformas */}
               <TouchableOpacity
                 style={[styles.actionBtn, isDisabled && { opacity: 0.38 }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openFriendSelector(); }}
@@ -608,8 +632,8 @@ export default function TicketDetailScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* ── ADD TO APPLE WALLET (iOS only) ── */}
-              {Platform.OS === 'ios' && (
+              {/* 3. APPLE WALLET — iOS nativo / web redirige a app */}
+              {Platform.OS === 'ios' ? (
                 <TouchableOpacity
                   style={[styles.actionBtn, walletLoading && { opacity: 0.55 }]}
                   onPress={handleAddToWallet}
@@ -629,11 +653,64 @@ export default function TicketDetailScreen() {
                     )}
                   </View>
                 </TouchableOpacity>
-              )}
+              ) : Platform.OS === 'web' ? (
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => setDownloadModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.actionBtnInner, { backgroundColor: '#000000', borderColor: 'rgba(255,255,255,0.5)' }]}>
+                    <FontAwesome name="apple" size={20} color="#FFFFFF" />
+                    <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>
+                      AGREGAR A APPLE WALLET
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
 
             </View>
           </ReAnimated.View>
         </ScrollView>
+
+        {/* ── MODAL DESCARGA APP (web) ── */}
+        <Modal visible={downloadModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDownloadModalVisible(false)}>
+          <View style={dlStyles.overlay}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => setDownloadModalVisible(false)} />
+            <ReAnimated.View entering={FadeInUp.duration(300).springify()} style={dlStyles.card}>
+              {/* Icono decorativo */}
+              <View style={dlStyles.iconCircle}>
+                <TicketIcon color="#FF31D8" size={32} strokeWidth={1.5} />
+              </View>
+
+              <Text style={dlStyles.title}>Vive la experiencia{'\n'}completa</Text>
+              <Text style={dlStyles.subtitle}>
+                Descarga la app y accede a todas las funciones: guarda tu entrada en Apple Wallet, transfiere por AirDrop, recibe notificaciones y mucho más.
+              </Text>
+
+              <View style={dlStyles.buttonsRow}>
+                <TouchableOpacity style={dlStyles.storeBtn} onPress={() => { setDownloadModalVisible(false); Linking.openURL(APP_STORE_URL); }} activeOpacity={0.85}>
+                  <FontAwesome name="apple" size={22} color="#fff" />
+                  <View>
+                    <Text style={dlStyles.storeBtnLabel}>Descargar en</Text>
+                    <Text style={dlStyles.storeBtnName}>App Store</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[dlStyles.storeBtn, { backgroundColor: 'rgba(52,168,83,0.15)', borderColor: 'rgba(52,168,83,0.4)' }]} onPress={() => { setDownloadModalVisible(false); Linking.openURL(PLAY_STORE_URL); }} activeOpacity={0.85}>
+                  <FontAwesome name="android" size={22} color="#34A853" />
+                  <View>
+                    <Text style={[dlStyles.storeBtnLabel, { color: 'rgba(255,255,255,0.5)' }]}>Disponible en</Text>
+                    <Text style={[dlStyles.storeBtnName, { color: '#34A853' }]}>Google Play</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity onPress={() => setDownloadModalVisible(false)} style={dlStyles.cancelBtn}>
+                <Text style={dlStyles.cancelText}>Ahora no</Text>
+              </TouchableOpacity>
+            </ReAnimated.View>
+          </View>
+        </Modal>
 
         {/* ── MODAL AMIGOS ── */}
         <Modal visible={friendModalVisible} animationType="slide" transparent={true} onRequestClose={() => setFriendModalVisible(false)}>
@@ -836,4 +913,36 @@ const styles = StyleSheet.create({
   friendName: { color: '#FBFBFB', fontWeight: '700', fontSize: 15, flex: 1 },
   sendIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.neonPink, justifyContent: 'center', alignItems: 'center' },
 
+});
+
+const dlStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  card: {
+    backgroundColor: '#0e0e0e',
+    borderTopLeftRadius: 32, borderTopRightRadius: 32,
+    borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: 28, paddingBottom: 40,
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: 'rgba(255,49,216,0.1)',
+    borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  title: { color: '#FBFBFB', fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center', marginBottom: 12 },
+  subtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  buttonsRow: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 16 },
+  storeBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 18, padding: 14,
+  },
+  storeBtnLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '600' },
+  storeBtnName: { color: '#FBFBFB', fontSize: 15, fontWeight: '800' },
+  cancelBtn: { paddingVertical: 10 },
+  cancelText: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '600' },
 });

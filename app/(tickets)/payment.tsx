@@ -130,6 +130,26 @@ export default function PaymentScreen() {
     if (eventId) fetchDetails();
   }, [eventId]);
 
+  // Redirigir si el usuario vuelve a payment después de haber pagado (web)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (sessionStorage.getItem('dyzgo_payment_done') === '1') {
+      sessionStorage.removeItem('dyzgo_payment_done');
+      router.replace('/(tabs)/home' as any);
+    }
+  }, []);
+
+  // Guardar datos del evento en sessionStorage antes de redirigir al banco (web)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !paymentUrl) return;
+    const totalQuantity = cart.reduce((acc, item) => acc + item.quantity, 0);
+    sessionStorage.setItem('dyzgo_event_return', JSON.stringify({
+      eventId,
+      eventName: eventDetails?.title || eventName || '',
+      quantity: totalQuantity.toString(),
+    }));
+  }, [paymentUrl]);
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       if (success) return;
