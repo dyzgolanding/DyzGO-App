@@ -309,7 +309,16 @@ export default function EventDetailScreen() {
         const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
         if (Platform.OS === 'web') {
-            Linking.openURL(fallbackMaps).catch(() => {});
+            const parts = [
+                [event.street, event.street_number].filter(Boolean).join(' '),
+                event.commune,
+                event.region,
+            ].filter(Boolean);
+            const addressQuery = parts.length > 0 ? parts.join(', ') : (event.location || '');
+            const mapsUrl = addressQuery
+                ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery + ', Chile')}`
+                : fallbackMaps;
+            Linking.openURL(mapsUrl).catch(() => {});
             return;
         }
 
@@ -526,7 +535,7 @@ export default function EventDetailScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
                     {/* Imagen hero */}
                     <View style={[styles.imageWrapper, { paddingTop: insets.top + 64 }]}>
-                        <SkeletonBox height={undefined} width="100%" borderRadius={24} style={{ aspectRatio: 1, maxWidth: 450, alignSelf: 'center' }} />
+                        <SkeletonBox height={0} width="100%" borderRadius={24} style={{ aspectRatio: 1, maxWidth: 450, alignSelf: 'center' }} />
                     </View>
                     {/* Content card skeleton */}
                     <View style={styles.contentCard}>
@@ -852,7 +861,18 @@ export default function EventDetailScreen() {
                                         <View style={[styles.mapContainer,  Platform.OS === 'web' && { height: 200 }]} pointerEvents="none">
                                             {Platform.OS === 'web' ? (
                                                 <iframe
-                                                    src={`https://maps.google.com/maps?q=${region.latitude},${region.longitude}&t=k&z=15&ie=UTF8&iwloc=&output=embed`}
+                                                    src={(() => {
+                                                        const parts = [
+                                                            [event?.street, event?.street_number].filter(Boolean).join(' '),
+                                                            event?.commune,
+                                                            event?.region,
+                                                        ].filter(Boolean);
+                                                        const addressQuery = parts.length > 0 ? parts.join(', ') : (event?.location || '');
+                                                        const q = addressQuery
+                                                            ? encodeURIComponent(addressQuery + ', Chile')
+                                                            : `${region.latitude},${region.longitude}`;
+                                                        return `https://maps.google.com/maps?q=${q}&t=k&z=15&ie=UTF8&iwloc=&output=embed`;
+                                                    })()}
                                                     style={{ width: '100%', height: '100%', border: 0 }}
                                                 />
                                             ) : (

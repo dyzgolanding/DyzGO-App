@@ -1,1 +1,2 @@
-export default function WebShareSheet() { return null; }
+interface WebShareSheetProps { visible: boolean; url: string; title: string; onClose: () => void; }
+export default function WebShareSheet(_props: WebShareSheetProps) { return null; }
