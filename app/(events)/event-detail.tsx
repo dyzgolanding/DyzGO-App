@@ -49,6 +49,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import RAnimated, { useSharedValue, withTiming, useAnimatedStyle, runOnJS, Easing, interpolate, Extrapolation } from 'react-native-reanimated';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 import RenderHtml from 'react-native-render-html';
 import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
@@ -269,18 +270,32 @@ export default function EventDetailScreen() {
                 .eq('is_available', true);
             setHasConsumptionMenu((count ?? 0) > 0);
 
-            if (eventData.latitude && eventData.longitude) {
-                setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-            }
-            else if (eventData.location) {
-                const searchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(eventData.location + ", Chile")}&format=json&limit=1`;
+            const addrParts = [
+                [eventData.street, eventData.street_number].filter(Boolean).join(' '),
+                eventData.commune,
+                eventData.region,
+            ].filter(Boolean);
+            const addressQuery = addrParts.length > 0 ? addrParts.join(', ') : (eventData.location || '');
+
+            if (addressQuery) {
                 try {
-                    const response = await fetch(searchUrl, { headers: { 'User-Agent': 'DisgoApp' } });
-                    const results = await response.json();
-                    if (results && results.length > 0) {
-                        setRegion({ latitude: parseFloat(results[0].lat), longitude: parseFloat(results[0].lon), latitudeDelta: 0.005, longitudeDelta: 0.005 });
+                    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+                    const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressQuery + ', Chile')}&key=${apiKey}`;
+                    const geoResponse = await fetch(geoUrl);
+                    const geoData = await geoResponse.json();
+                    const loc = geoData?.results?.[0]?.geometry?.location;
+                    if (loc) {
+                        setRegion({ latitude: loc.lat, longitude: loc.lng, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+                    } else if (eventData.latitude && eventData.longitude) {
+                        setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
                     }
-                } catch (geoError) { }
+                } catch {
+                    if (eventData.latitude && eventData.longitude) {
+                        setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+                    }
+                }
+            } else if (eventData.latitude && eventData.longitude) {
+                setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
             }
 
             const { data: { user } } = await supabase.auth.getUser();
@@ -322,24 +337,39 @@ export default function EventDetailScreen() {
             return;
         }
 
+        const nativeParts = [
+            [event.street, event.street_number].filter(Boolean).join(' '),
+            event.commune,
+            event.region,
+        ].filter(Boolean);
+        const nativeAddress = nativeParts.length > 0 ? nativeParts.join(', ') + ', Chile' : '';
+        const nativeQuery = nativeAddress || `${lat},${lng}`;
+        const nativeFallback = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nativeQuery)}`;
+
         const url = Platform.select({
-            ios: `comgooglemaps://?q=${lat},${lng}(${label})`,
-            android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`
+            ios: `comgooglemaps://?q=${encodeURIComponent(nativeQuery)}`,
+            android: `geo:0,0?q=${encodeURIComponent(nativeQuery)}`
         });
 
         Linking.canOpenURL(url!).then(supported => {
-            Linking.openURL(supported ? url! : fallbackMaps).catch(() => {});
+            Linking.openURL(supported ? url! : nativeFallback).catch(() => {});
         }).catch(() => {
-            Linking.openURL(fallbackMaps).catch(() => {});
+            Linking.openURL(nativeFallback).catch(() => {});
         });
     };
 
     const openUber = () => {
         if (!event) return;
-        const lat = event.latitude || region.latitude;
-        const lng = event.longitude || region.longitude;
+        const uberParts = [
+            [event.street, event.street_number].filter(Boolean).join(' '),
+            event.commune,
+            event.region,
+        ].filter(Boolean);
+        const uberAddress = uberParts.length > 0 ? uberParts.join(', ') + ', Chile' : (event.location || '');
         const nickName = encodeURIComponent(event.finalClubName || event.title || "Evento");
-        const formattedAddress = encodeURIComponent(event.location || "Ubicación del evento");
+        const formattedAddress = encodeURIComponent(uberAddress || "Ubicación del evento");
+        const lat = region.latitude;
+        const lng = region.longitude;
         const fallbackUber = `https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
         if (Platform.OS === 'web') {
@@ -858,30 +888,29 @@ export default function EventDetailScreen() {
                                 <View style={styles.mbSection}>
                                     <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                                     <View style={[styles.glassCard, { marginBottom: 0 }]}>
-                                        <View style={[styles.mapContainer,  Platform.OS === 'web' && { height: 200 }]} pointerEvents="none">
-                                            {Platform.OS === 'web' ? (
-                                                <iframe
-                                                    src={(() => {
-                                                        const parts = [
-                                                            [event?.street, event?.street_number].filter(Boolean).join(' '),
-                                                            event?.commune,
-                                                            event?.region,
-                                                        ].filter(Boolean);
-                                                        const addressQuery = parts.length > 0 ? parts.join(', ') : (event?.location || '');
-                                                        const q = addressQuery
-                                                            ? encodeURIComponent(addressQuery + ', Chile')
-                                                            : `${region.latitude},${region.longitude}`;
-                                                        return `https://maps.google.com/maps?q=${q}&t=k&z=15&ie=UTF8&iwloc=&output=embed`;
-                                                    })()}
-                                                    style={{ width: '100%', height: '100%', border: 0 }}
-                                                />
-                                            ) : (
-                                                <MapView provider={PROVIDER_GOOGLE} style={styles.map} scrollEnabled={false} zoomEnabled={false} region={region} mapType="hybrid" liteMode={true}>
-                                                    <Marker coordinate={{ latitude: region.latitude, longitude: region.longitude }}>
-                                                        <View style={[styles.classicPin, { shadowColor: activeBg1 }]}><MapPin size={36} color="#FBFBFB" fill={activeBg1} /></View>
-                                                    </Marker>
-                                                </MapView>
-                                            )}
+                                        <View style={[styles.mapContainer, { height: 200 }]} pointerEvents="none">
+                                            {(() => {
+                                                const parts = [
+                                                    [event?.street, event?.street_number].filter(Boolean).join(' '),
+                                                    event?.commune,
+                                                    event?.region,
+                                                ].filter(Boolean);
+                                                const addressQuery = parts.length > 0 ? parts.join(', ') : (event?.location || '');
+                                                const q = addressQuery
+                                                    ? encodeURIComponent(addressQuery + ', Chile')
+                                                    : `${region.latitude},${region.longitude}`;
+                                                const mapSrc = `https://maps.google.com/maps?q=${q}&t=k&z=15&ie=UTF8&iwloc=&output=embed`;
+                                                return Platform.OS === 'web' ? (
+                                                    <iframe src={mapSrc} style={{ width: '100%', height: '100%', border: 0 }} />
+                                                ) : (
+                                                    <WebView
+                                                        source={{ html: `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#000;"><iframe src="${mapSrc}" style="width:100%;height:100%;border:0;" frameborder="0" allowfullscreen></iframe></body></html>` }}
+                                                        style={styles.map}
+                                                        scrollEnabled={false}
+                                                        originWhitelist={['*']}
+                                                    />
+                                                );
+                                            })()}
                                         </View>
                                         {event?.location && (
                                             <View style={styles.addressContainer}>

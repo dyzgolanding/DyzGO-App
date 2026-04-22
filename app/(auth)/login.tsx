@@ -469,11 +469,13 @@ export default function AuthScreen() {
 
       <TouchableOpacity
         onPress={() => router.back()}
-        style={[styles.backButton, { top: insets.top + 12 }]}
+        style={[styles.backButtonOuter, { top: insets.top + 12 }]}
         activeOpacity={0.7}
       >
-        <ArrowLeft size={16} color="rgba(251,251,251,0.6)" />
-        <Text style={styles.backButtonText}>Volver</Text>
+        <BlurView intensity={60} tint="dark" style={styles.backButton}>
+          <ArrowLeft size={16} color="rgba(251,251,251,0.6)" />
+          <Text style={styles.backButtonText}>Volver</Text>
+        </BlurView>
       </TouchableOpacity>
 
       <View style={{ flex: 1 }}>
@@ -693,7 +695,8 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   header: { alignItems: 'center', marginBottom: Platform.OS === 'web' ? 32 : Math.round(16 * S) },
-  backButton: { position: 'absolute', left: 20, flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
+  backButtonOuter: { position: 'absolute', left: CONTENT_PADDING, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', zIndex: 10 },
+  backButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12 },
   backButtonText: { color: 'rgba(251,251,251,0.6)', fontSize: 12, fontWeight: '600' },
   logoText: { fontSize: Math.round(54 * S), fontWeight: '900', color: 'white', fontStyle: 'italic', letterSpacing: -3 },
   subtitle: { color: COLORS.textZinc, fontSize: 13, fontWeight: '900', letterSpacing: 0, marginTop: 5 },
