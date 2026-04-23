@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'DyzGO',
   slug: 'dyzgot',
-  version: '1.0.0',
+  version: '1.0.1',
   updates: { enabled: false },
   scheme: 'dyzgo',
   orientation: 'portrait',
@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '57',
+    buildNumber: '62',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
@@ -52,7 +52,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#000000',
     },
     package: 'com.dyzgo.app',
-    versionCode: 4,
+    versionCode: 5,
     permissions: [
       'ACCESS_COARSE_LOCATION',
       'ACCESS_FINE_LOCATION',
