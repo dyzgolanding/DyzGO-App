@@ -43,7 +43,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WebLeafletMap from '../../components/WebLeafletMap';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from 'expo-router';
-import { useUserLocation } from '../../lib/useUserLocation';
+import { useLocation } from '../../context/LocationContext';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
 import { formatEventDateTime } from '../../utils/format';
@@ -316,7 +316,7 @@ export default function ExploreScreen() {
       }, [])
   );
   
-  const { location } = useUserLocation();
+  const { location } = useLocation();
   const { events: cachedEvents, clubs: cachedClubs, isLoaded: cacheLoaded, refresh: refreshCache } = useAppData();
 
   const insets = useSafeAreaInsets();
@@ -415,22 +415,29 @@ export default function ExploreScreen() {
     setRefreshing(false);
   }, [refreshCache]);
 
-  const geocodeAndSave = async (id: string, address: string, table: 'events' | 'clubs') => {
-    if (!address || address.length < 4) return null;
+  const geoCache = useRef<Record<string, { latitude: number; longitude: number } | null>>({});
+  const [geocodedMarkers, setGeocodedMarkers] = useState<Record<string, { latitude: number; longitude: number }>>({});
+
+  const geocodeItem = async (item: any): Promise<{ latitude: number; longitude: number } | null> => {
+    if (item.latitude && item.longitude) return { latitude: item.latitude, longitude: item.longitude };
+    const parts = [
+      [item.street, item.street_number].filter(Boolean).join(' '),
+      item.commune,
+      item.region,
+    ].filter(Boolean);
+    const address = parts.length > 0 ? parts.join(', ') : (item.location || item.address || '');
+    if (!address) return null;
+    const cacheKey = item.id;
+    if (cacheKey in geoCache.current) return geoCache.current[cacheKey];
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address + ", Chile")}&format=json&limit=1`,
-        { headers: { 'User-Agent': 'DisgoApp' } }
-      );
-      const data = await response.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lon = parseFloat(data[0].lon);
-        await supabase.from(table).update({ latitude: lat, longitude: lon }).eq('id', id);
-        return { latitude: lat, longitude: lon };
-      }
-    } catch (e) { return null; }
-    return null;
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address + ', Chile')}&key=${apiKey}`);
+      const data = await res.json();
+      const loc = data?.results?.[0]?.geometry?.location;
+      const result = loc ? { latitude: loc.lat, longitude: loc.lng } : null;
+      geoCache.current[cacheKey] = result;
+      return result;
+    } catch { return null; }
   };
 
   async function fetchData(isRefresh = false) {
@@ -439,7 +446,7 @@ export default function ExploreScreen() {
 
       const { data: evData, error: evError } = await supabase
         .from('events')
-        .select('*, clubs(name, location, image), ticket_tiers(price), experiences(id, name, logo_url)')
+        .select('*, clubs(name, location, image, latitude, longitude), ticket_tiers(price, type), experiences(id, name, logo_url)')
         .eq('is_active', true)
         .in('status', ['active', 'info'])
         .order('date', { ascending: true })
@@ -474,19 +481,23 @@ export default function ExploreScreen() {
     const processedItems = rawItems.map(item => {
       let distance = null;
       let distanceText = '';
-      if (location && item.latitude && item.longitude) {
+      const clubObj = Array.isArray(item.clubs) ? item.clubs[0] : item.clubs;
+      const resolvedLat = item.latitude || clubObj?.latitude;
+      const resolvedLng = item.longitude || clubObj?.longitude;
+      if (location && resolvedLat && resolvedLng) {
         distance = getDistanceFromLatLonInKm(
           location.coords.latitude,
           location.coords.longitude,
-          item.latitude,
-          item.longitude
+          resolvedLat,
+          resolvedLng
         );
         distanceText = formatDistance(distance);
       }
 
       let minTicketPrice = Infinity;
-      if (item.ticket_tiers && item.ticket_tiers.length > 0) {
-        minTicketPrice = Math.min(...item.ticket_tiers.map((t: any) => t.price));
+      const payableTiers = (item.ticket_tiers ?? []).filter((t: any) => t.type !== 'courtesy');
+      if (payableTiers.length > 0) {
+        minTicketPrice = Math.min(...payableTiers.map((t: any) => t.price));
       } else if (item.price !== undefined && item.price !== null) {
         minTicketPrice = item.price;
       } else {
@@ -613,19 +624,21 @@ export default function ExploreScreen() {
   }, [catalogData, LOOP_MULTIPLIER]);
 
   // ANIMATED MAP CENTERING
-  const animateMapToIndex = useCallback((loopedIdx: number) => {
+  const animateMapToIndex = useCallback(async (loopedIdx: number) => {
     if (N === 0) return;
     const actualIdx = ((loopedIdx % N) + N) % N;
-    const item = currentData[actualIdx] ?? currentData[0];
-    if (item?.latitude && item?.longitude && mapRef.current) {
-      setActiveCarouselIndex(actualIdx);
-      mapRef.current.animateCamera({
-        center: { latitude: item.latitude - 0.005, longitude: item.longitude },
-        zoom: 14.5,
-        pitch: 45,
-      }, { duration: 500 });
-    }
-  }, [currentData, N]);
+    const item = catalogData[actualIdx] ?? catalogData[0];
+    if (!item || !mapRef.current) return;
+    const coords = await geocodeItem(item);
+    if (!coords) return;
+    const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
+    setActiveCarouselIndex(catIdx >= 0 ? catIdx : 0);
+    mapRef.current.animateCamera({
+      center: { latitude: coords.latitude - 0.005, longitude: coords.longitude },
+      zoom: 14.5,
+      pitch: 45,
+    }, { duration: 500 });
+  }, [catalogData, currentData, N]);
 
   // Predice el destino del snap antes de que termine la inercia (mueve el mapa ya)
   const onScrollEndDrag = useCallback((event: any) => {
@@ -661,6 +674,25 @@ export default function ExploreScreen() {
     return () => cancelAnimationFrame(frame);
   }, [viewMode]);
 
+  // Geocodificar en background los eventos sin coords al entrar al modo mapa
+  useEffect(() => {
+    if (viewMode !== 'map') return;
+    const missing = catalogData.filter(item => !item.latitude || !item.longitude);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (const item of missing) {
+        if (cancelled) break;
+        const coords = await geocodeItem(item);
+        if (coords && !cancelled) {
+          setGeocodedMarkers(prev => ({ ...prev, [item.id]: coords }));
+        }
+        await new Promise(r => setTimeout(r, 80));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [viewMode, activeTabIndex, catalogData.length]);
+
   // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
     setActiveCarouselIndex(0);
@@ -668,13 +700,17 @@ export default function ExploreScreen() {
     flatListRef.current?.scrollToOffset({ offset: startOffset, animated: false });
     if (catalogData.length > 0) {
       const item = catalogData[0];
-      if (item.latitude && item.longitude && mapRef.current) {
-        mapRef.current.animateCamera({
-          center: { latitude: item.latitude - 0.005, longitude: item.longitude },
-          zoom: 14.5,
-          pitch: 45,
-        }, { duration: 600 });
-      }
+      geocodeItem(item).then(coords => {
+        if (coords && mapRef.current) {
+          const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
+          setActiveCarouselIndex(catIdx >= 0 ? catIdx : 0);
+          mapRef.current.animateCamera({
+            center: { latitude: coords.latitude - 0.005, longitude: coords.longitude },
+            zoom: 14.5,
+            pitch: 45,
+          }, { duration: 600 });
+        }
+      });
     }
   }, [activeTabIndex, N]);
 
@@ -827,12 +863,12 @@ export default function ExploreScreen() {
             ref={mapRef}
             style={StyleSheet.absoluteFillObject}
             initialRegion={{ latitude: location ? location.coords.latitude - 0.005 : -33.4489, longitude: location ? location.coords.longitude : -70.6693 }}
-            markers={currentData.filter((item: any) => item.latitude && item.longitude).map((item: any, idx: number) => ({
-              id: item.id,
-              latitude: item.latitude,
-              longitude: item.longitude,
-              isSelected: activeCarouselIndex === idx,
-            }))}
+            markers={catalogData.map((item: any, idx: number) => {
+              const lat = item.latitude || geocodedMarkers[item.id]?.latitude;
+              const lng = item.longitude || geocodedMarkers[item.id]?.longitude;
+              if (!lat || !lng) return null;
+              return { id: item.id, latitude: lat, longitude: lng, isSelected: activeCarouselIndex === idx };
+            }).filter(Boolean) as any}
           />
         ) : (
           <MapView
@@ -844,10 +880,13 @@ export default function ExploreScreen() {
             mapType="hybrid"
             showsUserLocation={true} showsPointsOfInterest={false} showsBuildings={true} showsTraffic={false} pitchEnabled={true} rotateEnabled={true} compassOffset={{ x: -30, y: height / 2 }}
           >
-            {viewMode === 'map' && currentData.map((item: any, idx: number) => {
+            {viewMode === 'map' && catalogData.map((item: any, idx: number) => {
+              const lat = item.latitude || geocodedMarkers[item.id]?.latitude;
+              const lng = item.longitude || geocodedMarkers[item.id]?.longitude;
+              if (!lat || !lng) return null;
               const isSelected = activeCarouselIndex === idx;
               return (
-                <Marker key={item.id} coordinate={{ latitude: item.latitude, longitude: item.longitude }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
+                <Marker key={item.id} coordinate={{ latitude: lat, longitude: lng }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
                   {isSelected ? (
                     <View style={styles.activePinContainer}>
                       <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
@@ -1004,8 +1043,8 @@ export default function ExploreScreen() {
                   scrollX={scrollX}
                   isTabEv={isTabEv}
                   onPress={() => {
-                    const actualIdx = N > 0 ? ((index % N) + N) % N : index;
-                    if (actualIdx !== activeCarouselIndex) {
+                    const centeredIdx = Math.round(scrollX.value / SNAP);
+                    if (index !== centeredIdx) {
                       flatListRef.current?.scrollToOffset({ offset: index * SNAP, animated: true });
                       animateMapToIndex(index);
                       return;

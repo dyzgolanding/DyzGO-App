@@ -11,13 +11,20 @@ import {
     MoveHorizontal,
     Star,
     Ticket,
+    Trash2,
     Trophy,
     UserPlus,
     Users,
     X
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import ReAnimated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import ReAnimated, {
+  FadeIn, FadeInUp,
+  useSharedValue, useAnimatedStyle,
+  withSpring, withTiming, runOnJS,
+  interpolate, Extrapolation,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
     Alert,
     Animated,
@@ -36,6 +43,83 @@ import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 400;
+const PEEK = -80; // posición de reposo donde queda el basurero visible
+
+// ─── Swipeable wrapper — UI-thread (Gesture Handler + Reanimated) ─────────────
+const SwipeableNotification = React.memo(({ n, onDelete, children }: {
+  n: any;
+  onDelete: (id: string, type: string, relatedId?: string) => void;
+  children: React.ReactNode;
+}) => {
+  const x      = useSharedValue(0);
+  const startX = useSharedValue(0);
+
+  const doDelete = useCallback(() => {
+    onDelete(n.id, n.type, n.related_id);
+  }, [onDelete, n.id, n.type, n.related_id]);
+
+  const animateDelete = useCallback(() => {
+    x.value = withTiming(-width, { duration: 220 }, () => {
+      runOnJS(doDelete)();
+    });
+  }, [doDelete]);
+
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+  // oculto en reposo, visible apenas empieza el swipe
+  const bgStyle   = useAnimatedStyle(() => ({
+    opacity: interpolate(x.value, [-12, -6, 0], [1, 1, 0], Extrapolation.CLAMP),
+  }));
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-12, 12])
+    .onStart(() => { startX.value = x.value; })
+    .onUpdate(e => {
+      x.value = Math.min(0, Math.max(-width, startX.value + e.translationX));
+    })
+    .onEnd(() => {
+      // solo peek o volver — el borrado es exclusivamente por botón
+      if (x.value < PEEK * 0.4) {
+        x.value = withSpring(PEEK, { damping: 60, stiffness: 350 });
+      } else {
+        x.value = withSpring(0, { damping: 60, stiffness: 350 });
+      }
+    })
+    .onFinalize((_, success) => {
+      if (!success) {
+        if (x.value < PEEK * 0.5) {
+          x.value = withSpring(PEEK, { damping: 60, stiffness: 350 });
+        } else {
+          x.value = withSpring(0, { damping: 60, stiffness: 350 });
+        }
+      }
+    });
+
+  return (
+    <View style={{ marginBottom: 12, borderRadius: 20, overflow: 'hidden' }}>
+      {/* Botón rojo — invisible en reposo, aparece al deslizar */}
+      <ReAnimated.View style={[swipeStyles.deleteBackground, bgStyle]}>
+        <TouchableOpacity onPress={animateDelete} style={swipeStyles.trashBtn} hitSlop={16}>
+          <Trash2 color="white" size={22} />
+        </TouchableOpacity>
+      </ReAnimated.View>
+      {/* Tarjeta que se desliza */}
+      <GestureDetector gesture={pan}>
+        <ReAnimated.View style={cardStyle}>
+          {children}
+        </ReAnimated.View>
+      </GestureDetector>
+    </View>
+  );
+});
+
+const swipeStyles = StyleSheet.create({
+  deleteBackground: {
+    position: 'absolute', right: 0, top: 0, bottom: 0, width: 80,
+    backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center',
+  },
+  trashBtn: { width: 80, height: '100%', justifyContent: 'center', alignItems: 'center' },
+});
 
 const COLORS = {
   ...THEME,
@@ -104,14 +188,25 @@ export default function NotificationsScreen() {
       const pendingIds = new Set(pendingFollows?.map(f => f.follower_id) ?? []);
 
       if (data) {
-        // Filtrar: si es friend_request y el follow ya no existe (fue cancelado), no mostrar
+        // Filtrar friend_request:
+        // - is_read: true → ya aceptada, siempre mostrar
+        // - is_read: false → solo si el follow sigue pendiente (no fue cancelado)
         const filtered = data.filter(n =>
-          n.type !== 'friend_request' || pendingIds.has(n.related_id)
+          n.type !== 'friend_request' || n.is_read || pendingIds.has(n.related_id)
         );
+
+        // Deduplicar: solo 1 friend_request por remitente (el más reciente, data ya viene desc)
+        const seenRequesters = new Set<string>();
+        const deduped = filtered.filter(n => {
+          if (n.type !== 'friend_request') return true;
+          if (seenRequesters.has(n.related_id)) return false;
+          seenRequesters.add(n.related_id);
+          return true;
+        });
 
         // Enriquecer friend_request con el perfil del remitente
         const friendRequestIds = [...new Set(
-          filtered
+          deduped
             .filter(n => ['friend_request', 'new_friend', 'friend_connected', 'friend_level'].includes(n.type) && n.related_id)
             .map(n => n.related_id)
         )];
@@ -127,7 +222,7 @@ export default function NotificationsScreen() {
           }
         }
 
-        const enriched = filtered.map(n => ({
+        const enriched = deduped.map(n => ({
           ...n,
           sender_profile: profileMap[n.related_id] ?? null,
         }));
@@ -159,6 +254,21 @@ export default function NotificationsScreen() {
       else setLoading(false);
     }
   }
+
+  const handleDeleteNotification = useCallback(async (id: string, type: string, relatedId?: string) => {
+    setRecentNotifications(prev => prev.filter(n => n.id !== id));
+    setOlderNotifications(prev => prev.filter(n => n.id !== id));
+    await supabase.from('notifications').delete().eq('id', id);
+    // Solicitud pendiente: también eliminar el follow
+    if (type === 'friend_request' && relatedId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('follows').delete()
+          .eq('follower_id', relatedId)
+          .eq('following_id', user.id);
+      }
+    }
+  }, []);
 
   const updateLocalNotification = (id: string, updates: any) => {
       setRecentNotifications(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
@@ -198,17 +308,24 @@ export default function NotificationsScreen() {
 
             if (isMounted.current) Alert.alert("¡Conectados!", "Ahora son amigos.");
         } else {
-            // Rechazar: Borramos la solicitud de follows
+            // Rechazar: eliminar follow y la notificación del DB
             await supabase
                 .from('follows')
                 .delete()
                 .eq('follower_id', requesterId)
                 .eq('following_id', user.id);
 
+            await supabase.from('notifications').delete().eq('id', notification.id);
+
+            // Quitar de la lista local
+            setRecentNotifications(prev => prev.filter(n => n.id !== notification.id));
+            setOlderNotifications(prev => prev.filter(n => n.id !== notification.id));
+
             if (isMounted.current) Alert.alert("Solicitud eliminada", "Has rechazado la solicitud.");
+            return;
         }
 
-        // Marcar notificación como leída
+        // Aceptar: marcar como leída (queda visible como "Amigos")
         await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
         updateLocalNotification(notification.id, { is_read: true });
 
@@ -219,9 +336,13 @@ export default function NotificationsScreen() {
 
 
   const handleNotificationPress = async (notification: any) => {
-    // Notificaciones con botones de acción pendientes → no navegar al tocar la tarjeta
-    const isPendingAction = !notification.is_read && notification.type === 'friend_request';
-    if (isPendingAction) return;
+    // Solicitud pendiente → ir al perfil sin marcar como leída (los botones siguen activos)
+    if (!notification.is_read && notification.type === 'friend_request') {
+      if (notification.related_id) {
+        router.push({ pathname: '/user-profile', params: { id: notification.related_id } });
+      }
+      return;
+    }
 
     try {
       await supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
@@ -337,7 +458,7 @@ export default function NotificationsScreen() {
     return (
         <TouchableOpacity
             style={[styles.glassCard, n.is_read && !isPendingAction && { opacity: 0.6 }]}
-            activeOpacity={isPendingAction ? 1 : 0.7}
+            activeOpacity={0.7}
             onPress={() => handleNotificationPress(n)}
         >
           <View style={[styles.iconContainer, { backgroundColor: getIconBg(n.type) }]}>
@@ -351,7 +472,9 @@ export default function NotificationsScreen() {
                   @{n.sender_profile.username || n.sender_profile.full_name || 'Usuario'}
                 </Text>
               )}
-              <Text style={styles.notifText} numberOfLines={2}>{n.message}</Text>
+              {!isProcessedFriendRequest && (
+                <Text style={styles.notifText} numberOfLines={2}>{n.message}</Text>
+              )}
 
               {/* BOTONES DE ACCIÓN — solo solicitudes de amistad */}
               {isPendingAction && (
@@ -430,7 +553,11 @@ export default function NotificationsScreen() {
                   <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
                   <View style={styles.sectionContainer}>
                       <Text style={styles.sectionHeader}>Últimos 7 días</Text>
-                      {recentNotifications.map(n => <NotificationItem key={n.id} n={n} />)}
+                      {recentNotifications.map(n => (
+                        <SwipeableNotification key={n.id} n={n} onDelete={handleDeleteNotification}>
+                          <NotificationItem n={n} />
+                        </SwipeableNotification>
+                      ))}
                   </View>
                   </ReAnimated.View>
               )}
@@ -440,7 +567,11 @@ export default function NotificationsScreen() {
                   <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
                   <View style={styles.sectionContainer}>
                       <Text style={styles.sectionHeader}>Últimos 30 días</Text>
-                      {olderNotifications.map(n => <NotificationItem key={n.id} n={n} />)}
+                      {olderNotifications.map(n => (
+                        <SwipeableNotification key={n.id} n={n} onDelete={handleDeleteNotification}>
+                          <NotificationItem n={n} />
+                        </SwipeableNotification>
+                      ))}
                   </View>
                   </ReAnimated.View>
               )}
@@ -466,10 +597,10 @@ const styles = StyleSheet.create({
       letterSpacing: 0.5 
   },
 
-  glassCard: { 
-      flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glassBg, 
-      padding: isSmallScreen ? 14 : 16, borderRadius: 20, marginBottom: 12, 
-      borderWidth: 1, borderColor: COLORS.glassBorder 
+  glassCard: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glassBg,
+      padding: isSmallScreen ? 14 : 16, borderRadius: 20,
+      borderWidth: 1, borderColor: COLORS.glassBorder
   },
   iconContainer: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
   notifTitle: { color: 'white', fontWeight: '800', fontSize: 14, marginBottom: 2 },

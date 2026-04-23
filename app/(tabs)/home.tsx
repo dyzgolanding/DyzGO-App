@@ -47,7 +47,7 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
-import { useUserLocation } from '../../lib/useUserLocation';
+import { useLocation } from '../../context/LocationContext';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
 import { safeFormatDate, formatDayShort } from '../../utils/format';
@@ -159,7 +159,7 @@ export default function HomeScreen() {
     );
 
     const params = useLocalSearchParams();
-    const { location, needsPermission, requestPermission } = useUserLocation();
+    const { location, needsPermission, requestPermission } = useLocation();
     const [showLocationModal, setShowLocationModal] = useState(false);
 
     // --- DATOS PRECARGADOS ---
@@ -505,8 +505,9 @@ export default function HomeScreen() {
                             scrollEventThrottle={16}
                         >
                             {featuredEvents.map((event, index) => {
-                                const targetLat = event.latitude || event.clubs?.latitude;
-                                const targetLong = event.longitude || event.clubs?.longitude;
+                                const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs;
+                                const targetLat = event.latitude || cl?.latitude;
+                                const targetLong = event.longitude || cl?.longitude;
                                 let distanceText = '';
                                 if (location && targetLat && targetLong) {
                                     distanceText = formatDistance(getDistanceFromLatLonInKm(location.coords.latitude, location.coords.longitude, targetLat, targetLong));

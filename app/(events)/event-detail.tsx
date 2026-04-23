@@ -49,7 +49,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import RAnimated, { useSharedValue, withTiming, useAnimatedStyle, runOnJS, Easing, interpolate, Extrapolation } from 'react-native-reanimated';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { WebView } from 'react-native-webview';
 import RenderHtml from 'react-native-render-html';
 import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
@@ -212,16 +211,16 @@ export default function EventDetailScreen() {
 
             const { data: eventData, error: eventError } = await supabase
                 .from('events')
-                .select('*, clubs(*), ticket_tiers(price), experiences(id, name, logo_url, instagram_handle)')
+                .select('*, clubs(*), ticket_tiers(price, type), experiences(id, name, logo_url, instagram_handle)')
                 .eq('id', params.id)
                 .single();
 
             if (eventError) throw eventError;
 
             let calculatedMinPrice = 0;
-            if (eventData.ticket_tiers && eventData.ticket_tiers.length > 0) {
-                const prices = eventData.ticket_tiers.map((t: any) => t.price);
-                calculatedMinPrice = Math.min(...prices);
+            const payableTiers = (eventData.ticket_tiers ?? []).filter((t: any) => t.type !== 'courtesy');
+            if (payableTiers.length > 0) {
+                calculatedMinPrice = Math.min(...payableTiers.map((t: any) => t.price));
             }
             setMinPrice(calculatedMinPrice);
 
@@ -277,7 +276,9 @@ export default function EventDetailScreen() {
             ].filter(Boolean);
             const addressQuery = addrParts.length > 0 ? addrParts.join(', ') : (eventData.location || '');
 
-            if (addressQuery) {
+            if (eventData.latitude && eventData.longitude) {
+                setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+            } else if (addressQuery) {
                 try {
                     const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
                     const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressQuery + ', Chile')}&key=${apiKey}`;
@@ -286,16 +287,8 @@ export default function EventDetailScreen() {
                     const loc = geoData?.results?.[0]?.geometry?.location;
                     if (loc) {
                         setRegion({ latitude: loc.lat, longitude: loc.lng, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-                    } else if (eventData.latitude && eventData.longitude) {
-                        setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
                     }
-                } catch {
-                    if (eventData.latitude && eventData.longitude) {
-                        setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-                    }
-                }
-            } else if (eventData.latitude && eventData.longitude) {
-                setRegion({ latitude: eventData.latitude, longitude: eventData.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
+                } catch { /* mantener región por defecto */ }
             }
 
             const { data: { user } } = await supabase.auth.getUser();
@@ -318,8 +311,8 @@ export default function EventDetailScreen() {
 
     const openInGoogleMaps = () => {
         if (!event) return;
-        const lat = event.latitude || region.latitude;
-        const lng = event.longitude || region.longitude;
+        const lat = region.latitude;
+        const lng = region.longitude;
         const label = encodeURIComponent(event.title || "Evento");
         const fallbackMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
@@ -361,7 +354,7 @@ export default function EventDetailScreen() {
     const openUber = () => {
         if (!event) return;
         const uberParts = [
-            [event.street, event.street_number].filter(Boolean).join(' '),
+            [event?.street, event?.street_number].filter(Boolean).join(' '),
             event.commune,
             event.region,
         ].filter(Boolean);
@@ -889,28 +882,28 @@ export default function EventDetailScreen() {
                                     <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Ubicación y Llegada</Text>
                                     <View style={[styles.glassCard, { marginBottom: 0 }]}>
                                         <View style={[styles.mapContainer, { height: 200 }]} pointerEvents="none">
-                                            {(() => {
-                                                const parts = [
-                                                    [event?.street, event?.street_number].filter(Boolean).join(' '),
-                                                    event?.commune,
-                                                    event?.region,
-                                                ].filter(Boolean);
-                                                const addressQuery = parts.length > 0 ? parts.join(', ') : (event?.location || '');
-                                                const q = addressQuery
-                                                    ? encodeURIComponent(addressQuery + ', Chile')
-                                                    : `${region.latitude},${region.longitude}`;
-                                                const mapSrc = `https://maps.google.com/maps?q=${q}&t=k&z=15&ie=UTF8&iwloc=&output=embed`;
-                                                return Platform.OS === 'web' ? (
-                                                    <iframe src={mapSrc} style={{ width: '100%', height: '100%', border: 0 }} />
-                                                ) : (
-                                                    <WebView
-                                                        source={{ html: `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#000;"><iframe src="${mapSrc}" style="width:100%;height:100%;border:0;" frameborder="0" allowfullscreen></iframe></body></html>` }}
-                                                        style={styles.map}
-                                                        scrollEnabled={false}
-                                                        originWhitelist={['*']}
+                                            {Platform.OS === 'web' ? (
+                                                <iframe
+                                                    src={`https://maps.google.com/maps?q=${region.latitude},${region.longitude}&t=k&z=15&output=embed`}
+                                                    style={{ width: '100%', height: '100%', border: 0 }}
+                                                />
+                                            ) : (
+                                                <MapView
+                                                    provider={PROVIDER_GOOGLE}
+                                                    style={styles.map}
+                                                    region={region}
+                                                    mapType="hybrid"
+                                                    scrollEnabled={false}
+                                                    zoomEnabled={false}
+                                                    rotateEnabled={false}
+                                                    pitchEnabled={false}
+                                                >
+                                                    <Marker
+                                                        coordinate={{ latitude: region.latitude, longitude: region.longitude }}
+                                                        pinColor={activeBg1}
                                                     />
-                                                );
-                                            })()}
+                                                </MapView>
+                                            )}
                                         </View>
                                         {event?.location && (
                                             <View style={styles.addressContainer}>

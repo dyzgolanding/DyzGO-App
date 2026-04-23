@@ -19,7 +19,13 @@ export const useUserLocation = (): LocationState => {
 
   const fetchLocation = async () => {
     try {
-      const current = await Location.getCurrentPositionAsync({});
+      // Intento rápido con la última posición conocida
+      const last = await Location.getLastKnownPositionAsync({});
+      if (last) setLocation(last);
+      // Luego obtiene posición fresca
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       setLocation(current);
     } catch {
       setErrorMsg('Error al obtener la ubicación');
@@ -52,12 +58,16 @@ export const useUserLocation = (): LocationState => {
         const { status } = await Location.getForegroundPermissionsAsync();
 
         if (status === 'granted') {
-          // Ya tenemos permiso — obtenemos ubicación directamente
           await fetchLocation();
         } else if (status === 'undetermined') {
-          // Aún no decidido — avisamos al componente para que muestre su modal
-          setNeedsPermission(true);
-          setLoading(false);
+          // Pide el permiso del sistema directamente
+          const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+          if (newStatus === 'granted') {
+            await fetchLocation();
+          } else {
+            setNeedsPermission(true);
+            setLoading(false);
+          }
         } else {
           // Denegado — no pedimos de nuevo
           setErrorMsg('Permiso de ubicación denegado');

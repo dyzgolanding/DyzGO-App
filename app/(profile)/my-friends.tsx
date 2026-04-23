@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from '../../components/BlurSurface';
-import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
+import ReAnimated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
@@ -14,7 +14,7 @@ import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Animated, Dimensions, FlatList,
-  PanResponder, Platform, RefreshControl, ScrollView, Share,
+  Platform, RefreshControl, Share,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
@@ -24,7 +24,6 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { EmptyStateCard } from '../../components/EmptyStateCard';
 
 const { width } = Dimensions.get('window');
-const isSmall = width < 400;
 const SLIDER_W = (width - 48) / 2;
 const BATCH_SIZE = 20;
 const CARD_W = width * 0.72;
@@ -41,73 +40,6 @@ interface UserItem {
   avatar_url?: string; xp?: number; level?: number;
 }
 interface UserItemWithMutual extends UserItem { mutualCount?: number; }
-
-// ─── Tarjeta grande para el carrusel de sugerencias ──────────────────────────
-function SuggestionCard({
-  item, isRequestSent, onPress, onAdd, onDismiss,
-}: {
-  item: UserItemWithMutual; isRequestSent: boolean;
-  onPress: () => void; onAdd: () => void; onDismiss: () => void;
-}) {
-  const lc = LEVEL_COLORS[item.level ?? 1] ?? COLORS.neonPink;
-  const initials = item.full_name ? item.full_name[0].toUpperCase() : '?';
-
-  return (
-    <TouchableOpacity style={[sug.card, { shadowColor: lc }]} onPress={onPress} activeOpacity={0.9}>
-      <LinearGradient
-        colors={['rgba(255,255,255,0.03)', lc + '15']}
-        style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
-      />
-
-      {!isRequestSent && (
-        <TouchableOpacity
-          style={sug.dismiss}
-          onPress={e => { e.stopPropagation(); onDismiss(); }}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-        >
-          <XIcon color={COLORS.textSecondary} size={14} />
-        </TouchableOpacity>
-      )}
-
-      <View style={[sug.ring, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}>
-        <LinearGradient colors={['rgba(255,49,216,0.3)', 'rgba(255,49,216,0.08)']} style={StyleSheet.absoluteFill} />
-        {item.avatar_url
-          ? <Image source={{ uri: item.avatar_url }} style={sug.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
-          : <Text style={sug.initials}>{initials}</Text>}
-      </View>
-
-      <View style={sug.info}>
-        <Text style={sug.name} numberOfLines={1}>{item.full_name}</Text>
-        <Text style={sug.username}>@{item.username || 'usuario'}</Text>
-        {!!item.level && (
-          <View style={[sug.levelPill, { backgroundColor: lc + '20', borderColor: lc + '40' }]}>
-            <Text style={[sug.levelText, { color: lc }]}>NIVEL {item.level}</Text>
-          </View>
-        )}
-        {(item.mutualCount ?? 0) > 0 && (
-          <Text style={sug.mutual}>
-            {item.mutualCount === 1 ? '1 amigo en común' : `${item.mutualCount} amigos en común`}
-          </Text>
-        )}
-      </View>
-
-      <View style={sug.action}>
-        {isRequestSent ? (
-          <View style={[sug.chip, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }]}>
-            <Check color={COLORS.textSecondary} size={16} />
-            <Text style={[sug.chipText, { color: COLORS.textSecondary }]}>Solicitud Enviada</Text>
-          </View>
-        ) : (
-          <TouchableOpacity style={sug.addBtn} onPress={onAdd} activeOpacity={0.8}>
-            <UserPlus color="white" size={18} />
-            <Text style={sug.addBtnText}>Agregar Amigo</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 // ─── Fila compacta de amigo (Tarjeta Liquid Glass) ────────────────────────────
 function FriendRow({ item, onPress }: { item: UserItem; onPress: () => void }) {
@@ -203,10 +135,10 @@ function SuggestionRow({
       </View>
       <View style={row.info}>
         <Text style={row.name} numberOfLines={1}>{item.full_name}</Text>
-        <Text style={row.username} numberOfLines={1}>
-          @{item.username || 'usuario'}
-          {(item.mutualCount ?? 0) > 0 ? ` · ${item.mutualCount} en común` : ''}
-        </Text>
+        <Text style={row.username} numberOfLines={1}>@{item.username || 'usuario'}</Text>
+        {(item.mutualCount ?? 0) > 0 && (
+          <Text style={row.mutual} numberOfLines={1}>{item.mutualCount} en común</Text>
+        )}
       </View>
       {!!item.level && (
         <View style={[row.levelPill, { backgroundColor: lc + '20', borderColor: lc + '40' }]}>
@@ -262,9 +194,6 @@ export default function MyFriendsScreen() {
   const [displayedSuggestions, setDisplayedSuggestions] = useState<UserItemWithMutual[]>([]);
   // Descartados: ref para acceso síncrono en callbacks async, state para re-render
   const dismissedRef = useRef<Set<string>>(new Set());
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-
-  const scrollX = useRef(new Animated.Value(0)).current;
   const scopeAnim = useRef(new Animated.Value(0)).current;
   const scopeAnimValue = useRef(0);
   const hasLoaded = useRef(false);
@@ -292,7 +221,6 @@ export default function MyFriendsScreen() {
       try {
         const ids = new Set<string>(JSON.parse(raw) as string[]);
         dismissedRef.current = ids;
-        setDismissedIds(ids);
       } catch { /* ignore corrupted storage */ }
     });
   }, []);
@@ -302,25 +230,6 @@ export default function MyFriendsScreen() {
     return () => scopeAnim.removeListener(id);
   }, []);
 
-  const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5,
-    onPanResponderGrant: () => {
-      scopeAnim.stopAnimation(v => { scopeAnim.setOffset(v); scopeAnim.setValue(0); });
-    },
-    onPanResponderMove: (_, g) => { scopeAnim.setValue(g.dx / SLIDER_W); },
-    onPanResponderRelease: (_, g) => {
-      scopeAnim.flattenOffset();
-      const cur = scopeAnimValue.current;
-      const to = Math.max(0, Math.min(1, Math.round(cur > 0.5 || g.vx > 0.5 ? 1 : 0)));
-      setScope(to === 0 ? 'Amigos' : 'Global');
-      Animated.spring(scopeAnim, { toValue: to, useNativeDriver: false, bounciness: 10, speed: 20 }).start();
-    },
-  })).current;
-
-  const slideLeft = scopeAnim.interpolate({
-    inputRange: [0, 1], outputRange: [4, SLIDER_W + 4], extrapolate: 'clamp',
-  });
 
   const handleScopeChange = useCallback((s: 'Amigos' | 'Global') => {
     setScope(s);
@@ -373,7 +282,7 @@ export default function MyFriendsScreen() {
         : { data: [] };
       setMyFriends(friendsRes.data ?? []);
 
-      await buildSmartSuggestions(user.id, mutualIds, mySentSet);
+      await buildSmartSuggestions(user.id, mutualIds);
     } catch (e) {
       console.error('[my-friends] fetchInitialData:', e);
     } finally {
@@ -390,7 +299,6 @@ export default function MyFriendsScreen() {
   const buildSmartSuggestions = async (
     userId: string,
     friendIds: string[],
-    sentIds: Set<string>,
   ) => {
     try {
       const dismissed = dismissedRef.current;
@@ -408,7 +316,7 @@ export default function MyFriendsScreen() {
         const mutualCount: Record<string, number> = {};
         (fof ?? []).forEach((f: any) => {
           const id = f.following_id;
-          if (!friendSet.has(id) && !sentIds.has(id) && !dismissed.has(id)) {
+          if (!friendSet.has(id) && !dismissed.has(id)) {
             mutualCount[id] = (mutualCount[id] ?? 0) + 1;
           }
         });
@@ -434,7 +342,7 @@ export default function MyFriendsScreen() {
       // Completar con usuarios de alta XP si faltan candidatos
       if (candidates.length < BATCH_SIZE) {
         const excludeSet = new Set([
-          ...friendIds, ...sentIds, userId,
+          ...friendIds, userId,
           ...candidates.map(c => c.id), ...dismissed,
         ]);
         const excludeParam = excludeSet.size > 0
@@ -454,9 +362,9 @@ export default function MyFriendsScreen() {
       }
 
       allCandidates.current = candidates;
-      // Filtrar descartados y enviados al calcular el lote inicial
+      // Filtrar solo descartados — los de solicitud pendiente permanecen con estado visual
       const initial = candidates
-        .filter(c => !sentIds.has(c.id) && !dismissed.has(c.id))
+        .filter(c => !dismissed.has(c.id))
         .slice(0, BATCH_SIZE);
       setDisplayedSuggestions(initial);
     } catch (e) {
@@ -474,7 +382,6 @@ export default function MyFriendsScreen() {
   const dismissSuggestion = useCallback((id: string) => {
     const next = new Set([...dismissedRef.current, id]);
     dismissedRef.current = next;
-    setDismissedIds(next);
     // Persistir en AsyncStorage para sobrevivir refreshes y reinicios
     AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify([...next])).catch(() => {});
 
@@ -512,21 +419,24 @@ export default function MyFriendsScreen() {
       });
       if (error) throw error;
 
-      // Deduplicar notificación
-      await supabase.from('notifications').delete()
-        .eq('user_id', targetId).eq('related_id', user.id).eq('type', 'friend_request');
-      await supabase.from('notifications').insert({
-        user_id: targetId, related_id: user.id, type: 'friend_request',
-        title: 'Solicitud de Amistad', message: 'te ha enviado una solicitud de amistad.', is_read: false,
-      });
+      // Upsert notificación — evita duplicados aunque el DELETE previo falle por RLS
+      await supabase.from('notifications').upsert(
+        { user_id: targetId, related_id: user.id, type: 'friend_request',
+          title: 'Solicitud de Amistad', message: 'te ha enviado una solicitud de amistad.', is_read: false },
+        { onConflict: 'user_id,related_id,type', ignoreDuplicates: false }
+      );
 
-      const { data: recipient } = await supabase
-        .from('profiles').select('expo_push_token').eq('id', targetId).single();
+      const [{ data: recipient }, { data: sender }] = await Promise.all([
+        supabase.from('profiles').select('expo_push_token').eq('id', targetId).single(),
+        supabase.from('profiles').select('full_name').eq('id', user.id).single(),
+      ]);
       if (recipient?.expo_push_token) {
+        const senderName = sender?.full_name || 'Alguien';
         await sendPushNotification(
           recipient.expo_push_token,
           'Solicitud de Amistad',
-          '¡Alguien quiere conectar contigo en DyzGO!',
+          `${senderName} quiere conectar contigo en DyzGO`,
+          { url: '/notifications' },
         );
       }
     } catch (e) {
@@ -792,26 +702,7 @@ const row = StyleSheet.create({
   badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginLeft: 8 },
   badgeText: { fontSize: 11, fontWeight: '800' },
   addBtn:    { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.neonPink, justifyContent: 'center', alignItems: 'center', marginLeft: 8, shadowColor: COLORS.neonPink, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
-});
-
-// ─── Estilos de tarjeta grande (SuggestionCard) ───────────────────────────────
-const sug = StyleSheet.create({
-  card:      { width: '100%', height: 370, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 28, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'space-between', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } },
-  dismiss:   { position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  ring:      { width: 110, height: 110, borderRadius: 55, borderWidth: 3, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', marginTop: 24, shadowOpacity: 0.6, shadowRadius: 15, shadowOffset: { width: 0, height: 0 }, backgroundColor: 'rgba(255,49,216,0.2)' },
-  avatar:    { width: 110, height: 110 },
-  initials:  { color: '#FBFBFB', fontSize: 44, fontWeight: '900' },
-  info:      { alignItems: 'center', gap: 8, paddingHorizontal: 10, width: '100%' },
-  name:      { color: '#FBFBFB', fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  username:  { color: COLORS.textSecondary, fontSize: 14, fontWeight: '500', marginTop: -4 },
-  levelPill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, borderWidth: 1, marginTop: 4 },
-  levelText: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  mutual:    { color: COLORS.neonPink, fontSize: 12, fontWeight: '700', marginTop: 5 },
-  action:    { width: '100%', marginTop: 10 },
-  chip:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 48, borderRadius: 16, borderWidth: 1 },
-  chipText:  { fontSize: 14, fontWeight: '800' },
-  addBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 48, borderRadius: 16, backgroundColor: COLORS.neonPink, shadowColor: COLORS.neonPink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 12 },
-  addBtnText:{ color: 'white', fontSize: 15, fontWeight: '800' },
+  mutual:    { color: COLORS.neonPink, fontSize: 11, fontWeight: '600', marginTop: 1, opacity: 0.8 },
 });
 
 // ─── Estilos globales de la pantalla ─────────────────────────────────────────

@@ -515,7 +515,7 @@ export default function AuthScreen() {
                 <>
                   {showNameUser && (
                     <Animated.View entering={simpleFadeIn}>
-                      <GlassInput label="NOMBRE COMPLETO" icon={<User color={COLORS.neonPink} size={18} />} placeholder="Nombre Apellido" value={fullName} onChangeText={handleNameInput} />
+                      <GlassInput label="NOMBRE" icon={<User color={COLORS.neonPink} size={18} />} placeholder="Nombre Apellido" value={fullName} onChangeText={handleNameInput} />
                       <GlassInput label="USERNAME" icon={<AtSign color={COLORS.neonPink} size={18} />} placeholder="tu_usuario" value={username} onChangeText={handleUsernameInput} autoCapitalize="none" />
                     </Animated.View>
                   )}
@@ -560,6 +560,7 @@ export default function AuthScreen() {
                 <Animated.View entering={simpleFadeIn} style={{ width: '100%', alignItems: 'center' }}>
                   <Text style={styles.otpInfo}>Código enviado a{"\n"}<Text style={{ color: '#fff', fontWeight: '800' }}>{email}</Text></Text>
                   <GlassInput label="CÓDIGO" icon={<KeyRound color={COLORS.neonPink} size={20} />} placeholder="000000" value={otpCode} onChangeText={setOtpCode} keyboardType="number-pad" maxLength={6} />
+                  <Text style={styles.spamNote}>¿No lo ves? Revisa tu carpeta de spam.</Text>
                   <View style={styles.resendContainer}>
                     <TouchableOpacity onPress={() => { setStep(1); }} style={styles.backBtn}>
                       <ArrowLeft color="#888" size={14} />
@@ -766,6 +767,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#000', fontSize: Math.round(18 * S), fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5 },
   otpInfo: { color: COLORS.textZinc, marginBottom: 25, textAlign: 'center', fontSize: 14, opacity: 0.8 },
+  spamNote: { color: 'rgba(255,255,255,0.45)', fontSize: 12, textAlign: 'center', marginBottom: 14 },
   resendContainer: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 15 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   backBtnText: { color: '#888', fontSize: 11, fontWeight: '900' },

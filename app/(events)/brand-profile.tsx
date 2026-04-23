@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { useSaved } from '../../context/SavedContext';
 import { supabase } from '../../lib/supabase';
-import { useUserLocation } from '../../lib/useUserLocation';
+import { useLocation } from '../../context/LocationContext';
 import { getDistanceFromLatLonInKm, formatDistance } from '../../utils/location';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
@@ -60,7 +60,7 @@ export default function BrandProfileScreen() {
   const hasCachedParams = !!(cachedName);
 
   const { isBrandSaved, toggleSaveBrand } = useSaved();
-  const { location } = useUserLocation();
+  const { location } = useLocation();
   const followed = isBrandSaved(experienceId);
 
   const [loading, setLoading] = useState(!hasCachedParams);

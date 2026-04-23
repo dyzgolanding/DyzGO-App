@@ -1,3 +1,4 @@
+import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
@@ -9,10 +10,14 @@ import {
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import ReAnimated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Platform, 
+import ReAnimated, {
+  FadeIn, FadeInDown, FadeInUp,
+  useSharedValue, withTiming, useAnimatedStyle,
+  runOnJS, Easing, interpolate, Extrapolation,
+} from 'react-native-reanimated';
+import { Platform,
   Alert,
-  Dimensions, ScrollView, StatusBar,
+  Dimensions, FlatList, Modal, PanResponder, ScrollView, StatusBar,
   StyleSheet, Text, TouchableOpacity, View,
  } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +26,7 @@ import { sendPushNotification } from '../../lib/push';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const LEVEL_COLORS: Record<number, string> = {
   1: '#8A2BE2', 2: '#9D50BB', 3: '#4776E6', 4: '#00B4DB',
@@ -46,6 +51,35 @@ export default function UserProfileScreen() {
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [mutualCount, setMutualCount] = useState(0);
   const [mutualAvatars, setMutualAvatars] = useState<string[]>([]);
+  const [mutualFriends, setMutualFriends] = useState<any[]>([]);
+  const [mutualModalVisible, setMutualModalVisible] = useState(false);
+
+  const modalOffset = useSharedValue(height);
+  const modalSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: modalOffset.value }] }));
+  const modalOverlayStyle = useAnimatedStyle(() => ({ opacity: interpolate(modalOffset.value, [0, height], [1, 0], Extrapolation.CLAMP) }));
+
+  const closeMutualModal = () => {
+    modalOffset.value = withTiming(height, { duration: 320, easing: Easing.inOut(Easing.quad) }, () => { runOnJS(setMutualModalVisible)(false); });
+  };
+
+  const mutualPan = PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+    onPanResponderMove: (_, g) => { if (g.dy > 0) modalOffset.value = g.dy; },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 80 || g.vy > 0.5) {
+        modalOffset.value = withTiming(height, { duration: 250 }, () => { runOnJS(setMutualModalVisible)(false); });
+      } else {
+        modalOffset.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (mutualModalVisible) {
+      modalOffset.value = height;
+      modalOffset.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+    }
+  }, [mutualModalVisible]);
 
   const [profile, setProfile] = useState({
     full_name: initialName || 'Usuario',
@@ -82,9 +116,11 @@ export default function UserProfileScreen() {
 
       if (mutualIds.length > 0) {
         const { data } = await supabase.from('profiles')
-          .select('avatar_url')
-          .in('id', mutualIds.slice(0, 3));
-        setMutualAvatars(data?.map((p: any) => p.avatar_url).filter(Boolean) ?? []);
+          .select('id, full_name, username, avatar_url')
+          .in('id', mutualIds);
+        const friends = data ?? [];
+        setMutualFriends(friends);
+        setMutualAvatars(friends.slice(0, 3).map((p: any) => p.avatar_url).filter(Boolean));
       }
     } catch (e) {
       console.error('[user-profile] fetchMutualFriends:', e);
@@ -210,7 +246,7 @@ export default function UserProfileScreen() {
   const BTN_CONFIG = {
     none:             { label: 'AGREGAR AMIGO',       Icon: UserPlus,  gradient: false, bg: 'rgba(255,49,216,0.15)',       border: 'rgba(255,49,216,0.35)',    textColor: '#FF31D8' },
     request_sent:     { label: 'CANCELAR SOLICITUD',  Icon: X,         gradient: false, bg: 'rgba(255,255,255,0.05)',      border: 'rgba(251,251,251,0.05)',  textColor: COLORS.textSecondary },
-    request_received: { label: 'ACEPTAR SOLICITUD',   Icon: Check,     gradient: true,  bg: null,                         border: null,                      textColor: 'white' },
+    request_received: { label: 'ACEPTAR SOLICITUD',   Icon: Check,     gradient: false, bg: 'rgba(0,255,136,0.08)',        border: '#00FF88',                 textColor: '#00FF88' },
     friends:          { label: 'AMIGOS',              Icon: UserCheck, gradient: false, bg: 'rgba(0,255,136,0.08)',        border: '#00FF88',                 textColor: '#00FF88' },
   }[friendState];
 
@@ -281,7 +317,7 @@ export default function UserProfileScreen() {
         {/* AMIGOS EN COMÚN */}
         {!isOwnProfile && mutualCount > 0 && (
           <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
-          <View style={s.mutualRow}>
+          <TouchableOpacity style={s.mutualRow} onPress={() => setMutualModalVisible(true)} activeOpacity={0.75}>
             <View style={s.mutualAvatars}>
               {mutualAvatars.slice(0, 3).map((url, i) => (
                 <Image
@@ -297,7 +333,8 @@ export default function UserProfileScreen() {
             <Text style={s.mutualText}>
               {mutualCount === 1 ? '1 amigo en común' : `${mutualCount} amigos en común`}
             </Text>
-          </View>
+            <ChevronRight color="rgba(255,255,255,0.25)" size={16} />
+          </TouchableOpacity>
           </ReAnimated.View>
         )}
 
@@ -356,6 +393,49 @@ export default function UserProfileScreen() {
         )}
 
       </ScrollView>
+
+      {/* MODAL AMIGOS EN COMÚN */}
+      <Modal visible={mutualModalVisible} transparent statusBarTranslucent onRequestClose={closeMutualModal}>
+        <ReAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }, modalOverlayStyle]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeMutualModal} />
+        </ReAnimated.View>
+        <ReAnimated.View style={[s.modalContent, modalSheetStyle]}>
+          <View style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden' }]}>
+            <BlurView intensity={70} tint="dark" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+          </View>
+          <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 24 }} {...mutualPan.panHandlers}>
+            <View style={s.modalHandle} />
+          </View>
+          <Text style={s.modalTitle}>
+            {mutualCount === 1 ? '1 amigo en común' : `${mutualCount} amigos en común`}
+          </Text>
+          <FlatList
+            data={mutualFriends}
+            keyExtractor={item => item.id}
+            contentContainerStyle={{ paddingBottom: 32 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={s.modalFriendRow}
+                activeOpacity={0.8}
+                onPress={() => { closeMutualModal(); setTimeout(() => router.push({ pathname: '/user-profile', params: { id: item.id } }), 340); }}
+              >
+                {item.avatar_url
+                  ? <Image source={{ uri: item.avatar_url }} style={s.modalAvatar} contentFit="cover" transition={0} />
+                  : <View style={[s.modalAvatar, { backgroundColor: 'rgba(255,49,216,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FF31D8' }]}>
+                      <Text style={{ color: '#FBFBFB', fontWeight: '900', fontSize: 18 }}>{item.full_name?.[0]?.toUpperCase() ?? '?'}</Text>
+                    </View>
+                }
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalFriendName}>{item.full_name}</Text>
+                  <Text style={s.modalFriendSub}>@{item.username || 'usuario'}</Text>
+                </View>
+                <ChevronRight color="rgba(255,255,255,0.25)" size={18} />
+              </TouchableOpacity>
+            )}
+          />
+        </ReAnimated.View>
+      </Modal>
+
     </ReAnimated.View>
   );
 }
@@ -403,4 +483,13 @@ const s = StyleSheet.create({
   // Unfriend
   unfriendBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: -8 },
   unfriendText: { color: 'rgba(255,60,60,0.5)', fontSize: 12, fontWeight: '500' },
+
+  // Modal amigos en común
+  modalContent:    { position: 'absolute', bottom: 0, left: 0, right: 0, height: height * 0.55, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 25, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  modalHandle:     { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', borderRadius: 2 },
+  modalTitle:      { color: '#FBFBFB', fontSize: 18, fontWeight: '900', fontStyle: 'italic', marginBottom: 20 },
+  modalFriendRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.05)', padding: 14, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
+  modalAvatar:     { width: 44, height: 44, borderRadius: 22, marginRight: 14 },
+  modalFriendName: { color: '#FBFBFB', fontWeight: '800', fontSize: 15 },
+  modalFriendSub:  { color: 'rgba(251,251,251,0.5)', fontSize: 12, marginTop: 2 },
 });

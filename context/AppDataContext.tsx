@@ -39,7 +39,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       const [evResult, clResult] = await Promise.all([
         supabase
           .from('events')
-          .select('*, clubs(name, location), ticket_tiers(price)')
+          .select('*, clubs(name, location, latitude, longitude), ticket_tiers(price)')
           .eq('is_active', true)
           .in('status', ['active', 'info'])
           .order('date', { ascending: true })

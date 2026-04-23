@@ -7,8 +7,10 @@ import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useRef, useState } from 'react';
 import { Easing, Platform, StatusBar, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Bell } from 'lucide-react-native';
 import { AppDataProvider, useAppData } from '../context/AppDataContext';
+import { LocationProvider } from '../context/LocationContext';
 import { SavedProvider } from '../context/SavedContext';
 import { OnboardingContext } from '../context/OnboardingContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -239,6 +241,7 @@ function RootLayout() {
       <OnboardingContext.Provider value={{ setNeedsOnboarding }}>
         <AppDataProvider>
           <SessionPreloader session={session} />
+          <LocationProvider>
           <SavedProvider>
             <ThemeProvider value={PureBlackTheme}>
               {Platform.OS !== 'web' && (
@@ -303,6 +306,7 @@ function RootLayout() {
               </Stack>
             </ThemeProvider>
           </SavedProvider>
+          </LocationProvider>
         </AppDataProvider>
       </OnboardingContext.Provider>
     </ErrorBoundary>
@@ -311,7 +315,11 @@ function RootLayout() {
   if (Platform.OS === 'web') {
     return <WebShell>{appContent}</WebShell>;
   }
-  return appContent;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {appContent}
+    </GestureHandlerRootView>
+  );
 }
 
 export default RootLayout;

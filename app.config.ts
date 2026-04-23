@@ -4,22 +4,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'DyzGO',
   slug: 'dyzgot',
-  version: '1.0.0',
+  version: '1.0.1',
   updates: { enabled: false },
   scheme: 'dyzgo',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   userInterfaceStyle: 'dark',
   splash: {
-    image: './assets/images/splash-icon.png',
-    resizeMode: 'contain',
     backgroundColor: '#000000',
   },
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.dyzgo.app',
-    buildNumber: '59',
+    buildNumber: '60',
     associatedDomains: ['applinks:dyzgo.com'],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:

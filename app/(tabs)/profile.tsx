@@ -4,6 +4,7 @@ import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { BlurView } from '../../components/BlurSurface';
 import {
   Award,
+  Bell,
   ChevronRight,
   Settings,
   Ticket,
@@ -15,11 +16,14 @@ import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View
 } from 'react-native';
 import Animated, {
@@ -75,6 +79,28 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!loading) fadeAnim.value = withTiming(1, timing.enter);
   }, [loading]);
+
+  const [hasUnreadNotifs] = useState(true);
+
+  const [showAvatarViewer, setShowAvatarViewer] = useState(false);
+  const avatarScale = useSharedValue(0.8);
+  const avatarOpacity = useSharedValue(0);
+  const avatarViewerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: avatarScale.value }],
+    opacity: avatarOpacity.value,
+  }));
+
+  const openAvatarViewer = () => {
+    setShowAvatarViewer(true);
+    avatarScale.value = withTiming(1, { duration: 250 });
+    avatarOpacity.value = withTiming(1, { duration: 200 });
+  };
+
+  const closeAvatarViewer = () => {
+    avatarScale.value = withTiming(0.8, { duration: 180 });
+    avatarOpacity.value = withTiming(0, { duration: 180 });
+    setTimeout(() => setShowAvatarViewer(false), 190);
+  };
 
   const [profile, setProfile] = useState({
     id: '',
@@ -174,6 +200,10 @@ export default function ProfileScreen() {
               <Text style={styles.brandText}>DyzGO<Text style={{ color: '#FF31D8' }}>.</Text></Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <PressableScale scaleTo={0.82} haptic="light" style={styles.bellContainer} onPress={() => router.push('/notifications')}>
+                <Bell color="rgba(251, 251, 251, 0.5)" size={24} />
+                {hasUnreadNotifs && <View style={styles.notifDot} />}
+              </PressableScale>
               <PressableScale scaleTo={0.82} haptic="light" style={styles.iconContainer} onPress={() => router.push('/settings')}>
                 <Settings color="rgba(251, 251, 251, 0.5)" size={24} />
               </PressableScale>
@@ -207,7 +237,11 @@ export default function ProfileScreen() {
                   <Text style={styles.levelText}>NIVEL {profile.level}</Text>
                 </View>
               </View>
-              <View style={styles.avatarBorderBig}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={profile.avatar_url ? openAvatarViewer : undefined}
+                style={styles.avatarBorderBig}
+              >
                 {profile.avatar_url ? (
                   <Image source={{ uri: profile.avatar_url }} style={styles.avatarImageReal} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 ) : (
@@ -217,7 +251,15 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
+
+              <Modal visible={showAvatarViewer} transparent animationType="none" onRequestClose={closeAvatarViewer} statusBarTranslucent>
+                <Pressable style={styles.avatarViewerOverlay} onPress={closeAvatarViewer}>
+                  <Animated.View style={[styles.avatarViewerContainer, avatarViewerStyle]}>
+                    <Image source={{ uri: profile.avatar_url! }} style={styles.avatarViewerImg} contentFit="cover" />
+                  </Animated.View>
+                </Pressable>
+              </Modal>
             </View>
           </AnimatedEntry>
           )}
@@ -334,6 +376,8 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center' },
   brandText: { color: '#FBFBFB', fontSize: 24, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 },
   iconContainer: { position: 'relative', padding: 4 },
+  bellContainer: { position: 'relative', padding: 4 },
+  notifDot: { position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' },
 
   heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: isLargeScreen ? 30 : 24, marginBottom: isLargeScreen ? 36 : 28, paddingHorizontal: 4 },
   userInfo: { flex: 1, paddingRight: 10 },
@@ -400,4 +444,11 @@ const styles = StyleSheet.create({
   bentoCardSubtitle: {
     color: 'rgba(251, 251, 251, 0.6)', fontSize: 11, marginTop: 4, fontWeight: '500'
   },
+  avatarViewerOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', alignItems: 'center',
+  },
+  avatarViewerContainer: {
+    width: windowWidth * 0.85, height: windowWidth * 0.85, borderRadius: 24, overflow: 'hidden',
+  },
+  avatarViewerImg: { width: '100%', height: '100%' },
 });
