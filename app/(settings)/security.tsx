@@ -331,7 +331,8 @@ export default function SecurityScreen() {
                         </View>
                         <Switch
                             value={faceId} onValueChange={toggleFaceId}
-                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }} thumbColor={faceId ? COLORS.neonPink : '#FBFBFB'}
+                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7B1E6B' }} thumbColor={faceId ? COLORS.neonPink : '#FBFBFB'}
+                            ios_backgroundColor='rgba(255,255,255,0.1)'
                         />
                     </View>
                 </View>
@@ -349,7 +350,8 @@ export default function SecurityScreen() {
                         </View>
                         <Switch
                             value={twoStep} onValueChange={toggleTwoStep}
-                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }} thumbColor={twoStep ? COLORS.neonPink : '#FBFBFB'}
+                            trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7B1E6B' }} thumbColor={twoStep ? COLORS.neonPink : '#FBFBFB'}
+                            ios_backgroundColor='rgba(255,255,255,0.1)'
                         />
                     </View>
                 </View>

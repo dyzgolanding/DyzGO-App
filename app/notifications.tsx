@@ -43,7 +43,13 @@ import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 const isSmallScreen = width < 400;
-const PEEK = -80; // posición de reposo donde queda el basurero visible
+// Dimensiones del pill de borrar
+const PILL_W    = 52;   // ancho/alto del cuadrado rojo (square)
+const PILL_GAP  = 10;   // distancia desde el borde derecho del wrapper al pill
+const CARD_GAP  = 8;    // espacio entre el borde derecho de la tarjeta y el pill
+// Umbrales para el swipe estilo Instagram
+const SNAP_OPEN       = -(PILL_W + PILL_GAP + CARD_GAP); // quedar abierto con gap
+const DELETE_THRESHOLD = -width * 0.45;                   // si pasa → borrar
 
 // ─── Swipeable wrapper — UI-thread (Gesture Handler + Reanimated) ─────────────
 const SwipeableNotification = React.memo(({ n, onDelete, children }: {
@@ -62,47 +68,68 @@ const SwipeableNotification = React.memo(({ n, onDelete, children }: {
     x.value = withTiming(-width, { duration: 220 }, () => {
       runOnJS(doDelete)();
     });
-  }, [doDelete]);
+  }, [doDelete, x]);
 
+  // La tarjeta se desliza
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
-  // oculto en reposo, visible apenas empieza el swipe
-  const bgStyle   = useAnimatedStyle(() => ({
-    opacity: interpolate(x.value, [-12, -6, 0], [1, 1, 0], Extrapolation.CLAMP),
-  }));
+
+  // El pill se mueve en sincronía EXACTA con la tarjeta (mismo shared value x)
+  // x=0 → pillTX = PILL_W+PILL_GAP (pill fuera de pantalla a la derecha, oculto)
+  // x=-(PILL_W+PILL_GAP) → pillTX = 0 (pill visible en su posición right:PILL_GAP)
+  const pillStyle = useAnimatedStyle(() => {
+    const pillTX = interpolate(
+      x.value,
+      [-(PILL_W + PILL_GAP), 0],
+      [0, PILL_W + PILL_GAP],
+      Extrapolation.CLAMP,
+    );
+    return { transform: [{ translateX: pillTX }] };
+  });
+
+  // El ícono escala levemente al acercarse al threshold de borrado
+  const trashIconStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      x.value,
+      [DELETE_THRESHOLD, SNAP_OPEN, 0],
+      [1.2, 1, 0.85],
+      Extrapolation.CLAMP,
+    );
+    return { transform: [{ scale }] };
+  });
 
   const pan = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-12, 12])
+    .activeOffsetX([-8, 8])
+    .failOffsetY([-15, 15])
     .onStart(() => { startX.value = x.value; })
     .onUpdate(e => {
       x.value = Math.min(0, Math.max(-width, startX.value + e.translationX));
     })
     .onEnd(() => {
-      // solo peek o volver — el borrado es exclusivamente por botón
-      if (x.value < PEEK * 0.4) {
-        x.value = withSpring(PEEK, { damping: 60, stiffness: 350 });
+      if (x.value <= DELETE_THRESHOLD) {
+        // Umbral de borrado superado → animar y borrar
+        x.value = withTiming(-width, { duration: 220 }, () => {
+          runOnJS(doDelete)();
+        });
+      } else if (x.value < SNAP_OPEN / 2) {
+        // Pasó la mitad del umbral de apertura → quedar abierto
+        x.value = withSpring(SNAP_OPEN, { damping: 60, stiffness: 400 });
       } else {
-        x.value = withSpring(0, { damping: 60, stiffness: 350 });
-      }
-    })
-    .onFinalize((_, success) => {
-      if (!success) {
-        if (x.value < PEEK * 0.5) {
-          x.value = withSpring(PEEK, { damping: 60, stiffness: 350 });
-        } else {
-          x.value = withSpring(0, { damping: 60, stiffness: 350 });
-        }
+        // Poco desplazamiento → volver al inicio
+        x.value = withSpring(0, { damping: 60, stiffness: 400 });
       }
     });
 
   return (
-    <View style={{ marginBottom: 12, borderRadius: 20, overflow: 'hidden' }}>
-      {/* Botón rojo — invisible en reposo, aparece al deslizar */}
-      <ReAnimated.View style={[swipeStyles.deleteBackground, bgStyle]}>
-        <TouchableOpacity onPress={animateDelete} style={swipeStyles.trashBtn} hitSlop={16}>
-          <Trash2 color="white" size={22} />
-        </TouchableOpacity>
+    <View style={swipeStyles.wrapper}>
+      {/* pillContainer: absoluto top-bottom-right, centra el cuadrado verticalmente */}
+      <ReAnimated.View style={[swipeStyles.pillContainer, pillStyle]}>
+        <ReAnimated.View style={[swipeStyles.deletePill, trashIconStyle]}>
+          <TouchableOpacity onPress={animateDelete} style={swipeStyles.trashBtn} hitSlop={10}>
+            <Trash2 color="rgba(255, 80, 65, 1)" size={20} />
+          </TouchableOpacity>
+        </ReAnimated.View>
       </ReAnimated.View>
+
       {/* Tarjeta que se desliza */}
       <GestureDetector gesture={pan}>
         <ReAnimated.View style={cardStyle}>
@@ -114,11 +141,38 @@ const SwipeableNotification = React.memo(({ n, onDelete, children }: {
 });
 
 const swipeStyles = StyleSheet.create({
-  deleteBackground: {
-    position: 'absolute', right: 0, top: 0, bottom: 0, width: 80,
-    backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center',
+  wrapper: {
+    marginBottom: 12,
+    overflow: 'hidden', // clipea el pill cuando está a la derecha (reposo)
   },
-  trashBtn: { width: 80, height: '100%', justifyContent: 'center', alignItems: 'center' },
+  // Contenedor que ocupa toda la altura del wrapper y centra el cuadrado verticalmente
+  pillContainer: {
+    position: 'absolute',
+    right: PILL_GAP,
+    top: 0,
+    bottom: 0,
+    width: PILL_W,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // El cuadrado rojo con estilo glassmorphism
+  deletePill: {
+    width: PILL_W,
+    height: PILL_W,
+    backgroundColor: 'rgba(255, 59, 48, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.38)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  trashBtn: {
+    width: PILL_W,
+    height: PILL_W,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 const COLORS = {
@@ -255,19 +309,13 @@ export default function NotificationsScreen() {
     }
   }
 
-  const handleDeleteNotification = useCallback(async (id: string, type: string, relatedId?: string) => {
+  const handleDeleteNotification = useCallback(async (id: string, type: string, _relatedId?: string) => {
+    // Solo elimina la notificación de la UI y de la base de datos.
+    // La gestión de follows (amistad) se hace EXCLUSIVAMENTE en handleFriendRequestDecision.
+    // Nunca tocar la tabla follows desde aquí para evitar bugs de des-amistad accidental.
     setRecentNotifications(prev => prev.filter(n => n.id !== id));
     setOlderNotifications(prev => prev.filter(n => n.id !== id));
     await supabase.from('notifications').delete().eq('id', id);
-    // Solicitud pendiente: también eliminar el follow
-    if (type === 'friend_request' && relatedId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('follows').delete()
-          .eq('follower_id', relatedId)
-          .eq('following_id', user.id);
-      }
-    }
   }, []);
 
   const updateLocalNotification = (id: string, updates: any) => {

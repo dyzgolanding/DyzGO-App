@@ -63,6 +63,11 @@ const ITEM_WIDTH = Math.round(CARD_BASE_WIDTH * 0.75); // Tarjetas de club
 const SPACING = 16;
 const FULL_SIZE = ITEM_WIDTH + SPACING;
 
+// Próximos eventos carousel — equal to brand-profile approach
+const EVENT_CARD_W = Platform.OS === 'web' ? 400 : width - 52;
+const EVENT_GAP = 12;
+const EVENT_SNAP = EVENT_CARD_W + EVENT_GAP;
+
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
@@ -210,12 +215,23 @@ export default function HomeScreen() {
     };
 
     const flatListRef = useRef<FlatList>(null);
-    const featuredScrollRef = useRef<ScrollView>(null);
-    const mouseScrollEvents = useMouseScroll(featuredScrollRef);
+    const featuredListRef = useRef<FlatList>(null);
     const mouseScrollClubs = useMouseScroll(flatListRef, FULL_SIZE);
-    const featuredActiveIndex = useRef(0);
+    const featuredScrollX = useRef(0);
     const hasCentered = useRef(false);
     const scrollX = useSharedValue(0);
+
+    const handleFeaturedPress = (index: number, event: any) => {
+        const targetOffset = index * EVENT_SNAP;
+        const currentOffset = featuredScrollX.current;
+        if (Math.abs(currentOffset - targetOffset) > EVENT_SNAP / 2) {
+            featuredListRef.current?.scrollToOffset({ offset: targetOffset, animated: true });
+        } else {
+            const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs;
+            const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences;
+            router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } });
+        }
+    };
 
     const onScrollHandler = useAnimatedScrollHandler((event) => {
         scrollX.value = event.contentOffset.x;
@@ -482,29 +498,33 @@ export default function HomeScreen() {
                     </View>
 
                     {loading && featuredEvents.length === 0 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined} contentContainerStyle={styles.horizontalPadEvent}>
-                            {[1, 2].map(i => (
-                                <View key={i} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
-                                    <SkeletonBox height={CARD_BASE_WIDTH - 52} width={CARD_BASE_WIDTH - 52} borderRadius={30} style={{ marginRight: 12 }} />
-                                </View>
-                            ))}
-                        </ScrollView>
-                    ) : (
-                        <ScrollView
-                            {...mouseScrollEvents}
-                            ref={featuredScrollRef}
+                        <FlatList
                             horizontal
+                            data={[1, 2]}
+                            keyExtractor={(i) => String(i)}
                             showsHorizontalScrollIndicator={false}
-                            style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as any : undefined}
-                            contentContainerStyle={styles.horizontalPadEvent}
-                            snapToInterval={CARD_BASE_WIDTH - 40}
-                            snapToAlignment="center"
+                            contentContainerStyle={{ paddingLeft: 26, paddingRight: 14, gap: EVENT_GAP }}
+                            renderItem={() => (
+                                <SkeletonBox height={EVENT_CARD_W} width={EVENT_CARD_W} borderRadius={30} />
+                            )}
+                        />
+                    ) : (
+                        <FlatList
+                            ref={featuredListRef}
+                            horizontal
+                            data={featuredEvents}
+                            keyExtractor={(item: any) => item.id}
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingLeft: 26, paddingRight: 14, gap: EVENT_GAP }}
+                            snapToInterval={EVENT_SNAP}
                             decelerationRate="fast"
-                            disableIntervalMomentum
-                            onScroll={(e) => { featuredActiveIndex.current = Math.round(e.nativeEvent.contentOffset.x / (CARD_BASE_WIDTH - 40)); }}
+                            removeClippedSubviews={true}
+                            maxToRenderPerBatch={8}
+                            windowSize={5}
+                            initialNumToRender={6}
+                            onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
                             scrollEventThrottle={16}
-                        >
-                            {featuredEvents.map((event, index) => {
+                            renderItem={({ item: event, index }) => {
                                 const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs;
                                 const targetLat = event.latitude || cl?.latitude;
                                 const targetLong = event.longitude || cl?.longitude;
@@ -513,68 +533,52 @@ export default function HomeScreen() {
                                     distanceText = formatDistance(getDistanceFromLatLonInKm(location.coords.latitude, location.coords.longitude, targetLat, targetLong));
                                 }
                                 const minAge = Math.min(event.min_age_men || 18, event.min_age_women || 18);
-
                                 return (
-                                    <View key={event.id} style={Platform.OS === 'web' ? { scrollSnapAlign: 'center', scrollSnapStop: 'always' } as any : undefined}>
-                                        <AnimatedEntry index={index} fromY={32} fromScale={0.96}>
-                                            <PressableScale
-                                            scaleTo={0.97}
-                                            haptic="light"
-                                            style={styles.bigEventCard}
-                                            onPress={() => {
-                                                const FEATURED_INTERVAL = CARD_BASE_WIDTH - 40;
-                                                const targetX = index * FEATURED_INTERVAL;
-                                                if (index !== featuredActiveIndex.current) {
-                                                    featuredActiveIndex.current = index;
-                                                    featuredScrollRef.current?.scrollTo({ x: targetX, animated: true });
-                                                } else {
-                                                    { const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs; const exp = Array.isArray(event.experiences) ? event.experiences[0] : event.experiences; router.push({ pathname: '/event-detail', params: Platform.OS === 'web' ? { id: event.id } : { id: event.id, imageUrl: event.image_url, title: event.title, date: event.date, accentColor: event.accent_color, category: event.area || event.category, hour: event.hour, clubName: cl?.name || event.club_name, clubImage: cl?.image, producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: event.instagram_url, status: event.status } }); }
-                                                }
-                                            }}
-                                        >
-                                            <ImageBackground source={{ uri: event.image_url }} style={styles.fullImg} imageStyle={{ borderRadius: 31 }}>
-                                                <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.7)', '#030303']} locations={[0.4, 0.8, 1]} style={styles.fullImgOverlay}>
-
-                                                    {/* Top Badges */}
-                                                    <View style={styles.eventTopRow}>
-                                                        <View style={styles.eventTopRowContent}>
-                                                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                                <BlurView intensity={30} tint="dark" style={styles.glassDateBadge}>
-                                                                    <Text style={styles.glassDateText}>{formatDayShort(event.date)}</Text>
-                                                                </BlurView>
-                                                                <BlurView intensity={30} tint="dark" style={[styles.glassDateBadge, { paddingHorizontal: 10 }]}>
-                                                                    <Text style={[styles.glassDateText]}>{minAge}+</Text>
-                                                                </BlurView>
-                                                            </View>
-                                                            {distanceText ? (
-                                                                <BlurView intensity={30} tint="dark" style={styles.glassBadge}>
-                                                                    <MapPin size={12} color="rgba(251, 251, 251, 0.5)" />
-                                                                    <Text style={styles.glassBadgeText}>{distanceText}</Text>
-                                                                </BlurView>
-                                                            ) : <View />}
+                                    <PressableScale
+                                        scaleTo={0.97}
+                                        haptic="light"
+                                        style={styles.bigEventCard}
+                                        onPress={() => handleFeaturedPress(index, event)}
+                                    >
+                                        <ImageBackground source={{ uri: event.image_url }} style={styles.fullImg} imageStyle={{ borderRadius: 31 }}>
+                                            <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.7)', '#030303']} locations={[0.4, 0.8, 1]} style={styles.fullImgOverlay}>
+                                                {/* Top Badges */}
+                                                <View style={styles.eventTopRow}>
+                                                    <View style={styles.eventTopRowContent}>
+                                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                            <BlurView intensity={30} tint="dark" style={styles.glassDateBadge}>
+                                                                <Text style={styles.glassDateText}>{formatDayShort(event.date)}</Text>
+                                                            </BlurView>
+                                                            <BlurView intensity={30} tint="dark" style={[styles.glassDateBadge, { paddingHorizontal: 10 }]}>
+                                                                <Text style={styles.glassDateText}>{minAge}+</Text>
+                                                            </BlurView>
                                                         </View>
+                                                        {distanceText ? (
+                                                            <BlurView intensity={30} tint="dark" style={styles.glassBadge}>
+                                                                <MapPin size={12} color="rgba(251, 251, 251, 0.5)" />
+                                                                <Text style={styles.glassBadgeText}>{distanceText}</Text>
+                                                            </BlurView>
+                                                        ) : <View />}
                                                     </View>
-
-                                                    {/* Bottom Content */}
-                                                    <View>
-                                                        <Text
-                                                            style={[styles.bigEventTitle, (() => {
-                                                                const l = (event.title || '').length;
-                                                                const size = l <= 12 ? 36 : l <= 20 ? 28 : l <= 30 ? 22 : 18;
-                                                                return { fontSize: size, lineHeight: size * 1.1 };
-                                                            })()]}
-                                                            numberOfLines={3}
-                                                        >{event.title}</Text>
-                                                        <Text style={[styles.bigEventClub, { marginTop: 6 }]}>{event.club_name || event.location}</Text>
-                                                    </View>
-                                                </LinearGradient>
-                                            </ImageBackground>
-                                        </PressableScale>
-                                        </AnimatedEntry>
-                                    </View>
+                                                </View>
+                                                {/* Bottom Content */}
+                                                <View>
+                                                    <Text
+                                                        style={[styles.bigEventTitle, (() => {
+                                                            const l = (event.title || '').length;
+                                                            const size = l <= 12 ? 36 : l <= 20 ? 28 : l <= 30 ? 22 : 18;
+                                                            return { fontSize: size, lineHeight: size * 1.1 };
+                                                        })()]}
+                                                        numberOfLines={3}
+                                                    >{event.title}</Text>
+                                                    <Text style={[styles.bigEventClub, { marginTop: 6 }]}>{event.club_name || event.location}</Text>
+                                                </View>
+                                            </LinearGradient>
+                                        </ImageBackground>
+                                    </PressableScale>
                                 );
-                            })}
-                        </ScrollView>
+                            }}
+                        />
                     )}
                 </View>
 
@@ -735,7 +739,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden'
     },
     brandRow: { flexDirection: 'row', alignItems: 'center' },
-    brandText: { color: '#FBFBFB', fontSize: Math.round(24 * S), fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 },
+    brandText: { color: '#FBFBFB', fontSize: 24, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', paddingLeft: 4 },
 
     bellContainer: { position: 'relative', padding: 4 },
     notifDot: { position: 'absolute', top: 3, right: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF31D8', borderWidth: 2, borderColor: '#030303' },
@@ -767,7 +771,7 @@ const styles = StyleSheet.create({
     horizontalPad: { paddingLeft: 24, paddingRight: 16 },
     horizontalPadEvent: { paddingLeft: 26, paddingRight: 14 },
 
-    bigEventCard: { width: CARD_BASE_WIDTH - 52, height: CARD_BASE_WIDTH - 52, marginRight: 12, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    bigEventCard: { width: EVENT_CARD_W, height: EVENT_CARD_W, borderRadius: 32, overflow: 'hidden', backgroundColor: '#0A0A0A', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
     fullImg: { flex: 1, borderRadius: 32 },
     fullImgOverlay: { flex: 1, padding: 24, justifyContent: 'space-between' },
 

@@ -228,7 +228,7 @@ export default function SavedScreen() {
       <Switch
         value={pushEnabled}
         onValueChange={toggleGlobalPush}
-        trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }}
+        trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7B1E6B' }}
         thumbColor={pushEnabled ? COLORS.neonPink : '#FBFBFB'}
         ios_backgroundColor='rgba(255,255,255,0.1)'
       />

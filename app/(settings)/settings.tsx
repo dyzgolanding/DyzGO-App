@@ -471,9 +471,9 @@ const SettingSwitch = ({ icon, title, subtitle, value, onValueChange }: any) => 
         <Switch
             value={value}
             onValueChange={onValueChange}
-            trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(255,49,216,0.3)' }}
-            thumbColor={value ? COLORS.neonPink : '#FBFBFB'}
-            ios_backgroundColor='rgba(255,255,255,0.1)'
+            trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#7B1E6B' }}
+        thumbColor={value ? COLORS.neonPink : '#FBFBFB'}
+        ios_backgroundColor='rgba(255,255,255,0.1)'
         />
     </View>
 );

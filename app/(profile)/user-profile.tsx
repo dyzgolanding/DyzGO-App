@@ -50,7 +50,7 @@ export default function UserProfileScreen() {
   const [friendState, setFriendState] = useState<FriendState>('none');
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [mutualCount, setMutualCount] = useState(0);
-  const [mutualAvatars, setMutualAvatars] = useState<string[]>([]);
+  const [mutualAvatars, setMutualAvatars] = useState<{ avatar_url: string | null; initial: string }[]>([]);
   const [mutualFriends, setMutualFriends] = useState<any[]>([]);
   const [mutualModalVisible, setMutualModalVisible] = useState(false);
 
@@ -120,7 +120,8 @@ export default function UserProfileScreen() {
           .in('id', mutualIds);
         const friends = data ?? [];
         setMutualFriends(friends);
-        setMutualAvatars(friends.slice(0, 3).map((p: any) => p.avatar_url).filter(Boolean));
+        // Guardamos los primeros 3 independientemente de si tienen avatar o no
+        setMutualAvatars(friends.slice(0, 3).map((p: any) => ({ avatar_url: p.avatar_url, initial: p.full_name?.[0]?.toUpperCase() ?? '?' })));
       }
     } catch (e) {
       console.error('[user-profile] fetchMutualFriends:', e);
@@ -319,15 +320,24 @@ export default function UserProfileScreen() {
           <ReAnimated.View entering={FadeInUp.duration(300).delay(80).springify()}>
           <TouchableOpacity style={s.mutualRow} onPress={() => setMutualModalVisible(true)} activeOpacity={0.75}>
             <View style={s.mutualAvatars}>
-              {mutualAvatars.slice(0, 3).map((url, i) => (
-                <Image
+              {mutualAvatars.slice(0, 3).map((m, i) => (
+                <View
                   key={i}
-                  source={{ uri: url }}
-                  style={[s.mutualAvatar, { marginLeft: i === 0 ? 0 : -8, zIndex: 3 - i }]}
-                  contentFit="cover"
-                  transition={150}
-                  cachePolicy="memory-disk"
-                />
+                  style={[s.mutualAvatarRing, { marginLeft: i === 0 ? 0 : -8, zIndex: 3 - i }]}
+                >
+                  {m.avatar_url
+                    ? <Image
+                        source={{ uri: m.avatar_url }}
+                        style={s.mutualAvatarImg}
+                        contentFit="cover"
+                        transition={150}
+                        cachePolicy="memory-disk"
+                      />
+                    : <View style={s.mutualAvatarPlaceholder}>
+                        <Text style={s.mutualAvatarInitial}>{m.initial}</Text>
+                      </View>
+                  }
+                </View>
               ))}
             </View>
             <Text style={s.mutualText}>
@@ -476,8 +486,12 @@ const s = StyleSheet.create({
 
   // Amigos en común
   mutualRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(251,251,251,0.05)' },
-  mutualAvatars: { flexDirection: 'row' },
-  mutualAvatar:  { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#030303' },
+  mutualAvatars:           { flexDirection: 'row' },
+  // Anillo exterior con borde rosado y overflow:hidden para recortar la imagen
+  mutualAvatarRing:        { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#FF31D8', overflow: 'hidden', backgroundColor: '#030303' },
+  mutualAvatarImg:         { width: 21, height: 21 },
+  mutualAvatarPlaceholder: { width: 21, height: 21, backgroundColor: 'rgba(255,49,216,0.45)', justifyContent: 'center', alignItems: 'center' },
+  mutualAvatarInitial:     { color: '#FBFBFB', fontSize: 9, fontWeight: '900' },
   mutualText:    { color: COLORS.textSecondary, fontSize: 12, fontWeight: '500', flex: 1 },
 
   // Unfriend
