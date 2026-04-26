@@ -1,3 +1,20 @@
+/**
+ * Sirve imágenes de Supabase Storage con transformación on-the-fly.
+ * Las transformaciones (/render/image/) requieren plan Pro de Supabase.
+ * Al subir de plan: descomentar el bloque de transformación.
+ */
+export function getImageUrl(
+  url: string | null | undefined,
+  width: number,
+  quality = 75,
+): string | undefined {
+  if (!url) return undefined;
+  if (!url.includes('supabase.co/storage')) return url;
+  const base = url.replace('/object/public/', '/render/image/public/');
+  const sep  = base.includes('?') ? '&' : '?';
+  return `${base}${sep}width=${width}&quality=${quality}`;
+}
+
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MONTHS_LONG  = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const DAYS_SHORT   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];

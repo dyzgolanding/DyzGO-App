@@ -300,6 +300,7 @@ function RootLayout() {
                   }}
                 />
                 <Stack.Screen name="(tickets)" />
+                <Stack.Screen name="(consumption)" />
                 <Stack.Screen name="(profile)" />
                 <Stack.Screen name="(settings)" />
                 <Stack.Screen name="(staff)" />

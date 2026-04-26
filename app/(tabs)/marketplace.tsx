@@ -21,7 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { sendPushNotification } from '../../lib/push';
-import { isEventFinished } from '../../utils/format';
+import { isEventFinished, getImageUrl } from '../../utils/format';
 import { supabase } from '../../lib/supabase';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { AnimatedEntry } from '../../components/animated/AnimatedEntry';
@@ -97,7 +97,7 @@ const MarketCard = memo(function MarketCard({ item, index, cardH, scrollY, curre
                 {/* IMAGEN HERO */}
                 <View style={{ flex: 1, overflow: 'hidden' }}>
                     {eventImg ? (
-                        <ExpoImage source={{ uri: eventImg }} style={[StyleSheet.absoluteFill, isSold && { opacity: 0.35 }]} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                        <ExpoImage source={{ uri: getImageUrl(eventImg, 800) }} style={[StyleSheet.absoluteFill, isSold && { opacity: 0.35 }]} contentFit="cover" cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                     ) : (
                         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
                             <Ticket color={COLORS.neonPink} size={48} opacity={isSold ? 0.2 : 0.4} />
@@ -797,7 +797,7 @@ export default function MarketplaceScreen() {
                         {/* IMAGEN HERO */}
                         <View style={{ height: eventImg ? 140 : 80, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }}>
                             {eventImg ? (
-                                <ExpoImage source={{ uri: eventImg }} style={StyleSheet.absoluteFill} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                                <ExpoImage source={{ uri: getImageUrl(eventImg, 800) }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                             ) : (
                                 <Ticket color={COLORS.neonPink} size={32} opacity={0.5} />
                             )}
@@ -870,7 +870,7 @@ export default function MarketplaceScreen() {
 
                         <View style={{ flexDirection: 'row', gap: 16 }}>
                             {eventImg ? (
-                                <ExpoImage source={{ uri: eventImg }} style={{ width: 80, height: 80, borderRadius: 16 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                                <ExpoImage source={{ uri: getImageUrl(eventImg, 200) }} style={{ width: 80, height: 80, borderRadius: 16 }} contentFit="cover" cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                             ) : (
                                 <View style={{ width: 80, height: 80, borderRadius: 16, backgroundColor: 'rgba(255,49,216,0.15)', justifyContent: 'center', alignItems: 'center' }}>
                                     <Ticket color={COLORS.neonPink} size={28} />
@@ -1415,7 +1415,7 @@ export default function MarketplaceScreen() {
                                                     activeOpacity={0.7}
                                                 >
                                                     {t.events?.image_url
-                                                        ? <ExpoImage source={{ uri: t.events.image_url }} style={{ width: 64, height: 64, borderRadius: 16, marginRight: 16 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                                                        ? <ExpoImage source={{ uri: getImageUrl(t.events.image_url, 160) }} style={{ width: 64, height: 64, borderRadius: 16, marginRight: 16 }} contentFit="cover" cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                                                         : <View style={[s.ticketIconBox, { width: 64, height: 64, borderRadius: 16, marginRight: 16 }]}><Ticket color={COLORS.neonPink} size={28} /></View>
                                                     }
                                                     <View style={{ flex: 1, gap: 6, paddingVertical: 2 }}>
@@ -1438,7 +1438,7 @@ export default function MarketplaceScreen() {
                             {/* Ticket mini chip */}
                             <View style={[s.selectedTicketRow, { marginBottom: 24 }]}>
                                 {ticketToSell?.events?.image_url
-                                    ? <ExpoImage source={{ uri: ticketToSell.events.image_url }} style={{ width: 44, height: 44, borderRadius: 12, marginRight: 14 }} contentFit="cover" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                                    ? <ExpoImage source={{ uri: getImageUrl(ticketToSell.events.image_url, 120) }} style={{ width: 44, height: 44, borderRadius: 12, marginRight: 14 }} contentFit="cover" cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                                     : <View style={[s.ticketIconBox, { width: 44, height: 44, borderRadius: 12, marginRight: 14 }]}><Ticket color={COLORS.neonPink} size={20} /></View>
                                 }
                                 <View style={{ flex: 1, gap: 4 }}>

@@ -1,3 +1,4 @@
+import { getImageUrl } from '../../utils/format';
 import { BlurView } from '../../components/BlurSurface';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -227,7 +228,7 @@ export default function ConsumptionMenuScreen() {
           return (
             <View style={styles.itemCard}>
               {item.image_url ? (
-                <ExpoImage source={{ uri: item.image_url }} style={styles.itemImage} contentFit="cover" />
+                <ExpoImage source={{ uri: getImageUrl(item.image_url, 400) }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <View style={[styles.itemImagePlaceholder, { backgroundColor: accentColor + '15' }]}>
                   <Wine size={28} color={accentColor + '60'} />

@@ -10,16 +10,18 @@
  */
 import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
 import {
-  CheckCircle2, Clock, Minus, Plus,
-  Wine, Zap, AlertTriangle, MapPin, ShoppingBag, Timer,
+  ArrowRight, CheckCircle2, Clock, Minus, MoveHorizontal, Plus,
+  Share2, Users, Wine, X, Zap, AlertTriangle, MapPin, ShoppingBag, Timer,
 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
-import { Platform, 
-  ActivityIndicator, Alert, StatusBar, StyleSheet,
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform,
+  ActivityIndicator, Alert, FlatList, Modal, Share, StatusBar, StyleSheet,
   Text, TouchableOpacity, View,
- } from 'react-native';
+} from 'react-native';
+import { sendPushNotification } from '../../lib/push';
 import Animated, {
   FadeInUp,
   useSharedValue, useAnimatedStyle, withTiming,
@@ -93,6 +95,11 @@ export default function ConsumptionOrderScreen() {
   const [barCapacity, setBarCapacity] = useState<Record<string, number>>({});
   const [queueInfo, setQueueInfo] = useState<Record<string, { position: number; etaMinutes: number | null }>>({});
   const [selections, setSelections] = useState<Record<string, number>>({});
+  const [transferring, setTransferring] = useState(false);
+  const [isSent, setIsSent] = useState(false);
+  const [friendModalVisible, setFriendModalVisible] = useState(false);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
 
   // Reanimated — fade-in al cargar
   const opacity = useSharedValue(0);
@@ -101,7 +108,7 @@ export default function ConsumptionOrderScreen() {
   useEffect(() => {
     fetchOrder();
 
-    const channel = supabase
+    const itemsChannel = supabase
       .channel(`consumption_order:${orderId}`)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public',
@@ -110,7 +117,22 @@ export default function ConsumptionOrderScreen() {
       }, () => fetchOrder())
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const ownerChannel = supabase
+      .channel(`consumption_owner:${orderId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public',
+        table: 'consumption_orders',
+        filter: `id=eq.${orderId}`,
+      }, async (payload) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (payload.new.user_id !== user?.id) setIsSent(true);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(itemsChannel);
+      supabase.removeChannel(ownerChannel);
+    };
   }, [orderId]);
 
   const fetchOrder = async () => {
@@ -259,6 +281,7 @@ export default function ConsumptionOrderScreen() {
   }, {});
 
   const totalSelected = productsWithSelection.reduce((s, p) => s + p.selected, 0);
+  const canTransfer = items.length > 0 && items.every(i => i.status === 'inactive');
 
   const setQty = (productName: string, delta: number, max: number) => {
     setSelections(prev => {
@@ -303,6 +326,113 @@ export default function ConsumptionOrderScreen() {
       setActivating(false);
     }
   };
+
+  const handleShareTransfer = async () => {
+    try {
+      setTransferring(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      const secretToken =
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      const { error } = await supabase.from('consumption_order_transfers').insert({
+        order_id: orderId, sender_id: user?.id,
+        token: secretToken, is_used: false, expires_at: expiresAt.toISOString(),
+      });
+      if (error) throw error;
+
+      const shareUrl = Linking.createURL('/claim-consumption', { queryParams: { token: secretToken } });
+      await Share.share({
+        url: shareUrl,
+        message: `🥂 Aquí tienes tu pedido${order?.event?.title ? ` de ${order.event.title}` : ''}. Reclámalo antes de que expire: ${shareUrl}`,
+      });
+    } catch (err) {
+      Alert.alert('Error', 'No se pudo generar el enlace.');
+      console.error(err);
+    } finally { setTransferring(false); }
+  };
+
+  const openFriendSelector = useCallback(async () => {
+    setFriendModalVisible(true);
+    setLoadingFriends(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: follows } = await supabase
+        .from('follows').select('following_id')
+        .eq('follower_id', user.id).eq('status', 'accepted');
+      const friendIds = follows?.map((f: any) => f.following_id) || [];
+      if (friendIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
+        setFriends(profiles || []);
+      } else { setFriends([]); }
+    } catch (e) { console.error(e); }
+    finally { setLoadingFriends(false); }
+  }, []);
+
+  const handleDirectTransfer = async (friendId: string, friendName: string) => {
+    Alert.alert(
+      'Confirmar Transferencia',
+      `¿Enviar el pedido a ${friendName}?\n\nEsta acción es irreversible y el pedido desaparecerá de tu cuenta.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Enviar ahora',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setTransferring(true);
+              setFriendModalVisible(false);
+              const { error } = await supabase.rpc('transfer_consumption_order_direct', {
+                p_order_id: orderId,
+                p_recipient_id: friendId,
+              });
+              if (error) throw error;
+
+              const { data: recipient } = await supabase
+                .from('profiles').select('expo_push_token').eq('id', friendId).single();
+              if (recipient?.expo_push_token) {
+                sendPushNotification(
+                  recipient.expo_push_token,
+                  '🥂 ¡Recibiste un pedido!',
+                  `Te enviaron un pedido${order?.event?.title ? ` de ${order.event.title}` : ''}.`,
+                  { url: '/my-tickets' }
+                ).then(undefined, console.error);
+              }
+              setIsSent(true);
+            } catch (e: any) {
+              Alert.alert('Error', `Falló la transferencia: ${e.message}`);
+              console.error(e);
+              setTransferring(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (isSent) return (
+    <View style={{ flex: 1, backgroundColor: '#030303', justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.15)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      </View>
+      <View style={styles.sentCard}>
+        <MoveHorizontal size={44} color="#FF31D8" />
+        <Text style={styles.sentTitle}>¡PEDIDO ENVIADO!</Text>
+        <Text style={styles.sentSubtitle}>El pedido ya está en la cuenta del destinatario.</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.sentBtn}
+        activeOpacity={0.7}
+        onPress={() => router.replace('/(tabs)/home')}
+      >
+        <Text style={styles.sentBtnText}>VOLVER AL INICIO</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   if (loading) return (
     <View style={styles.container}>
@@ -371,6 +501,34 @@ export default function ConsumptionOrderScreen() {
           </View>
         </View>
         </Animated.View>
+
+        {/* ─── TRANSFERIR (solo si todos los ítems están inactive) ─── */}
+        {canTransfer && (
+          <Animated.View entering={FadeInUp.duration(300).delay(40).springify()}>
+          <View style={styles.transferRow}>
+            <TouchableOpacity
+              style={styles.transferBtn}
+              onPress={openFriendSelector}
+              disabled={transferring}
+              activeOpacity={0.75}
+            >
+              <Users size={16} color="#FF31D8" />
+              <Text style={styles.transferBtnText}>Enviar a amigo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.transferBtn}
+              onPress={handleShareTransfer}
+              disabled={transferring}
+              activeOpacity={0.75}
+            >
+              {transferring
+                ? <ActivityIndicator size={16} color="#FF31D8" />
+                : <Share2 size={16} color="#FF31D8" />}
+              <Text style={styles.transferBtnText}>Compartir link</Text>
+            </TouchableOpacity>
+          </View>
+          </Animated.View>
+        )}
 
         {/* ─── SECCIÓN: ACTIVAR ─── */}
         {inactiveProducts.length > 0 && (
@@ -573,6 +731,62 @@ export default function ConsumptionOrderScreen() {
           </View>
         )}
       </Animated.ScrollView>
+
+      {/* ─── MODAL: Seleccionar amigo ─── */}
+      <Modal
+        visible={friendModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFriendModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Enviar a un amigo</Text>
+              <TouchableOpacity onPress={() => setFriendModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={20} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingFriends ? (
+              <ActivityIndicator color="#FF31D8" style={{ marginTop: 30 }} />
+            ) : friends.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Users size={36} color="rgba(255,255,255,0.15)" />
+                <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 12, fontSize: 14, fontWeight: '600' }}>
+                  No tienes amigos agregados aún
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={friends}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.friendRow}
+                    activeOpacity={0.7}
+                    onPress={() => handleDirectTransfer(item.id, item.full_name || item.username || 'este usuario')}
+                  >
+                    <View style={styles.friendAvatar}>
+                      <Text style={styles.friendAvatarText}>
+                        {(item.full_name || item.username || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.friendName}>{item.full_name || item.username}</Text>
+                      {item.username && item.full_name && (
+                        <Text style={styles.friendUsername}>@{item.username}</Text>
+                      )}
+                    </View>
+                    <ArrowRight size={16} color="rgba(255,255,255,0.3)" />
+                  </TouchableOpacity>
+                )}
+                contentContainerStyle={{ paddingBottom: 20 }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -673,4 +887,59 @@ const styles = StyleSheet.create({
   historyStatus: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 16, fontWeight: '700' },
+
+  // Transfer buttons
+  transferRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 20,
+  },
+  transferBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 12, borderRadius: 16,
+    backgroundColor: 'rgba(255,49,216,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,49,216,0.25)',
+  },
+  transferBtnText: { color: '#FF31D8', fontWeight: '800', fontSize: 13 },
+
+  // isSent screen
+  sentCard: {
+    alignItems: 'center', gap: 14,
+    backgroundColor: 'rgba(255,49,216,0.08)',
+    borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,49,216,0.25)',
+    padding: 32, width: '100%', marginBottom: 20,
+  },
+  sentTitle: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic', textAlign: 'center' },
+  sentSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  sentBtn: {
+    width: '100%', height: 58, borderRadius: 20,
+    backgroundColor: 'rgba(255,49,216,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,49,216,0.35)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  sentBtnText: { color: '#FF31D8', fontWeight: '900', fontSize: 15 },
+
+  // Friend modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#111', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 40, maxHeight: '70%',
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
+  modalCloseBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  friendRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  friendAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,49,216,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  friendAvatarText: { color: '#FF31D8', fontWeight: '900', fontSize: 18 },
+  friendName: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  friendUsername: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 },
 });

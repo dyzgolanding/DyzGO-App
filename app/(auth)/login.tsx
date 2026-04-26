@@ -1,4 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import { useLocalSearchParams } from 'expo-router';
@@ -77,6 +78,40 @@ export default function AuthScreen() {
   const animValue = useSharedValue(0);
   const strengthAnim = useSharedValue(0);
   const captchaRef = useRef<any>(null); // REF PARA EL CAPTCHA
+
+  // Google OAuth nativo — abre accounts.google.com directamente (iOS muestra ese dominio)
+  const [_googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.params?.id_token;
+      if (idToken) {
+        supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })
+          .then(async ({ data: sessionData, error }) => {
+            if (error) throw error;
+            const user = sessionData.session?.user;
+            if (user) {
+              await supabase.from('profiles').upsert({
+                id: user.id,
+                email: user.email,
+                full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+              }, { onConflict: 'id', ignoreDuplicates: true });
+            }
+          })
+          .catch((err: any) => Alert.alert('Error', err.message || 'No se pudo iniciar sesión con Google'))
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    } else if (googleResponse.type === 'cancel' || googleResponse.type === 'dismiss' || googleResponse.type === 'error') {
+      setLoading(false);
+    }
+  }, [googleResponse]);
 
   // --- EFECTO DEL CONTADOR ---
   useEffect(() => {
@@ -359,24 +394,24 @@ export default function AuthScreen() {
 
   const handleGoogleAuth = async () => {
     setLoading(true);
+
+    // Nativo: abre accounts.google.com directamente → iOS muestra ese dominio
+    if (Platform.OS !== 'web') {
+      googlePromptAsync();
+      return;
+    }
+
+    // Web: flujo OAuth estándar via Supabase
     try {
-      const redirectTo = Platform.OS === 'web' ? window.location.origin : 'dizgo://';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+        options: { redirectTo: window.location.origin, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
       });
       if (error || !data.url) throw error || new Error('Error iniciando autenticación');
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-      // El usuario canceló o cerró el navegador — no es un error
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        return;
-      }
-
-      if (result.type !== 'success') {
-        throw new Error('No se pudo completar el inicio de sesión con Google.');
-      }
+      const result = await WebBrowser.openAuthSessionAsync(data.url, window.location.origin);
+      if (result.type === 'cancel' || result.type === 'dismiss') return;
+      if (result.type !== 'success') throw new Error('No se pudo completar el inicio de sesión con Google.');
 
       const fragmentStr = result.url.includes('#')
         ? result.url.split('#')[1]
@@ -400,7 +435,6 @@ export default function AuthScreen() {
           full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
         }, { onConflict: 'id', ignoreDuplicates: true });
       }
-      // _layout.tsx onAuthStateChange maneja el routing automáticamente
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo iniciar sesión con Google');
     } finally {

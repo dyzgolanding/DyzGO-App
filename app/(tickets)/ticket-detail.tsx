@@ -293,13 +293,6 @@ export default function TicketDetailScreen() {
               const { error } = await supabase.rpc('transfer_ticket_direct', { p_ticket_id: safeTicketId, p_recipient_id: friendId });
               if (error) throw error;
 
-              await supabase.from('notifications').insert({
-                user_id: friendId, type: 'ticket_received',
-                title: '¡Recibiste una entrada!',
-                message: `Te enviaron una entrada para ${ticket?.events?.title}. Ya está en tu cuenta.`,
-                related_id: safeTicketId, is_read: false,
-              }).then(undefined, console.error);
-
               const { data: recipient } = await supabase.from('profiles').select('expo_push_token').eq('id', friendId).single();
               if (recipient?.expo_push_token) {
                 sendPushNotification(recipient.expo_push_token, '🎟️ ¡Recibiste una entrada!', `Te enviaron una entrada para ${ticket?.events?.title}.`, { url: '/my-tickets' }).then(undefined, console.error);
@@ -461,7 +454,7 @@ export default function TicketDetailScreen() {
                 >
                   {/* Event image */}
                   {eventImageUri ? (
-                    <Image source={{ uri: eventImageUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} />
+                    <Image source={{ uri: getImageUrl(eventImageUri, 1200) }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" transition={250} />
                   ) : (
                     <LinearGradient colors={['#3a0d6e', '#1a0d40', '#0a0820']} style={StyleSheet.absoluteFill} />
                   )}
@@ -736,7 +729,7 @@ export default function TicketDetailScreen() {
                   ListEmptyComponent={<Text style={styles.emptyText}>No tienes amigos confirmados.</Text>}
                   renderItem={({ item }) => (
                     <TouchableOpacity style={styles.glassFriendRow} onPress={() => handleDirectTransfer(item.id, item.full_name)} activeOpacity={0.75}>
-                      <Image source={item.avatar_url ? { uri: item.avatar_url } : { uri: 'https://via.placeholder.com/50' }} style={styles.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
+                      <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/50' }} style={styles.avatar} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                       <Text style={styles.friendName}>{item.full_name}</Text>
                       <View style={styles.sendIconBox}>
                         <ArrowRight color="white" size={15} />

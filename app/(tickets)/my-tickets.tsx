@@ -1,3 +1,4 @@
+import { getImageUrl } from '../../utils/format';
 import { BlurView } from '../../components/BlurSurface';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -312,7 +313,7 @@ export default function MyTicketsScreen() {
               {item.events?.image_url ? (
                 <>
                   <Image
-                    source={{ uri: item.events.image_url }}
+                    source={{ uri: getImageUrl(item.events.image_url, 800) }}
                     style={styles.eventImage}
                     contentFit="cover"
                     transition={150}
@@ -475,7 +476,7 @@ export default function MyTicketsScreen() {
                     <View style={[styles.rightSection, { alignItems: 'center', justifyContent: 'center' }]}>
                       <View style={[styles.eventImageContainer, { backgroundColor: cfg.color + '15', justifyContent: 'center', alignItems: 'center' }]}>
                         {eventData?.image_url
-                          ? <Image source={{ uri: eventData.image_url }} style={styles.eventImage} contentFit="cover" transition={150} cachePolicy="memory-disk" />
+                          ? <Image source={{ uri: getImageUrl(eventData.image_url, 800) }} style={styles.eventImage} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                           : <StatusIcon size={36} color={cfg.color} />
                         }
                       </View>

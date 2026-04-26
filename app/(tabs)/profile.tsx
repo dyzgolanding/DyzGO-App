@@ -80,7 +80,7 @@ export default function ProfileScreen() {
     if (!loading) fadeAnim.value = withTiming(1, timing.enter);
   }, [loading]);
 
-  const [hasUnreadNotifs] = useState(true);
+  const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
 
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
   const avatarScale = useSharedValue(0.8);
@@ -124,17 +124,12 @@ export default function ProfileScreen() {
       }
 
       if (user) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        const { count: usedTicketsCount } = await supabase
-          .from('tickets')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('used', true);
+        const [{ data: profileData }, { count: usedTicketsCount }, { count: unreadCount }] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+          supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('used', true),
+          supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+        ]);
+        setHasUnreadNotifs((unreadCount ?? 0) > 0);
 
         if (profileData) {
           setProfile({
@@ -256,7 +251,7 @@ export default function ProfileScreen() {
               <Modal visible={showAvatarViewer} transparent animationType="none" onRequestClose={closeAvatarViewer} statusBarTranslucent>
                 <Pressable style={styles.avatarViewerOverlay} onPress={closeAvatarViewer}>
                   <Animated.View style={[styles.avatarViewerContainer, avatarViewerStyle]}>
-                    <Image source={{ uri: profile.avatar_url! }} style={styles.avatarViewerImg} contentFit="cover" />
+                    <Image source={{ uri: profile.avatar_url! }} style={styles.avatarViewerImg} contentFit="cover" cachePolicy="memory-disk" />
                   </Animated.View>
                 </Pressable>
               </Modal>

@@ -46,7 +46,7 @@ import { useFocusEffect } from 'expo-router';
 import { useLocation } from '../../context/LocationContext';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
-import { formatEventDateTime } from '../../utils/format';
+import { formatEventDateTime, getImageUrl } from '../../utils/format';
 import { useAppData } from '../../context/AppDataContext';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useMouseScroll } from '../../hooks/useMouseScroll';
@@ -137,7 +137,7 @@ const MapCarouselCard = memo(function MapCarouselCard({ item, index, scrollX, is
   return (
     <Animated.View style={[styles.cardWrapper, animStyle]}>
       <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onPress}>
-        <ImageBackground source={{ uri: item.image_url || item.image }} style={styles.cardImg}>
+        <ImageBackground source={{ uri: getImageUrl(item.image_url || item.image, 800) }} style={styles.cardImg}>
           <LinearGradient colors={['transparent', 'rgba(3,3,3,0.72)', '#030303']} locations={[0.3, 0.68, 1]} style={styles.cardGradient}>
             {/* Badges superiores */}
             <View style={styles.cardTopRow}>
@@ -236,7 +236,7 @@ function renderCatCard(item: any, isTabEv: boolean, router: any, big = true) {
         });
       }}
     >
-      <ImageBackground source={{ uri: item.image_url || item.image }} style={{ flex: 1 }}>
+      <ImageBackground source={{ uri: getImageUrl(item.image_url || item.image, 800) }} style={{ flex: 1 }}>
         <LinearGradient colors={['transparent', 'rgba(3,3,3,0.65)', '#030303']} locations={[0.3, 0.72, 1]} style={{ flex: 1, padding: big ? 16 : 10, justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
             {isTabEv && formatDayShort(item.date) ? (

@@ -50,7 +50,7 @@ import { SkeletonBox } from '../../components/SkeletonBox';
 import { useLocation } from '../../context/LocationContext';
 import { formatDistance, getDistanceFromLatLonInKm } from '../../utils/location';
 import { COLORS } from '../../constants/colors';
-import { safeFormatDate, formatDayShort } from '../../utils/format';
+import { safeFormatDate, formatDayShort, getImageUrl } from '../../utils/format';
 import { PermissionModal } from '../../components/PermissionModal';
 import { useMouseScroll } from '../../hooks/useMouseScroll';
 
@@ -128,7 +128,7 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
                 onPress={handlePress}
                 style={styles.clubCardContainer}
             >
-                <ImageBackground source={{ uri: item.image }} style={styles.clubImgRounded} imageStyle={{ borderRadius: 31 }}>
+                <ImageBackground source={{ uri: getImageUrl(item.image, 800) }} style={styles.clubImgRounded} imageStyle={{ borderRadius: 31 }}>
                     <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.8)', '#030303']} style={styles.clubOverlay} locations={[0.3, 0.8, 1]}>
                         <View style={styles.clubHeaderRow}>
                             {distanceText ? (
@@ -202,7 +202,7 @@ export default function HomeScreen() {
             return () => clearTimeout(timer);
         }
     }, [needsPermission, loading]);
-    const [hasUnreadNotifs, setHasUnreadNotifs] = useState(true); // Controla el puntito magenta
+    const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
 
     // Redirige al login con param redirect si no hay sesión, retorna false
     const requireAuth = async (destination: string): Promise<boolean> => {
@@ -258,16 +258,20 @@ export default function HomeScreen() {
             const { data: { session } } = await supabase.auth.getSession();
             const user = session?.user ?? null;
             if (user) {
-                const { data: profile } = await supabase
-                    .from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
+                const [{ data: profile }, { count: unreadCount }] = await Promise.all([
+                    supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single(),
+                    supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+                ]);
 
                 if (profile) {
                     setUserName(profile.full_name || '');
                     setAvatarUrl(profile.avatar_url || null);
                 }
+                setHasUnreadNotifs((unreadCount ?? 0) > 0);
             } else {
                 setUserName('');
                 setAvatarUrl(null);
+                setHasUnreadNotifs(false);
             }
 
             const { data: clubs } = await supabase.from('clubs').select('*').order('name', { ascending: true }).limit(10);
@@ -353,6 +357,13 @@ export default function HomeScreen() {
             hasCentered.current = false;
             const task = InteractionManager.runAfterInteractions(() => {
                 fetchData();
+                // Re-snap al card más cercano si quedó en posición rara al volver de navegación
+                if (featuredListRef.current && featuredScrollX.current > 0) {
+                    const nearest = Math.round(featuredScrollX.current / EVENT_SNAP) * EVENT_SNAP;
+                    if (Math.abs(featuredScrollX.current - nearest) > 2) {
+                        featuredListRef.current.scrollToOffset({ offset: nearest, animated: false });
+                    }
+                }
             });
             return () => task.cancel();
         }, [fetchData])
@@ -379,6 +390,7 @@ export default function HomeScreen() {
     }, [topClubs]);
 
     const handleProximityConnect = async () => {
+        if (!(await requireAuth('/(tabs)/home'))) return;
         try {
             setConnecting(true);
             const { data: { user } } = await supabase.auth.getUser();
@@ -460,7 +472,7 @@ export default function HomeScreen() {
                         <PressableScale scaleTo={0.88} haptic="light" onPress={async () => { if (await requireAuth('/profile')) router.push('/profile'); }}>
                             <View style={styles.avatarBorder}>
                                 {avatarUrl ? (
-                                    <ExpoImage source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                                    <ExpoImage source={{ uri: avatarUrl ?? undefined }} style={styles.avatarImage} contentFit="cover" cachePolicy="memory-disk" />
                                 ) : (
                                     <View style={styles.avatarFallback}>
                                         <Text style={styles.avatarInitial}>{userName ? userName[0].toUpperCase() : '?'}</Text>
@@ -523,6 +535,7 @@ export default function HomeScreen() {
                             windowSize={5}
                             initialNumToRender={6}
                             onScroll={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
+                            onMomentumScrollEnd={(e) => { featuredScrollX.current = e.nativeEvent.contentOffset.x; }}
                             scrollEventThrottle={16}
                             renderItem={({ item: event, index }) => {
                                 const cl = Array.isArray(event.clubs) ? event.clubs[0] : event.clubs;
@@ -540,7 +553,7 @@ export default function HomeScreen() {
                                         style={styles.bigEventCard}
                                         onPress={() => handleFeaturedPress(index, event)}
                                     >
-                                        <ImageBackground source={{ uri: event.image_url }} style={styles.fullImg} imageStyle={{ borderRadius: 31 }}>
+                                        <ImageBackground source={{ uri: getImageUrl(event.image_url, 800) }} style={styles.fullImg} imageStyle={{ borderRadius: 31 }}>
                                             <LinearGradient colors={['transparent', 'rgba(3, 3, 3, 0.7)', '#030303']} locations={[0.4, 0.8, 1]} style={styles.fullImgOverlay}>
                                                 {/* Top Badges */}
                                                 <View style={styles.eventTopRow}>

@@ -430,7 +430,7 @@ export default function UserProfileScreen() {
                 onPress={() => { closeMutualModal(); setTimeout(() => router.push({ pathname: '/user-profile', params: { id: item.id } }), 340); }}
               >
                 {item.avatar_url
-                  ? <Image source={{ uri: item.avatar_url }} style={s.modalAvatar} contentFit="cover" transition={0} />
+                  ? <Image source={{ uri: item.avatar_url }} style={s.modalAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   : <View style={[s.modalAvatar, { backgroundColor: 'rgba(255,49,216,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FF31D8' }]}>
                       <Text style={{ color: '#FBFBFB', fontWeight: '900', fontSize: 18 }}>{item.full_name?.[0]?.toUpperCase() ?? '?'}</Text>
                     </View>

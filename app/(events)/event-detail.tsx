@@ -21,7 +21,8 @@ import {
     Shirt,
     User,
     Wine,
-    Zap
+    Zap,
+    ExternalLink
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,7 +53,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import RenderHtml from 'react-native-render-html';
 import { supabase } from '../../lib/supabase';
 import { COLORS } from '../../constants/colors';
-import { isEventFinished } from '../../utils/format';
+import { isEventFinished, getImageUrl } from '../../utils/format';
 import WebShareSheet from '../../components/WebShareSheet';
 import AppDownloadSheet from '../../components/AppDownloadSheet';
 import { SkeletonBox } from '../../components/SkeletonBox';
@@ -101,20 +102,20 @@ export default function EventDetailScreen() {
     const router = useRouter();
 
     const p = (k: string) => { const v = params[k] as string | undefined; return v && v !== 'undefined' && v !== '' ? v : undefined; };
-    const optImageUrl      = p('imageUrl');
-    const optTitle         = p('title');
-    const optDate          = p('date');
-    const optHour          = p('hour');
-    const optClubName      = p('clubName');
-    const optClubImage     = p('clubImage');
-    const optAccentColor   = p('accentColor');
+    const optImageUrl = p('imageUrl');
+    const optTitle = p('title');
+    const optDate = p('date');
+    const optHour = p('hour');
+    const optClubName = p('clubName');
+    const optClubImage = p('clubImage');
+    const optAccentColor = p('accentColor');
     const optThemeColorEnd = p('themeColorEnd');
-    const optCategory      = p('category') || p('area');
-    const optProducerName  = p('producerName');
-    const optProducerLogo  = p('producerLogo');
-    const optProducerId    = p('producerId');
-    const optInstagramUrl  = p('instagramUrl');
-    const optStatus        = p('status');
+    const optCategory = p('category') || p('area');
+    const optProducerName = p('producerName');
+    const optProducerLogo = p('producerLogo');
+    const optProducerId = p('producerId');
+    const optInstagramUrl = p('instagramUrl');
+    const optStatus = p('status');
 
     const insets = useSafeAreaInsets();
     const headerBgAnim = useRef(new Animated.Value(0)).current;
@@ -172,6 +173,32 @@ export default function EventDetailScreen() {
             modalOffset.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
         }
     }, [modalVisible]);
+
+    const [redirectModalVisible, setRedirectModalVisible] = useState(false);
+    const redirectOffset = useSharedValue(height);
+    const redirectSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: redirectOffset.value }] }));
+    const redirectOverlayStyle = useAnimatedStyle(() => ({ opacity: interpolate(redirectOffset.value, [0, height], [1, 0], Extrapolation.CLAMP) }));
+
+    const closeRedirectModal = () => {
+        redirectOffset.value = withTiming(height, { duration: 320, easing: Easing.inOut(Easing.quad) }, () => { runOnJS(setRedirectModalVisible)(false); });
+    };
+
+    const redirectPan = Gesture.Pan()
+        .onUpdate(e => { if (e.translationY > 0) redirectOffset.value = e.translationY; })
+        .onEnd(e => {
+            if (e.translationY > 80 || e.velocityY > 500) {
+                redirectOffset.value = withTiming(height, { duration: 250 }, () => { runOnJS(setRedirectModalVisible)(false); });
+            } else {
+                redirectOffset.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+            }
+        });
+
+    useEffect(() => {
+        if (redirectModalVisible) {
+            redirectOffset.value = height;
+            redirectOffset.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+        }
+    }, [redirectModalVisible]);
 
     const [region, setRegion] = useState(INITIAL_REGION);
     const [queueStatus, setQueueStatus] = useState<any>(null);
@@ -326,7 +353,7 @@ export default function EventDetailScreen() {
             const mapsUrl = addressQuery
                 ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery + ', Chile')}`
                 : fallbackMaps;
-            Linking.openURL(mapsUrl).catch(() => {});
+            Linking.openURL(mapsUrl).catch(() => { });
             return;
         }
 
@@ -345,9 +372,9 @@ export default function EventDetailScreen() {
         });
 
         Linking.canOpenURL(url!).then(supported => {
-            Linking.openURL(supported ? url! : nativeFallback).catch(() => {});
+            Linking.openURL(supported ? url! : nativeFallback).catch(() => { });
         }).catch(() => {
-            Linking.openURL(nativeFallback).catch(() => {});
+            Linking.openURL(nativeFallback).catch(() => { });
         });
     };
 
@@ -373,9 +400,9 @@ export default function EventDetailScreen() {
         const uberUrl = `uber://?action=setPickup&pickup=my_location&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[nickname]=${nickName}&dropoff[formatted_address]=${formattedAddress}`;
 
         Linking.canOpenURL(uberUrl).then(supported => {
-            Linking.openURL(supported ? uberUrl : fallbackUber).catch(() => {});
+            Linking.openURL(supported ? uberUrl : fallbackUber).catch(() => { });
         }).catch(() => {
-            Linking.openURL(fallbackUber).catch(() => {});
+            Linking.openURL(fallbackUber).catch(() => { });
         });
     };
 
@@ -386,11 +413,16 @@ export default function EventDetailScreen() {
             ? finalInstagramUrl
             : `https://instagram.com/${finalInstagramUrl.replace('@', '')}`;
         if (/^https?:\/\/(www\.)?instagram\.com\//.test(url)) {
-            Linking.openURL(url).catch(() => {});
+            Linking.openURL(url).catch(() => { });
         }
     };
 
     const handleGetTickets = async () => {
+        if (isInfo) {
+            trackInfoClick('modal_opened');
+            setRedirectModalVisible(true);
+            return;
+        }
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
             setPendingNav({
@@ -451,6 +483,28 @@ export default function EventDetailScreen() {
             await Share.share({ message: text });
         } catch (error) { }
     };
+
+    const trackInfoClick = useCallback((action: 'modal_opened' | 'redirect_confirmed') => {
+        const eventId = String(event?.id || params.id);
+        supabase.auth.getUser().then(async ({ data: { user } }) => {
+            let userName: string | null = null;
+            let userEmail: string | null = null;
+            if (user) {
+                userEmail = user.email ?? null;
+                try {
+                    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+                    userName = profile?.full_name ?? null;
+                } catch { }
+            }
+            supabase.from('info_event_clicks').insert({
+                event_id: eventId,
+                user_id: user?.id ?? null,
+                user_name: userName,
+                user_email: userEmail,
+                action,
+            }).catch(() => { });
+        }).catch(() => { });
+    }, [event, params.id]);
 
     const handleCopyAddress = async () => {
         if (event && event.location) {
@@ -528,7 +582,7 @@ export default function EventDetailScreen() {
             const r = (num >> 16) & 255;
             const g = (num >> 8) & 255;
             const b = num & 255;
-            
+
             const prevBg = document.body.style.backgroundImage;
             document.body.style.transition = 'background-image 0.5s ease-in-out';
             document.body.style.backgroundImage = [
@@ -536,7 +590,7 @@ export default function EventDetailScreen() {
                 `radial-gradient(ellipse 80% 80% at 85% 85%, rgba(${r},${g},${b},0.28) 0%, transparent 65%)`,
                 `radial-gradient(ellipse 60% 60% at 50% 0%, rgba(${r},${g},${b},0.15) 0%, transparent 50%)`
             ].join(', ');
-            
+
             return () => {
                 document.body.style.backgroundImage = prevBg;
             };
@@ -616,27 +670,27 @@ export default function EventDetailScreen() {
 
             {/* Fondo — 3 capas de luz con accent_color del evento */}
             {Platform.OS !== 'web' && (
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <LinearGradient
-                    colors={[withAlpha(activeBg1, 0.2), 'transparent']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0.6, y: 0.5 }}
-                    style={StyleSheet.absoluteFill}
-                />
-                <LinearGradient
-                    colors={['transparent', withAlpha(activeBg1, 0.15)]}
-                    start={{ x: 0.4, y: 0.5 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                />
-                <LinearGradient
-                    colors={['transparent', withAlpha(activeBg1, 0.05), 'transparent']}
-                    start={{ x: 1, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    locations={[0.3, 0.5, 0.7]}
-                    style={StyleSheet.absoluteFill}
-                />
-            </View>
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient
+                        colors={[withAlpha(activeBg1, 0.2), 'transparent']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0.6, y: 0.5 }}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    <LinearGradient
+                        colors={['transparent', withAlpha(activeBg1, 0.15)]}
+                        start={{ x: 0.4, y: 0.5 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    <LinearGradient
+                        colors={['transparent', withAlpha(activeBg1, 0.05), 'transparent']}
+                        start={{ x: 1, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        locations={[0.3, 0.5, 0.7]}
+                        style={StyleSheet.absoluteFill}
+                    />
+                </View>
             )}
 
             <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
@@ -654,7 +708,7 @@ export default function EventDetailScreen() {
             <View style={{ flex: 1 }}>
                 <ScrollView
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: isInfo ? 40 : 130 }}
+                    contentContainerStyle={{ paddingBottom: 130 }}
                     bounces={true}
                     overScrollMode="always"
                     scrollEventThrottle={16}
@@ -668,7 +722,7 @@ export default function EventDetailScreen() {
                 >
                     <View style={[styles.imageWrapper, { paddingTop: insets.top + 64 }]}>
                         <Image
-                            source={{ uri: event?.image_url || optImageUrl || 'https://via.placeholder.com/400' }}
+                            source={{ uri: getImageUrl(event?.image_url || optImageUrl, 1400, 85) || 'https://via.placeholder.com/400' }}
                             style={styles.squareImage}
                             contentFit="cover"
                             transition={0}
@@ -678,51 +732,51 @@ export default function EventDetailScreen() {
                     <View style={styles.contentCard}>
 
                         <AnimatedEntry index={1} fromY={28} fromScale={0.98}>
-                        <View style={styles.titleSection}>
-                            {displayCategory && (
-                                <View style={styles.categoryCapsule}>
-                                    <Text style={styles.categoryCapsuleText}>{displayCategory}</Text>
-                                </View>
-                            )}
-                            <View style={styles.titleRow}>
-                                <Text style={[styles.title, { paddingRight: 90 }]} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.7}>
-                                    {event?.title || optTitle}
-                                </Text>
-                                <View style={[styles.dateBadge, { position: 'absolute', right: 0, top: 0 }]}>
-                                    <Text style={[styles.dateMonth, { fontSize: SCALE.dateMonthSize, color: activeBg1 }]}>{month || optMonth}</Text>
-                                    <Text style={[styles.dateDay, { fontSize: SCALE.dateDaySize }]}>{day || optDay}</Text>
+                            <View style={styles.titleSection}>
+                                {displayCategory && (
+                                    <View style={styles.categoryCapsule}>
+                                        <Text style={styles.categoryCapsuleText}>{displayCategory}</Text>
+                                    </View>
+                                )}
+                                <View style={styles.titleRow}>
+                                    <Text style={[styles.title, { paddingRight: 90 }]} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                        {event?.title || optTitle}
+                                    </Text>
+                                    <View style={[styles.dateBadge, { position: 'absolute', right: 0, top: 0 }]}>
+                                        <Text style={[styles.dateMonth, { fontSize: SCALE.dateMonthSize, color: activeBg1 }]}>{month || optMonth}</Text>
+                                        <Text style={[styles.dateDay, { fontSize: SCALE.dateDaySize }]}>{day || optDay}</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
                         </AnimatedEntry>
 
                         {displayProducerName ? (
                             <AnimatedEntry index={2} fromY={20}>
-                            <View style={styles.producerSection}>
-                                <PressableScale
-                                    scaleTo={0.96}
-                                    haptic="light"
-                                    style={styles.producerPill}
-                                    onPress={() => router.push({ pathname: '/brand-profile', params: { id: displayProducerId, name: displayProducerName, logoUrl: displayProducerLogo } })}
-                                >
-                                    <View style={styles.producerLogoRing}>
-                                        <View style={styles.producerLogoWrap}>
-                                            <Image source={{ uri: displayProducerLogo }} style={styles.producerLogoImg} contentFit="cover" transition={0} />
+                                <View style={styles.producerSection}>
+                                    <PressableScale
+                                        scaleTo={0.96}
+                                        haptic="light"
+                                        style={styles.producerPill}
+                                        onPress={() => router.push({ pathname: '/brand-profile', params: { id: displayProducerId, name: displayProducerName, logoUrl: displayProducerLogo } })}
+                                    >
+                                        <View style={styles.producerLogoRing}>
+                                            <View style={styles.producerLogoWrap}>
+                                                <Image source={{ uri: displayProducerLogo }} style={styles.producerLogoImg} contentFit="cover" cachePolicy="memory-disk" transition={0} />
+                                            </View>
                                         </View>
-                                    </View>
-                                    <View>
-                                        <Text style={styles.producerLabel}>PRODUCE</Text>
-                                        <Text style={styles.producerName} numberOfLines={1}>{displayProducerName}</Text>
-                                    </View>
-                                    <ChevronRight size={14} color={activeBg1} />
-                                </PressableScale>
-
-                                {hasValidInstagram && (
-                                    <PressableScale scaleTo={0.85} haptic="light" onPress={openInstagram} style={styles.instagramSquareIcon}>
-                                        <Instagram size={20} color="#FBFBFB" />
+                                        <View>
+                                            <Text style={styles.producerLabel}>PRODUCE</Text>
+                                            <Text style={styles.producerName} numberOfLines={1}>{displayProducerName}</Text>
+                                        </View>
+                                        <ChevronRight size={14} color={activeBg1} />
                                     </PressableScale>
-                                )}
-                            </View>
+
+                                    {hasValidInstagram && (
+                                        <PressableScale scaleTo={0.85} haptic="light" onPress={openInstagram} style={styles.instagramSquareIcon}>
+                                            <Instagram size={20} color="#FBFBFB" />
+                                        </PressableScale>
+                                    )}
+                                </View>
                             </AnimatedEntry>
                         ) : null}
 
@@ -733,7 +787,7 @@ export default function EventDetailScreen() {
                                         <PressableScale scaleTo={0.94} haptic="light" style={styles.infoHalf} onPress={navigateToClub}>
                                             <View style={{ width: 44, height: 44, borderRadius: 13, padding: 1.5, backgroundColor: withAlpha(activeBg1, 0.45), shadowColor: activeBg1, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.65, shadowRadius: 10, marginBottom: 8 }}>
                                                 <View style={{ flex: 1, borderRadius: 11.5, overflow: 'hidden' }}>
-                                                    <Image source={{ uri: displayClubImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" transition={0} />
+                                                    <Image source={{ uri: displayClubImage }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                                                 </View>
                                             </View>
                                             <Text style={styles.infoLabelSplit} numberOfLines={1}>{displayClubName}</Text>
@@ -785,7 +839,7 @@ export default function EventDetailScreen() {
                                         <PressableScale scaleTo={0.97} haptic="light" style={[styles.glassCard, styles.socialBarInner, { marginBottom: 0, padding: 0, paddingVertical: 10, paddingHorizontal: 16 }]} onPress={() => setModalVisible(true)}>
                                             <View style={styles.avatarsStack}>
                                                 {friendsGoing.slice(0, 3).map((f: any, i) => (
-                                                    <Image key={f.id} source={{ uri: f.avatar_url || 'https://via.placeholder.com/100' }} style={[styles.avatarStackImg, { zIndex: 3 - i, marginLeft: i === 0 ? 0 : -12 }]} contentFit="cover" transition={0} />
+                                                    <Image key={f.id} source={{ uri: f.avatar_url || 'https://via.placeholder.com/100' }} style={[styles.avatarStackImg, { zIndex: 3 - i, marginLeft: i === 0 ? 0 : -12 }]} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                                                 ))}
                                             </View>
                                             <View style={{ flex: 1, paddingLeft: 12 }}>
@@ -940,11 +994,6 @@ export default function EventDetailScreen() {
                                     <Text style={styles.legalTextHighlight}>
                                         Este evento tiene como hora de finalización aproximada las {displayEndTime} HRS {displayEndDay}.
                                     </Text>
-                                    {isInfo && (
-                                        <Text style={[styles.legalText, { marginTop: 10, color: 'rgba(251,251,251,0.5)' }]}>
-                                            Este es un evento informativo. No existe venta de tickets ni sistema de compra asociado. Toda la información publicada es de carácter referencial.
-                                        </Text>
-                                    )}
                                 </View>
                             </AnimatedEntry>
 
@@ -953,47 +1002,46 @@ export default function EventDetailScreen() {
                     </View>
                 </ScrollView>
 
-                {!isInfo && (
                 <BlurView intensity={80} tint="dark" style={styles.footer}>
-                        <>
-                            <View style={styles.footerInfo}>
-                                <Text style={[styles.footerLabel, { fontSize: SCALE.labelSize }]}>Desde</Text>
-                                <Text style={[styles.footerPrice, { fontSize: SCALE.valueSize * 1.4 }]}>${minPrice.toLocaleString()}</Text>
-                            </View>
+                    <>
+                        <View style={styles.footerInfo}>
+                            <Text style={[styles.footerLabel, { fontSize: SCALE.labelSize }]}>Desde</Text>
+                            <Text style={[styles.footerPrice, { fontSize: SCALE.valueSize * 1.4 }]}>${minPrice.toLocaleString()}</Text>
+                        </View>
 
+                        <PressableScale
+                            scaleTo={0.96}
+                            haptic="medium"
+                            style={[styles.buyBtnContainer, styles.buyBtnGradient, {
+                                backgroundColor: finished ? 'rgba(255,255,255,0.05)' : withAlpha(activeBg1, 0.15),
+                                borderWidth: 1,
+                                borderColor: finished ? '#333' : withAlpha(activeBg1, 0.35),
+                            }]}
+                            onPress={handleGetTickets}
+                            disabled={!optTitle && !event || (finished ?? false)}
+                        >
+                            <Text style={[styles.buyBtnText, { fontSize: SCALE.buttonTextSize, color: finished ? 'rgba(251,251,251,0.5)' : activeBg1 }]}>
+                                {finished ? 'EVENTO FINALIZADO' : isInfo ? 'OBTENER ENTRADAS' : 'OBTENER TICKETS'}
+                            </Text>
+                            {!finished && isInfo && <ExternalLink color={activeBg1} size={SCALE.buttonIconSize} />}
+                            {!finished && !isInfo && !hasConsumptionMenu && <ArrowRight color={activeBg1} size={SCALE.buttonIconSize} />}
+                        </PressableScale>
+
+                        {hasConsumptionMenu && !finished && !isInfo && (
                             <PressableScale
-                                scaleTo={0.96}
-                                haptic="medium"
-                                style={[styles.buyBtnContainer, styles.buyBtnGradient, {
-                                    backgroundColor: finished ? 'rgba(255,255,255,0.05)' : withAlpha(activeBg1, 0.15),
-                                    borderWidth: 1,
-                                    borderColor: finished ? '#333' : withAlpha(activeBg1, 0.35),
+                                scaleTo={0.94}
+                                haptic="light"
+                                style={[styles.consumptionBtn, {
+                                    backgroundColor: withAlpha(activeBg1, 0.1),
+                                    borderColor: withAlpha(activeBg1, 0.3),
                                 }]}
-                                onPress={handleGetTickets}
-                                disabled={!optTitle && !event || (finished ?? false)}
+                                onPress={handleGetConsumption}
                             >
-                                <Text style={[styles.buyBtnText, { fontSize: SCALE.buttonTextSize, color: finished ? 'rgba(251,251,251,0.5)' : activeBg1 }]}>
-                                    {finished ? 'EVENTO FINALIZADO' : 'OBTENER TICKETS'}
-                                </Text>
-                                {!finished && !hasConsumptionMenu && <ArrowRight color={activeBg1} size={SCALE.buttonIconSize} />}
+                                <Wine size={22} color={activeBg1} />
                             </PressableScale>
-
-                            {hasConsumptionMenu && !finished && (
-                                <PressableScale
-                                    scaleTo={0.94}
-                                    haptic="light"
-                                    style={[styles.consumptionBtn, {
-                                        backgroundColor: withAlpha(activeBg1, 0.1),
-                                        borderColor: withAlpha(activeBg1, 0.3),
-                                    }]}
-                                    onPress={handleGetConsumption}
-                                >
-                                    <Wine size={22} color={activeBg1} />
-                                </PressableScale>
-                            )}
-                        </>
+                        )}
+                    </>
                 </BlurView>
-                )}
 
                 <Modal visible={modalVisible} transparent statusBarTranslucent onRequestClose={closeAttendeeModal}>
                     <RAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }, modalOverlayStyle]}>
@@ -1022,7 +1070,7 @@ export default function EventDetailScreen() {
                                     style={styles.modalFriendRow}
                                     onPress={() => { closeAttendeeModal(); router.push({ pathname: '/user-profile', params: { id: item.id } }); }}
                                 >
-                                    <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/50' }} style={styles.modalAvatar} contentFit="cover" transition={0} />
+                                    <Image source={{ uri: item.avatar_url || 'https://via.placeholder.com/50' }} style={styles.modalAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.modalFriendName}>{item.full_name}</Text>
                                         <Text style={styles.modalFriendStatus}>Amigo</Text>
@@ -1031,6 +1079,69 @@ export default function EventDetailScreen() {
                                 </PressableScale>
                             )}
                         />
+                    </RAnimated.View>
+                </Modal>
+
+                <Modal visible={redirectModalVisible} transparent statusBarTranslucent onRequestClose={closeRedirectModal}>
+                    <RAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }, redirectOverlayStyle]}>
+                        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeRedirectModal} />
+                    </RAnimated.View>
+                    <RAnimated.View style={[styles.redirectModalContent, redirectSheetStyle]}>
+                        <View style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden' }]}>
+                            <BlurView intensity={70} tint="dark" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                        </View>
+                        <GestureDetector gesture={redirectPan}>
+                            <View style={{ alignItems: 'center', paddingTop: 16, paddingBottom: 8 }}>
+                                <View style={styles.modalHandle} />
+                            </View>
+                        </GestureDetector>
+                        <View style={{ paddingHorizontal: 28, paddingBottom: 40 }}>
+                            <View style={{ alignItems: 'center', marginVertical: 18 }}>
+                                <View style={{
+                                    width: 72, height: 72, borderRadius: 22,
+                                    backgroundColor: withAlpha(activeBg1, 0.15),
+                                    borderWidth: 1, borderColor: withAlpha(activeBg1, 0.3),
+                                    justifyContent: 'center', alignItems: 'center',
+                                    shadowColor: activeBg1, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 20,
+                                }}>
+                                    <ExternalLink size={32} color={activeBg1} />
+                                </View>
+                            </View>
+                            <Text style={[styles.modalTitle, { textAlign: 'center', fontSize: 22, marginBottom: 8 }]}>
+                                DyzGO. te conecta
+                            </Text>
+                            <Text style={{ color: 'rgba(251,251,251,0.55)', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 28 }}>
+                                Este evento vende sus entradas a través de una ticketera externa. Al continuar, serás redirigido para completar tu compra de forma segura.
+                            </Text>
+                            <PressableScale
+                                scaleTo={0.97}
+                                haptic="medium"
+                                style={[styles.buyBtnGradient, {
+                                    backgroundColor: withAlpha(activeBg1, 0.15),
+                                    borderWidth: 1, borderColor: withAlpha(activeBg1, 0.35),
+                                    marginBottom: 12,
+                                }]}
+                                onPress={() => {
+                                    const url = event?.external_ticket_url;
+                                    if (!url) return;
+                                    trackInfoClick('redirect_confirmed');
+                                    closeRedirectModal();
+                                    Linking.openURL(url).catch(() => { });
+                                }}
+                                disabled={!event?.external_ticket_url}
+                            >
+                                <ExternalLink color={event?.external_ticket_url ? activeBg1 : 'rgba(251,251,251,0.3)'} size={18} />
+                                <Text style={[styles.buyBtnText, {
+                                    fontSize: SCALE.buttonTextSize,
+                                    color: event?.external_ticket_url ? activeBg1 : 'rgba(251,251,251,0.3)',
+                                }]}>
+                                    {event?.external_ticket_url ? 'CONTINUAR A LA COMPRA' : 'URL NO CONFIGURADA'}
+                                </Text>
+                            </PressableScale>
+                            <PressableScale scaleTo={0.97} haptic="light" style={{ alignItems: 'center', padding: 14 }} onPress={closeRedirectModal}>
+                                <Text style={{ color: 'rgba(251,251,251,0.4)', fontSize: 13, fontWeight: '600' }}>Cancelar</Text>
+                            </PressableScale>
+                        </View>
                     </RAnimated.View>
                 </Modal>
 
@@ -1176,5 +1287,6 @@ const styles = StyleSheet.create({
     transportBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: 16, borderRadius: 20, gap: 15, borderWidth: 1, borderColor: COLORS.glassBorder },
     transportIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(3, 3, 3, 0.6)' },
     transportName: { color: '#FBFBFB', fontSize: 16, fontWeight: '800' },
-    transportTime: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 12 }
+    transportTime: { color: 'rgba(251, 251, 251, 0.6)', fontSize: 12 },
+    redirectModalContent: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
 });

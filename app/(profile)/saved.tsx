@@ -1,3 +1,4 @@
+import { getImageUrl } from '../../utils/format';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
@@ -56,7 +57,7 @@ const ClubCard = React.memo(({ item, index, scrollY, onPress, onDelete }: ClubCa
       <ReAnimated.View entering={FadeInDown.duration(250).delay(Math.min(index * 40, 160)).springify()}>
         <TouchableOpacity style={s.mktCard} activeOpacity={0.88} onPress={onPress}>
           {(item.image_url || item.image)
-            ? <Image source={{ uri: item.image_url || item.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+            ? <Image source={{ uri: getImageUrl(item.image_url || item.image, 800) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
             : <View style={s.cardPlaceholder} />}
           <LinearGradient colors={['transparent', 'rgba(3,3,3,0.65)', '#030303']} locations={[0.3, 0.65, 1]} style={s.mktOverlay}>
             <View style={{ alignItems: 'flex-end' }}>
@@ -110,7 +111,7 @@ const BrandCard = React.memo(({ brand, index, scrollY, onPress, onDelete }: Bran
               {brand.logo_url ? (
                 <View style={[s.brandLogoRing, { backgroundColor: COLORS.background, shadowColor: logoColor }]}>
                   <View style={s.brandLogoInner}>
-                    <Image source={{ uri: brand.logo_url }} style={s.brandLogoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                    <Image source={{ uri: getImageUrl(brand.logo_url, 120) }} style={s.brandLogoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                   </View>
                 </View>
               ) : <View />}

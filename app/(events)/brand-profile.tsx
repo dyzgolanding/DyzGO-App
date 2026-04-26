@@ -1,3 +1,4 @@
+import { getImageUrl } from '../../utils/format';
 import { BlurView } from '../../components/BlurSurface';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
@@ -266,7 +267,7 @@ export default function BrandProfileScreen() {
         ) : (
           <View style={s.banner}>
             {brand?.banner_url
-              ? <Image source={{ uri: brand.banner_url }} style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} contentFit="fill" transition={150} cachePolicy="memory-disk" />
+              ? <Image source={{ uri: getImageUrl(brand.banner_url, 1200) }} style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} contentFit="fill" transition={150} cachePolicy="memory-disk" />
               : <LinearGradient colors={['rgba(255,49,216,0.25)', 'rgba(138,43,226,0.25)', 'transparent']} style={StyleSheet.absoluteFill} />}
             <LinearGradient
               colors={['rgba(3,3,3,0.15)', 'transparent', 'transparent', Platform.OS === 'web' ? 'transparent' : COLORS.background]}
@@ -292,7 +293,7 @@ export default function BrandProfileScreen() {
             <View style={[s.logoRing, { shadowColor: pColor }]}>
               <View style={s.logoContainer}>
                 {brand?.logo_url
-                  ? <Image source={{ uri: brand.logo_url }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                  ? <Image source={{ uri: getImageUrl(brand.logo_url, 120) }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                   : (
                     <LinearGradient colors={[pColor, '#bc1888']} style={s.logoImg}>
                       <Layers color="white" size={38} />
@@ -401,7 +402,7 @@ export default function BrandProfileScreen() {
                     activeOpacity={0.9}
                     onPress={() => handleUpcomingPress(index, item)}
                   >
-                    <ImageBackground source={item.image_url ? { uri: item.image_url } : undefined} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
+                    <ImageBackground source={item.image_url ? { uri: getImageUrl(item.image_url, 800) } : undefined} style={s.eventCardImg} imageStyle={{ borderRadius: 28 }}>
                       <LinearGradient
                         colors={item.image_url ? ['transparent', 'rgba(3,3,3,0.7)', '#030303'] : [pColor + '44', 'rgba(3,3,3,0.85)', '#030303']}
                         locations={[0.4, 0.8, 1]}
@@ -492,7 +493,7 @@ export default function BrandProfileScreen() {
                     onPress={() => handlePastPress(index, item)}
                   >
                     <View style={s.pastImgWrap}>
-                      <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                      <Image source={{ uri: getImageUrl(item.image_url, 800) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
                       <View style={s.pastOverlay} />
                       <BlurView intensity={30} tint="dark" style={s.pastDateBadge}>
                         <Text style={s.pastDateDay}>{day}</Text>
