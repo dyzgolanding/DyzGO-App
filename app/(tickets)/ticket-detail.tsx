@@ -42,6 +42,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendPushNotification } from '../../lib/push';
 import { COLORS } from '../../constants/colors';
+import { getImageUrl } from '../../utils/format';
 import { supabase } from '../../lib/supabase';
 
 // ── Cambiar por los links reales cuando la app esté publicada ──

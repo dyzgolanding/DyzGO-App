@@ -267,7 +267,16 @@ export default function BrandProfileScreen() {
         ) : (
           <View style={s.banner}>
             {brand?.banner_url
-              ? <Image source={{ uri: getImageUrl(brand.banner_url, 1200) }} style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} contentFit="fill" transition={150} cachePolicy="memory-disk" />
+              ? <Image
+                  source={[
+                    { uri: getImageUrl(brand.banner_url, 1200) },
+                    { uri: brand.banner_url },
+                  ]}
+                  style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}
+                  contentFit="fill"
+                  transition={150}
+                  cachePolicy="memory-disk"
+                />
               : <LinearGradient colors={['rgba(255,49,216,0.25)', 'rgba(138,43,226,0.25)', 'transparent']} style={StyleSheet.absoluteFill} />}
             <LinearGradient
               colors={['rgba(3,3,3,0.15)', 'transparent', 'transparent', Platform.OS === 'web' ? 'transparent' : COLORS.background]}
@@ -293,7 +302,13 @@ export default function BrandProfileScreen() {
             <View style={[s.logoRing, { shadowColor: pColor }]}>
               <View style={s.logoContainer}>
                 {brand?.logo_url
-                  ? <Image source={{ uri: getImageUrl(brand.logo_url, 120) }} style={s.logoImg} contentFit="cover" transition={150} cachePolicy="memory-disk" placeholder={{ blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.' }} />
+                  ? <Image
+                      source={{ uri: brand.logo_url }}
+                      style={s.logoImg}
+                      contentFit="contain"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                    />
                   : (
                     <LinearGradient colors={[pColor, '#bc1888']} style={s.logoImg}>
                       <Layers color="white" size={38} />

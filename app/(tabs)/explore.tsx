@@ -108,11 +108,13 @@ const DARK_MAP_STYLE = [
 ];
 
 const SORT_OPTIONS = ['Distancia', 'Precio', 'Fecha'];
-const DISTANCE_OPTIONS = [5, 10, 20, 50];
+const DISTANCE_OPTIONS = [5, 10, 20, 50, 100];
 const DATE_OPTIONS = ['Hoy', 'Mañana', 'Esta Semana', 'Cualquiera'];
-const AGE_OPTIONS = ['Todo Público', '+18', '+21'];
+const SLIDER_MIN = 16;
+const SLIDER_MAX = 35;
 const CATEGORY_OPTIONS = ['Sunset', 'Rooftop', 'Afteroffice', 'Afterparty', 'Universitario', 'Nocturno'];
 const MUSIC_OPTIONS = ['Reggaeton', 'Techno', 'House', 'Edm', 'Trap'];
+const CITY_OPTIONS = ['Santiago', 'Valparaíso', 'Viña del Mar', 'Concepción', 'La Serena', 'Antofagasta', 'Temuco', 'Rancagua', 'Talca', 'Arica'];
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
@@ -304,6 +306,204 @@ const CatRowFocused = memo(function CatRowFocused({ group, rowIdx, scrollY, isTa
   );
 });
 
+const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const CAL_DAYS = ['D','L','M','M','J','V','S'];
+
+function CalendarPicker({ selectedDate, onSelect }: { selectedDate: string; onSelect: (d: string) => void }) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells: (number|null)[] = [...Array(firstDay).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
+
+  const prevMonth = () => viewMonth === 0 ? (setViewMonth(11), setViewYear(y => y-1)) : setViewMonth(m => m-1);
+  const nextMonth = () => viewMonth === 11 ? (setViewMonth(0), setViewYear(y => y+1)) : setViewMonth(m => m+1);
+
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <TouchableOpacity onPress={prevMonth} style={{ padding: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+          <ArrowLeft size={16} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+        <Text style={{ color: '#FBFBFB', fontWeight: '800', fontSize: 15 }}>{MONTH_NAMES[viewMonth]} {viewYear}</Text>
+        <TouchableOpacity onPress={nextMonth} style={{ padding: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+          <ArrowRight size={16} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+      </View>
+      <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+        {CAL_DAYS.map((d, i) => <Text key={i} style={{ flex: 1, textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '700' }}>{d}</Text>)}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {cells.map((day, i) => {
+          if (!day) return <View key={`e-${i}`} style={{ width: '14.28%', aspectRatio: 1 }} />;
+          const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isSelected = selectedDate === dateStr;
+          const isToday = dateStr === todayStr;
+          const isPast = dateStr < todayStr;
+          return (
+            <TouchableOpacity key={dateStr} disabled={isPast} onPress={() => onSelect(dateStr)} style={{ width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isSelected ? '#FF31D8' : 'transparent', borderWidth: isToday && !isSelected ? 1 : 0, borderColor: 'rgba(255,49,216,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: isSelected ? '#fff' : isPast ? 'rgba(255,255,255,0.2)' : '#FBFBFB', fontWeight: isSelected || isToday ? '800' : '400', fontSize: 13 }}>{day}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function RangeSlider({ lowVal, highVal, onChange }: {
+  lowVal: number; highVal: number;
+  onChange: (low: number, high: number) => void;
+}) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const THUMB = 24;
+
+  // Estado local solo para el label — se actualiza en cada Move (liviano)
+  const [displayLow,  setDisplayLow]  = useState(lowVal);
+  const [displayHigh, setDisplayHigh] = useState(highVal);
+
+  // Shared values (reanimated) — actualizan el UI thread sin re-renders de React
+  const lowPx  = useSharedValue(0);
+  const highPx = useSharedValue(0);
+
+  // Ref para leer posición actual desde callbacks del PanResponder (JS thread)
+  const posRef = useRef({ low: 0, high: 0, tw: 0 });
+
+  // Sincronizar shared values cuando cambian props o trackWidth
+  useEffect(() => {
+    if (trackWidth <= 0) return;
+    const lx = ((lowVal  - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * trackWidth;
+    const hx = ((highVal - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * trackWidth;
+    lowPx.value  = lx;
+    highPx.value = hx;
+    posRef.current = { low: lx, high: hx, tw: trackWidth };
+    setDisplayLow(lowVal);
+    setDisplayHigh(highVal);
+  }, [trackWidth, lowVal, highVal]);
+
+  const lowPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      posRef.current.low = lowPx.value;
+    },
+    onPanResponderMove: (_, { dx }) => {
+      const { high, tw } = posRef.current;
+      if (!tw) return;
+      const newX = Math.max(0, Math.min(posRef.current.low + dx, high - 2));
+      lowPx.value = newX;
+      // Actualizar label en tiempo real
+      setDisplayLow(Math.round(SLIDER_MIN + (newX / tw) * (SLIDER_MAX - SLIDER_MIN)));
+    },
+    onPanResponderRelease: (_, { dx }) => {
+      const { high, tw } = posRef.current;
+      if (!tw) return;
+      const newX = Math.max(0, Math.min(posRef.current.low + dx, high - 2));
+      posRef.current.low = newX;
+      lowPx.value = newX;
+      const rounded = Math.round(SLIDER_MIN + (newX / tw) * (SLIDER_MAX - SLIDER_MIN));
+      setDisplayLow(rounded);
+      onChange(
+        rounded,
+        Math.round(SLIDER_MIN + (posRef.current.high / tw) * (SLIDER_MAX - SLIDER_MIN)),
+      );
+    },
+  })).current;
+
+  const highPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      posRef.current.high = highPx.value;
+    },
+    onPanResponderMove: (_, { dx }) => {
+      const { low, tw } = posRef.current;
+      if (!tw) return;
+      const newX = Math.max(low + 2, Math.min(posRef.current.high + dx, tw));
+      highPx.value = newX;
+      // Actualizar label en tiempo real
+      setDisplayHigh(Math.round(SLIDER_MIN + (newX / tw) * (SLIDER_MAX - SLIDER_MIN)));
+    },
+    onPanResponderRelease: (_, { dx }) => {
+      const { low, tw } = posRef.current;
+      if (!tw) return;
+      const newX = Math.max(low + 2, Math.min(posRef.current.high + dx, tw));
+      posRef.current.high = newX;
+      highPx.value = newX;
+      const rounded = Math.round(SLIDER_MIN + (newX / tw) * (SLIDER_MAX - SLIDER_MIN));
+      setDisplayHigh(rounded);
+      onChange(
+        Math.round(SLIDER_MIN + (posRef.current.low / tw) * (SLIDER_MAX - SLIDER_MIN)),
+        rounded,
+      );
+    },
+  })).current;
+
+  // Estilos animados — se calculan en el UI thread sin pasar por React
+  const lowThumbStyle  = useAnimatedStyle(() => ({ transform: [{ translateX: lowPx.value }] }));
+  const highThumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: highPx.value }] }));
+  const activeStyle    = useAnimatedStyle(() => ({
+    transform: [{ translateX: lowPx.value + THUMB / 2 }],
+    width: Math.max(0, highPx.value - lowPx.value),
+  }));
+
+  return (
+    <View style={{ paddingVertical: 10 }}>
+      <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <View style={{ backgroundColor: 'rgba(255,49,216,0.12)', borderRadius: 14, paddingHorizontal: 18, paddingVertical: 9, borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)' }}>
+          <Text style={{ color: '#FF31D8', fontSize: 17, fontWeight: '900' }}>
+            {displayLow} — {displayHigh >= SLIDER_MAX ? `${displayHigh}+` : String(displayHigh)}
+          </Text>
+        </View>
+      </View>
+      <View
+        style={{ height: THUMB + 8, justifyContent: 'center' }}
+        onLayout={e => setTrackWidth(e.nativeEvent.layout.width - THUMB)}
+      >
+        {/* Track base */}
+        <View style={{ position: 'absolute', left: THUMB / 2, right: THUMB / 2, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 }} />
+        {/* Track activo */}
+        {trackWidth > 0 && (
+          <Animated.View style={[{ position: 'absolute', left: 0, height: 4, backgroundColor: '#FF31D8', borderRadius: 2 }, activeStyle]} />
+        )}
+        {/* Thumb bajo */}
+        {trackWidth > 0 && (
+          <Animated.View
+            {...lowPan.panHandlers}
+            style={[{
+              position: 'absolute', left: 0,
+              width: THUMB, height: THUMB, borderRadius: THUMB / 2,
+              backgroundColor: '#FF31D8',
+              shadowColor: '#FF31D8', shadowRadius: 10, shadowOpacity: 0.75, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+            }, lowThumbStyle]}
+          />
+        )}
+        {/* Thumb alto */}
+        {trackWidth > 0 && (
+          <Animated.View
+            {...highPan.panHandlers}
+            style={[{
+              position: 'absolute', left: 0,
+              width: THUMB, height: THUMB, borderRadius: THUMB / 2,
+              backgroundColor: '#FF31D8',
+              shadowColor: '#FF31D8', shadowRadius: 10, shadowOpacity: 0.75, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+            }, highThumbStyle]}
+          />
+        )}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600' }}>{SLIDER_MIN}</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600' }}>{SLIDER_MAX}+</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ExploreScreen() {
   const router = useRouter();
   
@@ -331,6 +531,8 @@ export default function ExploreScreen() {
 
   // NUEVO: Índice del item activo en el Carrusel Inferior
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
+  const [clusterPickerVisible, setClusterPickerVisible] = useState(false);
+  const [clusterPickerItems, setClusterPickerItems] = useState<any[]>([]);
   const mapRef = useRef<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const mouseScrollParams = useMouseScroll(flatListRef, CARD_W + CARD_GAP);
@@ -388,15 +590,50 @@ export default function ExploreScreen() {
       }
     });
 
+  const clusterOffset = useSharedValue(height);
+  const clusterSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: clusterOffset.value }] }));
+  const clusterOverlayStyle = useAnimatedStyle(() => ({ opacity: interpolate(clusterOffset.value, [0, height], [1, 0], Extrapolation.CLAMP) }));
+
+  const _resetCluster = () => { setClusterPickerVisible(false); setClusterPickerItems([]); };
+  const closeClusterPicker = () => {
+    clusterOffset.value = withTiming(height, { duration: 320, easing: Easing.inOut(Easing.quad) }, () => { runOnJS(_resetCluster)(); });
+  };
+
+  useEffect(() => {
+    if (clusterPickerVisible) {
+      clusterOffset.value = height;
+      clusterOffset.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+    }
+  }, [clusterPickerVisible]);
+
+  const clusterPan = Gesture.Pan()
+    .onUpdate(e => { if (e.translationY > 0) clusterOffset.value = e.translationY; })
+    .onEnd(e => {
+      if (e.translationY > 100 || e.velocityY > 800) {
+        clusterOffset.value = withTiming(height, { duration: 250 }, () => { runOnJS(_resetCluster)(); });
+      } else {
+        clusterOffset.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+      }
+    });
+
   const [filters, setFilters] = useState({
     sortBy: 'Distancia',
+    sortDir: 'asc' as 'asc' | 'desc',
+    ciudad: '',
     comuna: '',
     maxDistance: null as number | null,
     date: 'Cualquiera',
+    specificDate: '',
     category: '',
-    minAge: '',
-    musicGenre: ''
+    minAge: SLIDER_MIN,
+    maxAge: SLIDER_MAX,
+    musicGenre: '',
   });
+
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [showComunaInput, setShowComunaInput] = useState(false);
+  const [showDistancePicker, setShowDistancePicker] = useState(false);
 
   useEffect(() => {
     if (cacheLoaded && cachedEvents.length > 0) {
@@ -516,8 +753,12 @@ export default function ExploreScreen() {
       const matchesSearch = normalizeText(item.title || item.name || "").includes(query) ||
         normalizeText(item.location || item.address || "").includes(query);
 
+      const matchesCiudad = filters.ciudad
+        ? normalizeText(item.location || item.address || item.area || item.commune || item.region || "").includes(normalizeText(filters.ciudad))
+        : true;
+
       const matchesComuna = filters.comuna
-        ? normalizeText(item.location || item.address || item.area || "").includes(normalizeText(filters.comuna))
+        ? normalizeText(item.location || item.address || item.area || item.commune || "").includes(normalizeText(filters.comuna))
         : true;
 
       const matchesDistance = filters.maxDistance && item.distance !== null
@@ -532,15 +773,14 @@ export default function ExploreScreen() {
         ? normalizeText(item.music_genre || "").includes(normalizeText(filters.musicGenre))
         : true;
 
-      let matchesAge = true;
-      if (filters.minAge) {
-        if (filters.minAge === '+18') matchesAge = item.effectiveMinAge >= 18;
-        else if (filters.minAge === '+21') matchesAge = item.effectiveMinAge >= 21;
-        else if (filters.minAge === 'Todo Público') matchesAge = true;
-      }
+      const ageIsDefault = filters.minAge === SLIDER_MIN && filters.maxAge === SLIDER_MAX;
+      const matchesAge = ageIsDefault || (item.effectiveMinAge >= filters.minAge && item.effectiveMinAge <= filters.maxAge);
 
       let matchesDate = true;
-      if (filters.date !== 'Cualquiera') {
+      if (filters.specificDate) {
+        // Filtro por fecha específica del calendario
+        matchesDate = item.date ? item.date.startsWith(filters.specificDate) : false;
+      } else if (filters.date !== 'Cualquiera') {
         if (!item.date) {
           matchesDate = false;
         } else {
@@ -560,20 +800,21 @@ export default function ExploreScreen() {
         }
       }
 
-      return matchesSearch && matchesComuna && matchesDistance && matchesCategory && matchesMusic && matchesAge && matchesDate;
+      return matchesSearch && matchesCiudad && matchesComuna && matchesDistance && matchesCategory && matchesMusic && matchesAge && matchesDate;
     }).sort((a, b) => {
+      const dir = filters.sortDir === 'asc' ? 1 : -1;
       if (filters.sortBy === 'Precio') {
         const priceA = a.minTicketPrice === Infinity ? 9999999 : a.minTicketPrice;
         const priceB = b.minTicketPrice === Infinity ? 9999999 : b.minTicketPrice;
-        return priceA - priceB;
+        return (priceA - priceB) * dir;
       } else if (filters.sortBy === 'Fecha') {
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (!a.date) return dir;
+        if (!b.date) return -dir;
+        return (new Date(a.date).getTime() - new Date(b.date).getTime()) * dir;
       } else {
         const distA = a.distance !== null ? a.distance : 999999;
         const distB = b.distance !== null ? b.distance : 999999;
-        return distA - distB;
+        return (distA - distB) * dir;
       }
     });
 
@@ -608,7 +849,6 @@ export default function ExploreScreen() {
     return groups;
   }, [catalogData]);
 
-
   const SNAP = CARD_W + CARD_GAP;
   const N = catalogData.length;
 
@@ -623,14 +863,63 @@ export default function ExploreScreen() {
     return Array.from({ length: LOOP_MULTIPLIER }, () => catalogData).flat();
   }, [catalogData, LOOP_MULTIPLIER]);
 
+  const navigateToItem = useCallback((item: any) => {
+    const isTabEv = tabs[activeTabIndex] === 'Eventos';
+    const exp = Array.isArray(item.experiences) ? item.experiences[0] : item.experiences;
+    const clubObj = Array.isArray(item.clubs) ? item.clubs[0] : item.clubs;
+    let cleanDate = item.date;
+    if (cleanDate && typeof cleanDate === 'string' && cleanDate.includes('T')) cleanDate = cleanDate.split('T')[0];
+    if (isTabEv) eventCache.set(String(item.id), item);
+    router.push({
+      pathname: isTabEv ? '/event-detail' : '/club-detail',
+      params: isTabEv
+        ? (Platform.OS === 'web' ? { id: item.id } : {
+            id: item.id, imageUrl: item.image_url || item.image || '',
+            title: item.title || item.name, date: cleanDate, hour: item.hour,
+            clubName: clubObj?.name || item.club_name, clubImage: clubObj?.image || item.club_image,
+            accentColor: item.accent_color || item.theme_color || COLORS.neonPurple,
+            themeColorEnd: item.theme_color_end || '#0a0014',
+            category: item.category || item.area, area: item.area || item.category,
+            producerName: exp?.name, producerLogo: exp?.logo_url, producerId: exp?.id, instagramUrl: item.instagram_url, status: item.status,
+          })
+        : (Platform.OS === 'web' ? { id: item.id } : { id: item.id, imageUrl: item.image || item.image_url, name: item.name || item.title, instagramUrl: item.instagram || item.instagram_url }),
+    });
+  }, [activeTabIndex, tabs, router]);
+
+  const CLUSTER_RADIUS_KM = 0.08;
+  const getNearbyItems = useCallback((lat: number, lng: number) => {
+    return catalogData.filter((d: any) => {
+      const dLat = d.latitude || geocodedMarkers[d.id]?.latitude;
+      const dLng = d.longitude || geocodedMarkers[d.id]?.longitude;
+      if (!dLat || !dLng) return false;
+      return getDistanceFromLatLonInKm(lat, lng, dLat, dLng) <= CLUSTER_RADIUS_KM;
+    });
+  }, [catalogData, geocodedMarkers]);
+
+  // Contador de generación — se incrementa cada vez que cambian filtros/tab
+  // para cancelar callbacks async que quedaron obsoletos
+  const mapGenRef = useRef(0);
+
+  // Helper seguro para scrollToOffset — nunca excede los límites del FlatList
+  const safeScrollTo = useCallback((offset: number, animated = false) => {
+    if (!flatListRef.current) return;
+    const loopedLen = loopedData.length;
+    if (loopedLen === 0) return;
+    const maxOffset = Math.max(0, (loopedLen - 1) * SNAP);
+    flatListRef.current.scrollToOffset({ offset: Math.min(offset, maxOffset), animated });
+  }, [loopedData.length, SNAP]);
+
   // ANIMATED MAP CENTERING
   const animateMapToIndex = useCallback(async (loopedIdx: number) => {
+    const gen = mapGenRef.current;
     if (N === 0) return;
-    const actualIdx = ((loopedIdx % N) + N) % N;
+    const clampedIdx = Math.max(0, Math.min(loopedIdx, loopedData.length - 1));
+    const actualIdx = ((clampedIdx % N) + N) % N;
     const item = catalogData[actualIdx] ?? catalogData[0];
-    if (!item || !mapRef.current) return;
+    if (!item) return;
     const coords = await geocodeItem(item);
-    if (!coords) return;
+    // Si cambió generación (filtros/tab), descartar resultado obsoleto
+    if (gen !== mapGenRef.current || !coords || !mapRef.current) return;
     const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
     setActiveCarouselIndex(catIdx >= 0 ? catIdx : 0);
     mapRef.current.animateCamera({
@@ -638,10 +927,11 @@ export default function ExploreScreen() {
       zoom: 14.5,
       pitch: 45,
     }, { duration: 500 });
-  }, [catalogData, currentData, N]);
+  }, [catalogData, N, loopedData.length]);
 
   // Predice el destino del snap antes de que termine la inercia (mueve el mapa ya)
   const onScrollEndDrag = useCallback((event: any) => {
+    if (loopedData.length === 0) return;
     const { contentOffset, velocity } = event.nativeEvent;
     let loopedIdx = Math.round(contentOffset.x / SNAP);
     if (velocity?.x > 0.3) loopedIdx = Math.min(loopedData.length - 1, Math.floor(contentOffset.x / SNAP) + 1);
@@ -649,18 +939,20 @@ export default function ExploreScreen() {
     loopedIdx = Math.max(0, Math.min(loopedData.length - 1, loopedIdx));
     animateMapToIndex(loopedIdx);
     if (Platform.OS === 'web') {
-      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+      safeScrollTo(loopedIdx * SNAP, true);
     }
-  }, [animateMapToIndex, loopedData.length, SNAP]);
+  }, [animateMapToIndex, safeScrollTo, loopedData.length, SNAP]);
 
   // Corrección final cuando el snap se detiene
   const onMomentumScrollEnd = useCallback((event: any) => {
-    const loopedIdx = Math.round(event.nativeEvent.contentOffset.x / SNAP);
+    if (loopedData.length === 0) return;
+    const raw = Math.round(event.nativeEvent.contentOffset.x / SNAP);
+    const loopedIdx = Math.max(0, Math.min(raw, loopedData.length - 1));
     animateMapToIndex(loopedIdx);
     if (Platform.OS === 'web') {
-      flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+      safeScrollTo(loopedIdx * SNAP, true);
     }
-  }, [animateMapToIndex, SNAP]);
+  }, [animateMapToIndex, safeScrollTo, loopedData.length, SNAP]);
 
   // Aplicar CSS scroll-snap en web para touch móvil — re-run al entrar a modo mapa
   useEffect(() => {
@@ -693,25 +985,40 @@ export default function ExploreScreen() {
     return () => { cancelled = true; };
   }, [viewMode, activeTabIndex, catalogData.length]);
 
+  // Resetear carousel en modo mapa cuando cambian filtros (previene crash)
+  useEffect(() => {
+    mapGenRef.current += 1; // Invalidar callbacks async pendientes
+    if (viewMode !== 'map' || N === 0) return;
+    setActiveCarouselIndex(0);
+    const targetOffset = LOOP_MID * N * SNAP;
+    // InteractionManager espera a que terminen TODAS las animaciones/interacciones antes de scrollear
+    // Esto previene el crash de "data cambia + scrollToOffset al mismo tiempo"
+    const task = InteractionManager.runAfterInteractions(() => safeScrollTo(targetOffset, false));
+    return () => task.cancel();
+  }, [filters, searchQuery]);
+
   // Resetear al cambiar de tab — siempre al item 0 de la copia central
   useEffect(() => {
+    mapGenRef.current += 1; // Invalidar callbacks async pendientes
     setActiveCarouselIndex(0);
-    const startOffset = LOOP_MID * N * SNAP;
-    flatListRef.current?.scrollToOffset({ offset: startOffset, animated: false });
+    const targetOffset = LOOP_MID * N * SNAP;
+    const frame = requestAnimationFrame(() => safeScrollTo(targetOffset, false));
+
+    let cancelled = false;
     if (catalogData.length > 0) {
       const item = catalogData[0];
       geocodeItem(item).then(coords => {
-        if (coords && mapRef.current) {
-          const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
-          setActiveCarouselIndex(catIdx >= 0 ? catIdx : 0);
-          mapRef.current.animateCamera({
-            center: { latitude: coords.latitude - 0.005, longitude: coords.longitude },
-            zoom: 14.5,
-            pitch: 45,
-          }, { duration: 600 });
-        }
+        if (cancelled || !coords || !mapRef.current) return;
+        const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
+        setActiveCarouselIndex(catIdx >= 0 ? catIdx : 0);
+        mapRef.current.animateCamera({
+          center: { latitude: coords.latitude - 0.005, longitude: coords.longitude },
+          zoom: 14.5,
+          pitch: 45,
+        }, { duration: 600 });
       });
     }
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
   }, [activeTabIndex, N]);
 
 
@@ -723,9 +1030,20 @@ export default function ExploreScreen() {
             <Text style={styles.modalTitle}>Ordenar por</Text>
             <View style={styles.verticalOptions}>
               {SORT_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.optionRow} onPress={() => { setFilters({ ...filters, sortBy: opt }); setActiveFilterModal(null); }}>
+                <TouchableOpacity key={opt} style={styles.optionRow} onPress={() => setFilters({ ...filters, sortBy: opt })}>
                   <Text style={[styles.optionText, filters.sortBy === opt && styles.optionTextActive]}>{opt}</Text>
-                  {filters.sortBy === opt && <Check size={18} color={COLORS.neonPurple} />}
+                  {filters.sortBy === opt ? (
+                    <TouchableOpacity
+                      onPress={() => setFilters({ ...filters, sortDir: filters.sortDir === 'asc' ? 'desc' : 'asc' })}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(255,49,216,0.12)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.3)' }}
+                    >
+                      <Text style={{ color: '#FF31D8', fontSize: 12, fontWeight: '800' }}>
+                        {filters.sortDir === 'asc' ? '↑ Asc' : '↓ Desc'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <ArrowRight size={16} color="rgba(255,255,255,0.2)" />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -735,45 +1053,146 @@ export default function ExploreScreen() {
         return (
           <>
             <Text style={styles.modalTitle}>¿Cuándo?</Text>
+            {/* Opciones rápidas */}
             <View style={styles.verticalOptions}>
-              {DATE_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.optionRow} onPress={() => { setFilters({ ...filters, date: opt }); setActiveFilterModal(null); }}>
-                  <Text style={[styles.optionText, filters.date === opt && styles.optionTextActive]}>{opt}</Text>
-                  {filters.date === opt && <Check size={18} color={COLORS.neonPurple} />}
+              {DATE_OPTIONS.map(o => (
+                <TouchableOpacity
+                  key={o}
+                  style={styles.optionRow}
+                  onPress={() => {
+                    setFilters({ ...filters, date: o, specificDate: '' });
+                    setShowCalendarPicker(false);
+                    if (o !== 'Cualquiera') setActiveFilterModal(null);
+                  }}
+                >
+                  <Text style={[styles.optionText, !filters.specificDate && filters.date === o && styles.optionTextActive]}>{o}</Text>
+                  {!filters.specificDate && filters.date === o && <Check size={18} color={COLORS.neonPurple} />}
                 </TouchableOpacity>
               ))}
+              {/* Opción: fecha específica */}
+              <TouchableOpacity
+                style={styles.optionRow}
+                onPress={() => setShowCalendarPicker(v => !v)}
+              >
+                <Text style={[styles.optionText, !!filters.specificDate && styles.optionTextActive]}>
+                  {filters.specificDate ? `📅 ${filters.specificDate.split('-').reverse().join('/')}` : 'Fecha específica...'}
+                </Text>
+                {filters.specificDate
+                  ? <TouchableOpacity onPress={() => setFilters({ ...filters, specificDate: '', date: 'Cualquiera' })}>
+                      <X size={18} color="rgba(255,80,80,0.8)" />
+                    </TouchableOpacity>
+                  : <Calendar size={18} color={showCalendarPicker ? '#FF31D8' : 'rgba(255,255,255,0.3)'} />
+                }
+              </TouchableOpacity>
             </View>
+            {/* Calendario inline */}
+            {showCalendarPicker && (
+              <Animated.View entering={FadeInDown.duration(220)} style={{ marginTop: 16 }}>
+                <CalendarPicker
+                  selectedDate={filters.specificDate}
+                  onSelect={(d) => {
+                    setFilters({ ...filters, specificDate: d, date: 'Cualquiera' });
+                    setShowCalendarPicker(false);
+                    setActiveFilterModal(null);
+                  }}
+                />
+              </Animated.View>
+            )}
           </>
         );
       case 'distance':
         return (
           <>
             <Text style={styles.modalTitle}>Ubicación y Distancia</Text>
-            <Text style={styles.filterLabel}>Escribir Comuna</Text>
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Ej: Las Condes"
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              value={filters.comuna}
-              onChangeText={(t) => setFilters({ ...filters, comuna: t })}
-            />
-            {location && (
-              <>
-                <Text style={styles.filterLabel}>Distancia Máxima</Text>
-                <View style={styles.chipsContainer}>
-                  {DISTANCE_OPTIONS.map(dist => (
-                    <TouchableOpacity
-                      key={dist}
-                      style={[styles.chip, filters.maxDistance === dist && styles.chipActive]}
-                      onPress={() => setFilters({ ...filters, maxDistance: filters.maxDistance === dist ? null : dist })}
-                    >
-                      <Text style={[styles.chipText, filters.maxDistance === dist && styles.chipTextActive]}>{dist} km</Text>
+            <View style={styles.verticalOptions}>
+
+              {/* Fila: Ciudad */}
+              <TouchableOpacity style={styles.optionRow} onPress={() => { setShowCityPicker(v => !v); setShowComunaInput(false); setShowDistancePicker(false); }}>
+                <Text style={[styles.optionText, !!filters.ciudad && styles.optionTextActive]}>
+                  {filters.ciudad ? `🏙️ ${filters.ciudad}` : 'Ciudad...'}
+                </Text>
+                {filters.ciudad
+                  ? <TouchableOpacity onPress={() => setFilters({ ...filters, ciudad: '' })}>
+                      <X size={18} color="rgba(255,80,80,0.8)" />
                     </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-            <TouchableOpacity style={styles.mainBtn} onPress={closeFilterModal}>
+                  : <MapPin size={18} color={showCityPicker ? '#FF31D8' : 'rgba(255,255,255,0.3)'} />
+                }
+              </TouchableOpacity>
+              {showCityPicker && (
+                <Animated.View entering={FadeInDown.duration(220)} style={{ marginBottom: 8 }}>
+                  <View style={[styles.chipsContainer, { marginTop: 8 }]}>
+                    {CITY_OPTIONS.map(city => (
+                      <TouchableOpacity
+                        key={city}
+                        style={[styles.chip, filters.ciudad === city && styles.chipActive]}
+                        onPress={() => { setFilters({ ...filters, ciudad: filters.ciudad === city ? '' : city }); setShowCityPicker(false); }}
+                      >
+                        <Text style={[styles.chipText, filters.ciudad === city && styles.chipTextActive]}>{city}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </Animated.View>
+              )}
+
+              {/* Fila: Comuna */}
+              <TouchableOpacity style={styles.optionRow} onPress={() => { setShowComunaInput(v => !v); setShowCityPicker(false); setShowDistancePicker(false); }}>
+                <Text style={[styles.optionText, !!filters.comuna && styles.optionTextActive]}>
+                  {filters.comuna ? `📍 ${filters.comuna}` : 'Comuna...'}
+                </Text>
+                {filters.comuna
+                  ? <TouchableOpacity onPress={() => setFilters({ ...filters, comuna: '' })}>
+                      <X size={18} color="rgba(255,80,80,0.8)" />
+                    </TouchableOpacity>
+                  : <Search size={18} color={showComunaInput ? '#FF31D8' : 'rgba(255,255,255,0.3)'} />
+                }
+              </TouchableOpacity>
+              {showComunaInput && (
+                <Animated.View entering={FadeInDown.duration(220)} style={{ marginBottom: 8 }}>
+                  <TextInput
+                    style={[styles.filterInput, { marginTop: 8, marginBottom: 0 }]}
+                    placeholder="Ej: Las Condes, Ñuñoa..."
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    value={filters.comuna}
+                    onChangeText={(t) => setFilters({ ...filters, comuna: t })}
+                    autoFocus
+                  />
+                </Animated.View>
+              )}
+
+              {/* Fila: Distancia máxima (solo si hay GPS) */}
+              {location && (
+                <>
+                  <TouchableOpacity style={styles.optionRow} onPress={() => { setShowDistancePicker(v => !v); setShowCityPicker(false); setShowComunaInput(false); }}>
+                    <Text style={[styles.optionText, !!filters.maxDistance && styles.optionTextActive]}>
+                      {filters.maxDistance ? `📡 ${filters.maxDistance} km` : 'Distancia máxima...'}
+                    </Text>
+                    {filters.maxDistance
+                      ? <TouchableOpacity onPress={() => setFilters({ ...filters, maxDistance: null })}>
+                          <X size={18} color="rgba(255,80,80,0.8)" />
+                        </TouchableOpacity>
+                      : <ArrowRight size={18} color={showDistancePicker ? '#FF31D8' : 'rgba(255,255,255,0.3)'} />
+                    }
+                  </TouchableOpacity>
+                  {showDistancePicker && (
+                    <Animated.View entering={FadeInDown.duration(220)} style={{ marginBottom: 8 }}>
+                      <View style={[styles.chipsContainer, { marginTop: 8 }]}>
+                        {DISTANCE_OPTIONS.map(dist => (
+                          <TouchableOpacity
+                            key={dist}
+                            style={[styles.chip, filters.maxDistance === dist && styles.chipActive]}
+                            onPress={() => { setFilters({ ...filters, maxDistance: filters.maxDistance === dist ? null : dist }); setShowDistancePicker(false); }}
+                          >
+                            <Text style={[styles.chipText, filters.maxDistance === dist && styles.chipTextActive]}>{dist} km</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </Animated.View>
+                  )}
+                </>
+              )}
+
+            </View>
+            <TouchableOpacity style={[styles.mainBtn, { marginTop: 16 }]} onPress={closeFilterModal}>
               <LinearGradient colors={['#FF31D8', '#FF31D8']} style={styles.mainBtnGradient}>
                 <Text style={styles.mainBtnText}>Aplicar Cambios</Text>
               </LinearGradient>
@@ -827,15 +1246,17 @@ export default function ExploreScreen() {
       case 'age':
         return (
           <>
-            <Text style={styles.modalTitle}>Edad Permitida</Text>
-            <View style={styles.verticalOptions}>
-              {AGE_OPTIONS.map(opt => (
-                <TouchableOpacity key={opt} style={styles.optionRow} onPress={() => { setFilters({ ...filters, minAge: filters.minAge === opt ? '' : opt }); setActiveFilterModal(null); }}>
-                  <Text style={[styles.optionText, filters.minAge === opt && styles.optionTextActive]}>{opt}</Text>
-                  {filters.minAge === opt && <Check size={18} color={COLORS.neonPurple} />}
-                </TouchableOpacity>
-              ))}
-            </View>
+            <Text style={styles.modalTitle}>Rango de Edad</Text>
+            <RangeSlider
+              lowVal={filters.minAge}
+              highVal={filters.maxAge}
+              onChange={(low, high) => setFilters({ ...filters, minAge: low, maxAge: high })}
+            />
+            <TouchableOpacity style={[styles.mainBtn, { marginTop: 16 }]} onPress={closeFilterModal}>
+              <LinearGradient colors={['#FF31D8', '#FF31D8']} style={styles.mainBtnGradient}>
+                <Text style={styles.mainBtnText}>Aplicar</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </>
         );
       default:
@@ -844,12 +1265,12 @@ export default function ExploreScreen() {
   };
 
   const activeFiltersCount = [
-    filters.date !== 'Cualquiera',
-    filters.sortBy !== 'Distancia',
+    filters.date !== 'Cualquiera' || !!filters.specificDate,
+    filters.sortBy !== 'Distancia' || filters.sortDir !== 'asc',
     !!filters.category,
     !!filters.musicGenre,
-    !!filters.minAge,
-    !!filters.comuna || !!filters.maxDistance,
+    filters.minAge !== SLIDER_MIN || filters.maxAge !== SLIDER_MAX,
+    !!filters.ciudad || !!filters.comuna || !!filters.maxDistance,
   ].filter(Boolean).length;
 
   return (
@@ -886,7 +1307,24 @@ export default function ExploreScreen() {
               if (!lat || !lng) return null;
               const isSelected = activeCarouselIndex === idx;
               return (
-                <Marker key={item.id} coordinate={{ latitude: lat, longitude: lng }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}>
+                <Marker key={item.id} coordinate={{ latitude: lat, longitude: lng }} tracksViewChanges={isSelected} anchor={{ x: 0.5, y: 0.5 }}
+                  onPress={() => {
+                    const nearby = getNearbyItems(lat, lng);
+                    if (nearby.length > 1) {
+                      setClusterPickerItems(nearby);
+                      setClusterPickerVisible(true);
+                    } else if (isSelected) {
+                      navigateToItem(item);
+                    } else {
+                      const catIdx = catalogData.findIndex((d: any) => d.id === item.id);
+                      if (catIdx >= 0) {
+                        const loopedIdx = LOOP_MID * N + catIdx;
+                        flatListRef.current?.scrollToOffset({ offset: loopedIdx * SNAP, animated: true });
+                        animateMapToIndex(loopedIdx);
+                      }
+                    }
+                  }}
+                >
                   {isSelected ? (
                     <View style={styles.activePinContainer}>
                       <View style={styles.activePinRing}><View style={styles.activePinInner} /></View>
@@ -1017,13 +1455,13 @@ export default function ExploreScreen() {
             snapToInterval={SNAP}
             decelerationRate="fast"
             disableIntervalMomentum={true}
-            removeClippedSubviews={true}
+            removeClippedSubviews={false}
             maxToRenderPerBatch={8}
             windowSize={5}
             initialNumToRender={6}
             getItemLayout={(_: any, index: number) => ({ length: SNAP, offset: (width - CARD_W) / 2 + index * SNAP, index })}
             onLayout={() => {
-              if (N > 1) flatListRef.current?.scrollToOffset({ offset: LOOP_MID * N * SNAP, animated: false });
+              if (N > 1) safeScrollTo(LOOP_MID * N * SNAP, false);
             }}
             onScrollEndDrag={onScrollEndDrag}
             onMomentumScrollEnd={onMomentumScrollEnd}
@@ -1117,7 +1555,7 @@ export default function ExploreScreen() {
               onPress={closeFilterModal}
             />
           </Animated.View>
-          <Animated.View layout={LinearTransition.duration(250).easing(Easing.out(Easing.quad))} style={[styles.modalSheetPremium, { overflow: 'visible', paddingBottom: insets.bottom + 24, maxHeight: height * 0.76 }, filterSheetStyle]}>
+          <Animated.View style={[styles.modalSheetPremium, { overflow: 'visible', paddingBottom: insets.bottom + 24, maxHeight: height * 0.76 }, filterSheetStyle]}>
             <View style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden' }]}>
               <BlurView intensity={70} tint="dark" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
             </View>
@@ -1160,7 +1598,7 @@ export default function ExploreScreen() {
                   <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
                     {activeFiltersCount > 0 && (
                       <TouchableOpacity
-                        onPress={() => { setFilters({ sortBy: 'Distancia', comuna: '', maxDistance: null, date: 'Cualquiera', category: '', minAge: '', musicGenre: '' }); closeFilterModal(); }}
+                        onPress={() => { setFilters({ sortBy: 'Distancia', sortDir: 'asc', ciudad: '', comuna: '', maxDistance: null, date: 'Cualquiera', specificDate: '', category: '', minAge: SLIDER_MIN, maxAge: SLIDER_MAX, musicGenre: '' }); setShowCalendarPicker(false); closeFilterModal(); }}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(255,68,68,0.3)' }}
                       >
                         <X size={12} color="#FF4444" />
@@ -1168,13 +1606,25 @@ export default function ExploreScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+                  {/* Ordenar por — visualmente separado */}
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14, marginBottom: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' }}
+                    onPress={() => setActiveFilterModal('sort')}
+                  >
+                    <ArrowUpDown size={16} color={(filters.sortBy !== 'Distancia' || filters.sortDir !== 'asc') ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />
+                    <Text style={{ flex: 1, color: 'white', fontSize: 15, fontWeight: '700' }}>Ordenar por</Text>
+                    <Text style={{ color: '#FF31D8', fontSize: 13, fontWeight: '800' }}>
+                      {filters.sortBy} {filters.sortDir === 'asc' ? '↑' : '↓'}
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 6 }} />
+                  {/* Filtros */}
                   {[
-                    { key: 'sort', icon: <ArrowUpDown size={16} color={filters.sortBy !== 'Distancia' ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Ordenar por', value: filters.sortBy !== 'Distancia' ? filters.sortBy : null },
-                    { key: 'date', icon: <Calendar size={16} color={filters.date !== 'Cualquiera' ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Fecha', value: filters.date !== 'Cualquiera' ? filters.date : null },
-                    { key: 'distance', icon: <MapPin size={16} color={(filters.comuna || filters.maxDistance) ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Ubicación', value: filters.comuna || (filters.maxDistance ? `${filters.maxDistance} km` : null) },
+                    { key: 'date', icon: <Calendar size={16} color={(filters.date !== 'Cualquiera' || !!filters.specificDate) ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Fecha', value: filters.specificDate ? `📅 ${filters.specificDate.split('-').reverse().join('/')}` : (filters.date !== 'Cualquiera' ? filters.date : null) },
+                    { key: 'distance', icon: <MapPin size={16} color={(filters.ciudad || filters.comuna || filters.maxDistance) ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Ubicación', value: filters.ciudad || filters.comuna || (filters.maxDistance ? `${filters.maxDistance} km` : null) },
                     { key: 'category', icon: <Tag size={16} color={filters.category ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Categoría', value: filters.category || null },
                     { key: 'music', icon: <Music size={16} color={filters.musicGenre ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Estilo musical', value: filters.musicGenre || null },
-                    { key: 'age', icon: <Users size={16} color={filters.minAge ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Edad', value: filters.minAge || null },
+                    { key: 'age', icon: <Users size={16} color={(filters.minAge !== SLIDER_MIN || filters.maxAge !== SLIDER_MAX) ? '#FF31D8' : 'rgba(255,255,255,0.6)'} />, label: 'Edad', value: (filters.minAge !== SLIDER_MIN || filters.maxAge !== SLIDER_MAX) ? `${filters.minAge}–${filters.maxAge >= SLIDER_MAX ? `${filters.maxAge}+` : filters.maxAge}` : null },
                   ].map(row => (
                     <TouchableOpacity
                       key={row.key}
@@ -1194,13 +1644,70 @@ export default function ExploreScreen() {
               </Animated.View>
             ) : (
               <Animated.View entering={FadeInRight.duration(300)} style={{ width: '100%' }}>
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.52 }} contentContainerStyle={{ paddingBottom: 30 }}>
+                <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={activeFilterModal !== 'age'} style={{ maxHeight: height * 0.52 }} contentContainerStyle={{ paddingBottom: 30 }}>
                   {renderFilterContent()}
                 </ScrollView>
               </Animated.View>
             )}
           </Animated.View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── MODAL CLUSTER PICKER ── */}
+      <Modal
+        visible={clusterPickerVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeClusterPicker}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }, clusterOverlayStyle]}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeClusterPicker} />
+          </Animated.View>
+          <Animated.View style={[styles.modalSheetPremium, { overflow: 'visible', paddingBottom: insets.bottom + 24, maxHeight: height * 0.6 }, clusterSheetStyle]}>
+            <View style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden' }]}>
+              <BlurView intensity={70} tint="dark" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+            </View>
+            <GestureDetector gesture={clusterPan}>
+              <View style={{ alignItems: 'center', paddingVertical: 14, marginHorizontal: -25 }}>
+                <View style={[styles.modalHandleThin, { marginBottom: 0 }]} />
+              </View>
+            </GestureDetector>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>{clusterPickerItems.length} eventos aquí</Text>
+              <TouchableOpacity
+                onPress={closeClusterPicker}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' }}
+              >
+                <X color="rgba(255,255,255,0.6)" size={20} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              {clusterPickerItems.map(clusterItem => {
+                const clubObj = Array.isArray(clusterItem.clubs) ? clusterItem.clubs[0] : clusterItem.clubs;
+                return (
+                  <TouchableOpacity
+                    key={clusterItem.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', gap: 14 }}
+                    onPress={() => { closeClusterPicker(); setTimeout(() => navigateToItem(clusterItem), 350); }}
+                  >
+                    <View style={{ width: 48, height: 48, borderRadius: 10, overflow: 'hidden' }}>
+                      <ExpoImage source={{ uri: clusterItem.image_url || clusterItem.image }} style={{ width: 48, height: 48 }} contentFit="cover" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#FBFBFB', fontWeight: '800', fontSize: 15, fontStyle: 'italic' }} numberOfLines={1}>{clusterItem.title || clusterItem.name}</Text>
+                      <Text style={{ color: 'rgba(251,251,251,0.5)', fontSize: 12, fontWeight: '500', marginTop: 2 }} numberOfLines={1}>
+                        {clubObj?.name || clusterItem.club_name || clusterItem.location || ''}
+                        {clusterItem.date ? ` · ${formatDayShort(clusterItem.date)}` : ''}
+                      </Text>
+                    </View>
+                    <ArrowRight size={16} color="rgba(255,255,255,0.3)" />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        </View>
       </Modal>
 
     </View>

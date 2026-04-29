@@ -59,6 +59,16 @@ import AppDownloadSheet from '../../components/AppDownloadSheet';
 import { SkeletonBox } from '../../components/SkeletonBox';
 import { setPendingNav } from '../../lib/pendingNav';
 
+const htmlDescriptionRenderers = {
+    a: ({ tnode, TDefaultRenderer, ...props }: any) => (
+        <TDefaultRenderer
+            tnode={tnode}
+            {...props}
+            style={[props.style, { color: '#4A90E2', textDecorationLine: 'underline', fontWeight: '600' }]}
+        />
+    ),
+};
+
 const _dim = Dimensions.get('window');
 const width = Platform.OS === 'web' ? Math.min(_dim.width, 480) : _dim.width;
 const height = _dim.height;
@@ -877,14 +887,25 @@ export default function EventDetailScreen() {
                                         <Text style={[styles.sectionHeader, { fontSize: 18 }]}>Acerca del evento</Text>
                                         <RenderHtml
                                             contentWidth={width - (SCALE.padding * 2)}
-                                            source={{ html: event.description }}
+                                            renderers={htmlDescriptionRenderers}
+                                            renderersProps={{
+                                                a: {
+                                                    onPress: (_: any, href: string) => {
+                                                        if (href) Linking.openURL(href).catch(() => {});
+                                                    },
+                                                },
+                                            }}
+                                            source={{ html: (event.description ?? '')
+                                                .replace(/<p>(\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '')
+                                                .replace(/(<br\s*\/?>\s*){2,}/gi, '<br>')
+                                                .replace(/(?<![="'])(https?:\/\/[^\s<>"]+)/gi, (url: string) => `<a href="${url}">${url}</a>`) }}
                                             tagsStyles={{
-                                                body: { color: 'rgba(251, 251, 251, 0.6)', fontSize: SCALE.subtitleSize, lineHeight: 24 },
+                                                body: { color: 'rgba(251, 251, 251, 0.6)', fontSize: SCALE.subtitleSize, lineHeight: 20 },
                                                 b: { color: '#FBFBFB', fontWeight: '800' },
                                                 strong: { color: '#FBFBFB', fontWeight: '800' },
                                                 i: { fontStyle: 'italic' },
-                                                p: { margin: 0, marginBottom: 10 },
-                                                u: { textDecorationLine: 'underline', color: '#FBFBFB' }
+                                                p: { margin: 0, marginBottom: 2 },
+                                                u: { textDecorationLine: 'underline', color: '#FBFBFB' },
                                             }}
                                         />
                                     </View>
@@ -994,6 +1015,11 @@ export default function EventDetailScreen() {
                                     <Text style={styles.legalTextHighlight}>
                                         Este evento tiene como hora de finalización aproximada las {displayEndTime} HRS {displayEndDay}.
                                     </Text>
+                                    {isInfo && (
+                                        <Text style={[styles.legalText, { marginTop: 8 }]}>
+                                            Este es un evento informativo. No existe venta de tickets ni sistema de compra asociado. Toda la información publicada es de carácter referencial.
+                                        </Text>
+                                    )}
                                 </View>
                             </AnimatedEntry>
 

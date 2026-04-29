@@ -9,7 +9,7 @@ import {
   UserCheck, UserMinus, UserPlus, X,
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ReAnimated, {
   FadeIn, FadeInDown, FadeInUp,
   useSharedValue, withTiming, useAnimatedStyle,
@@ -46,7 +46,50 @@ export default function UserProfileScreen() {
   const navTop = useNavBarPaddingTop();
   const { id: profileId, name: initialName } = useLocalSearchParams<{ id: string; name: string }>();
 
+  // ── Estado del perfil — debe declararse ANTES del photo viewer ──
+  const [profile, setProfile] = useState({
+    full_name: initialName || 'Usuario',
+    username: '',
+    xp: 0,
+    level: 1,
+    avatar_url: null as string | null,
+    instagram_username: null as string | null,
+  });
+
   const [loading, setLoading] = useState(true);
+  const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
+
+  // Animaciones del visor de foto
+  const photoScale   = useSharedValue(0.6);
+  const photoOpacity = useSharedValue(0);
+  const photoDY      = useSharedValue(0);
+
+  const openPhotoViewer = useCallback(() => {
+    if (!profile.avatar_url) return;
+    photoDY.value = 0;
+    photoScale.value = 0.6;
+    photoOpacity.value = 0;
+    setPhotoViewerVisible(true);
+    photoScale.value   = withTiming(1,   { duration: 280, easing: Easing.out(Easing.cubic) });
+    photoOpacity.value = withTiming(1,   { duration: 220 });
+  }, [profile.avatar_url]);
+
+  const closePhotoViewer = useCallback(() => {
+    photoScale.value   = withTiming(0.75, { duration: 220, easing: Easing.in(Easing.cubic) });
+    photoOpacity.value = withTiming(0,    { duration: 200 }, () => { runOnJS(setPhotoViewerVisible)(false); });
+  }, []);
+
+  const photoViewerStyle = useAnimatedStyle(() => ({
+    opacity:   photoOpacity.value,
+    transform: [
+      { scale:       photoScale.value },
+      { translateY:  photoDY.value    },
+    ],
+  }));
+  const photoOverlayStyle = useAnimatedStyle(() => ({
+    opacity: photoOpacity.value,
+  }));
+
   const [friendState, setFriendState] = useState<FriendState>('none');
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [mutualCount, setMutualCount] = useState(0);
@@ -80,15 +123,6 @@ export default function UserProfileScreen() {
       modalOffset.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
     }
   }, [mutualModalVisible]);
-
-  const [profile, setProfile] = useState({
-    full_name: initialName || 'Usuario',
-    username: '',
-    xp: 0,
-    level: 1,
-    avatar_url: null as string | null,
-    instagram_username: null as string | null,
-  });
 
   useEffect(() => { if (profileId) loadAll(); }, [profileId]);
 
@@ -294,14 +328,18 @@ export default function UserProfileScreen() {
         <ReAnimated.View entering={FadeInUp.duration(300).delay(0).springify()}>
         <View style={s.heroSection}>
           {/* Anillo del avatar con color de nivel */}
-          <View style={[s.avatarOuter, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}>
+          <TouchableOpacity
+            activeOpacity={profile.avatar_url ? 0.85 : 1}
+            onPress={openPhotoViewer}
+            style={[s.avatarOuter, { borderColor: '#FF31D8', shadowColor: '#FF31D8' }]}
+          >
             <View style={[s.avatarInner, !profile.avatar_url && { backgroundColor: 'rgba(255,49,216,0.2)' }]}>
               {profile.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" transition={150} cachePolicy="memory-disk" />
                 : <Text style={s.avatarChar}>{initials}</Text>
               }
             </View>
-          </View>
+          </TouchableOpacity>
 
           <Text style={s.name}>{profile.full_name}</Text>
           <Text style={s.username}>@{profile.username || 'usuario'}</Text>
@@ -445,6 +483,46 @@ export default function UserProfileScreen() {
           />
         </ReAnimated.View>
       </Modal>
+
+      {/* VISOR DE FOTO DE PERFIL */}
+      {photoViewerVisible && (
+        <Modal visible transparent statusBarTranslucent animationType="none" onRequestClose={closePhotoViewer}>
+          {/* Overlay oscuro */}
+          <ReAnimated.View
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.88)' }, photoOverlayStyle]}
+          >
+            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closePhotoViewer} />
+          </ReAnimated.View>
+
+          {/* Botón cerrar */}
+          <ReAnimated.View style={[{ position: 'absolute', top: 56, right: 20, zIndex: 10 }, photoOverlayStyle]}>
+            <TouchableOpacity
+              onPress={closePhotoViewer}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <X color="white" size={18} />
+            </TouchableOpacity>
+          </ReAnimated.View>
+
+          {/* Foto expandida */}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} pointerEvents="box-none">
+            <ReAnimated.View
+              style={[{ width: width * 0.82, height: width * 0.82, borderRadius: width * 0.41, overflow: 'hidden', borderWidth: 2.5, borderColor: '#FF31D8', shadowColor: '#FF31D8', shadowRadius: 32, shadowOpacity: 0.6, shadowOffset: { width: 0, height: 0 }, elevation: 20 }, photoViewerStyle]}
+            >
+              <Image
+                source={{ uri: profile.avatar_url! }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            </ReAnimated.View>
+            <ReAnimated.Text style={[{ color: 'rgba(255,255,255,0.7)', fontSize: 17, fontWeight: '900', fontStyle: 'italic', marginTop: 20, letterSpacing: -0.5 }, photoOverlayStyle]}>
+              {profile.full_name}
+            </ReAnimated.Text>
+          </View>
+        </Modal>
+      )}
 
     </ReAnimated.View>
   );
