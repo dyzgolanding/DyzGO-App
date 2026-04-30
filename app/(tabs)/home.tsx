@@ -12,8 +12,6 @@ import {
     Ticket,
     Users,
     Wifi,
-    Sparkles,
-    Flame
 } from 'lucide-react-native';
 import React, { useCallback, memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -153,7 +151,7 @@ const ClubItem = memo(function ClubItem({ item, index, scrollX, location, onScro
 export default function HomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    
+
     // Ocultamiento seguro para Web
     const [isScreenFocused, setIsScreenFocused] = useState(true);
     useFocusEffect(
@@ -422,37 +420,37 @@ export default function HomeScreen() {
             }}
         />
     ), [scrollX, location]);
-    
+
     return (
         <View style={[styles.container, Platform.OS === 'web' && !isScreenFocused && { opacity: 0 }]} pointerEvents={Platform.OS === 'web' && !isScreenFocused ? 'none' : 'auto'}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* GLOW ROJO SUTIL EN EL FONDO - Luces difuminadas sin oscurecer el negro */}
             {Platform.OS !== 'web' && (
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                {/* Luz superior izquierda */}
-                <LinearGradient
-                    colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0.6, y: 0.5 }}
-                    style={StyleSheet.absoluteFill}
-                />
-                {/* Luz inferior derecha */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(255, 49, 216, 0.15)']}
-                    start={{ x: 0.4, y: 0.5 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                />
-                {/* Destello muy sutil cruzado */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']}
-                    start={{ x: 1, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    locations={[0.3, 0.5, 0.7]}
-                    style={StyleSheet.absoluteFill}
-                />
-            </View>
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    {/* Luz superior izquierda */}
+                    <LinearGradient
+                        colors={['rgba(255, 49, 216, 0.2)', 'transparent']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0.6, y: 0.5 }}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    {/* Luz inferior derecha */}
+                    <LinearGradient
+                        colors={['transparent', 'rgba(255, 49, 216, 0.15)']}
+                        start={{ x: 0.4, y: 0.5 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    {/* Destello muy sutil cruzado */}
+                    <LinearGradient
+                        colors={['transparent', 'rgba(255, 49, 216, 0.05)', 'transparent']}
+                        start={{ x: 1, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        locations={[0.3, 0.5, 0.7]}
+                        style={StyleSheet.absoluteFill}
+                    />
+                </View>
             )}
 
 
@@ -593,6 +591,33 @@ export default function HomeScreen() {
                             }}
                         />
                     )}
+                </View>
+
+                {/* CLUB GORDOS — RESERVA DE MESAS */}
+                <View style={styles.sectionMargin}>
+                    <View style={styles.sectionHeaderLine}>
+                        <Text style={styles.sectionTitle}>Reserva tu mesa</Text>
+                    </View>
+                    <View style={{ paddingHorizontal: 24 }}>
+                        <PressableScale scaleTo={0.97} haptic="medium" onPress={() => router.push('/reserve' as any)}>
+                            <View style={{ borderRadius: 28, overflow: 'hidden', height: 160, backgroundColor: '#0a0a0a' }}>
+                                <ExpoImage
+                                    source={{ uri: 'https://kovkkdhnmgavnqyjbqzd.supabase.co/storage/v1/object/public/banners/IMG_4313.PNG' }}
+                                    style={StyleSheet.absoluteFill}
+                                    contentFit="cover"
+                                />
+                                <LinearGradient
+                                    colors={['transparent', 'rgba(3,3,3,0.72)']}
+                                    start={{ x: 0, y: 0.3 }} end={{ x: 0, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                />
+                                <View style={{ position: 'absolute', bottom: 16, left: 20 }}>
+                                    <Text style={{ color: '#FBFBFB', fontSize: 21, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.4 }}>Club Gordos</Text>
+                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2, fontWeight: '500' }}>Avenida Vitacura 4607 Local 12A</Text>
+                                </View>
+                            </View>
+                        </PressableScale>
+                    </View>
                 </View>
 
                 {/* 3. BENTO GRID - EXPERIENCIA DYZGO */}

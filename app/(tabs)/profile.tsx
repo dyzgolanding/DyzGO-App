@@ -10,7 +10,7 @@ import {
   Ticket,
   TrendingUp,
   UserCheck,
-  Users
+  Users,
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
