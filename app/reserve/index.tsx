@@ -2,7 +2,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
-import { ArrowLeft, ChevronRight, Copy, Crown, Gift, Instagram, Navigation, Share2, X } from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronRight, Copy, Crown, Gift, Info, Instagram, Navigation, Share2, Sparkles, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -134,6 +134,7 @@ export default function ReserveScreen() {
   const [loading, setLoading] = useState(true);
   const [showBdayModal, setShowBdayModal] = useState(false);
   const headerBgAnim = React.useRef(new RNAnimated.Value(0)).current;
+  const modalHeaderBgAnim = React.useRef(new RNAnimated.Value(0)).current;
   const AnimatedBlurView = React.useMemo(() => RNAnimated.createAnimatedComponent(BlurView), []);
 
   const [isScreenFocused, setIsScreenFocused] = useState(true);
@@ -354,7 +355,7 @@ export default function ReserveScreen() {
             {venue?.birthday_banner_url ? (
               <ExpoImage
                 source={{ uri: getImageUrl(venue.birthday_banner_url, 800, 80) ?? venue.birthday_banner_url }}
-                style={StyleSheet.absoluteFill}
+                style={[StyleSheet.absoluteFill, { opacity: 0.45 }]}
                 contentFit="cover"
               />
             ) : (
@@ -455,91 +456,143 @@ export default function ReserveScreen() {
           <View style={styles.modalContainer}>
             <StatusBar barStyle="light-content" />
 
-            {/* Mismo fondo que el resto de la app */}
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
-              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['rgba(255,49,216,0.22)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 0.6 }} style={StyleSheet.absoluteFill} />
+              <LinearGradient colors={['transparent', 'rgba(255,49,216,0.14)']} start={{ x: 0.3, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+            {/* Header flotante — exactamente igual que el index */}
+            <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
+              <AnimatedBlurView intensity={50} tint="dark" style={[styles.pillBg, { opacity: modalHeaderBgAnim }]} />
+              <TouchableOpacity style={styles.iconBtn} onPress={() => setShowBdayModal(false)} activeOpacity={0.75}>
+                <ArrowLeft size={20} color="#FBFBFB" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconBtn} onPress={handleShare} activeOpacity={0.75}>
+                <Share2 size={20} color="#FBFBFB" />
+              </TouchableOpacity>
+            </View>
 
-              {/* Hero */}
-              <View style={styles.modalHero}>
-                {venue?.birthday_banner_url ? (
-                  <ExpoImage
-                    source={{ uri: getImageUrl(venue.birthday_banner_url, 800, 80) ?? venue.birthday_banner_url }}
-                    style={[StyleSheet.absoluteFill, { opacity: 0.65 }]}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <LinearGradient colors={['#1a0530', '#10031e', '#06010f']} style={StyleSheet.absoluteFill} />
-                )}
-                <LinearGradient colors={['transparent', 'rgba(3,3,3,0.95)']} start={{ x: 0.5, y: 0.1 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
-                <LinearGradient colors={['rgba(255,49,216,0.2)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                const y = e.nativeEvent.contentOffset.y;
+                modalHeaderBgAnim.setValue(Math.min(1, y / 180));
+              }}
+            >
 
-                {/* Close */}
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowBdayModal(false)}>
-                  <BlurView intensity={40} tint="dark" style={styles.modalCloseBtnInner}>
-                    <X size={18} color="#FBFBFB" />
-                  </BlurView>
-                </TouchableOpacity>
-
-                <View style={styles.modalHeroBottom}>
-                  <Text style={styles.modalVenueName}>CLUB GORDOS</Text>
-                  <Text style={styles.modalHeroTitle}>{'Celebra tu\ncumpleaños'}</Text>
+              {/* Banner card — igual que el index */}
+              <Animated.View entering={FadeInDown.duration(400)} style={[styles.bannerContainer, { paddingTop: insets.top + 60 }]}>
+                <View style={styles.bannerGlowWrap}>
+                  <View style={styles.bannerImageCard}>
+                    {venue?.birthday_banner_url ? (
+                      <ExpoImage
+                        source={{ uri: getImageUrl(venue.birthday_banner_url, 800, 80) ?? venue.birthday_banner_url }}
+                        style={styles.bannerImage}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    ) : (
+                      <LinearGradient colors={['#1a0828', '#060110']} style={StyleSheet.absoluteFill} />
+                    )}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(3,3,3,0.45)']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 0, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </View>
                 </View>
-              </View>
+              </Animated.View>
+
+              {/* Título debajo del banner */}
+              <Animated.View entering={FadeInUp.delay(150).duration(350)} style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8, gap: 6 }}>
+                <Text style={styles.sectionTitle}>{'Celebra tu\ncumpleaños'}</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500' }}>Beneficios exclusivos para tu día especial</Text>
+              </Animated.View>
 
               {/* Content */}
               <View style={styles.modalContent}>
 
-                <Text style={styles.smallSectionLabel}>Beneficios por tramo</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                  <Text style={[styles.smallSectionLabel, { marginBottom: 0 }]}>Beneficios por tramo</Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                </View>
 
                 {[
-                  { label: '+15 INVITADOS', items: ['1 botella de pisco o espumante + 1 bebida 1.5L', 'Torta de shots'] },
-                  { label: '10 A 14 INVITADOS', items: ['2 tragos (mojito / piscola / gin tonic / shot)', 'Torta de shots'] },
-                  { label: 'MENOS DE 10', items: ['1 trago (mojito / piscola / gin tonic / shot)', 'Torta de shots para todos'] },
+                  {
+                    label: '+15 INVITADOS', rank: '01', accent: '#FFD700',
+                    grad: ['rgba(255,215,0,0.12)', 'rgba(255,215,0,0.03)'] as [string, string],
+                    border: 'rgba(255,215,0,0.22)',
+                    items: ['1 botella de pisco o espumante + 1 bebida 1.5L', 'Torta de shots para todos'],
+                  },
+                  {
+                    label: '10 A 14 INVITADOS', rank: '02', accent: ACCENT2,
+                    grad: ['rgba(255,49,216,0.10)', 'rgba(255,49,216,0.02)'] as [string, string],
+                    border: 'rgba(255,49,216,0.2)',
+                    items: ['2 tragos (mojito / piscola / gin tonic / shot)', 'Torta de shots'],
+                  },
+                  {
+                    label: 'MENOS DE 10', rank: '03', accent: '#a78bfa',
+                    grad: ['rgba(167,139,250,0.08)', 'rgba(167,139,250,0.02)'] as [string, string],
+                    border: 'rgba(167,139,250,0.18)',
+                    items: ['1 trago (mojito / piscola / gin tonic / shot)', 'Torta de shots para todos'],
+                  },
                 ].map((tier, i) => (
-                  <View key={i} style={[styles.glassCard, { marginBottom: 12, padding: 16, gap: 10 }]}>
-                    <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: `${ACCENT2}55`, backgroundColor: `${ACCENT2}18`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 30 }}>
-                      <Text style={{ color: ACCENT2, fontSize: 10, fontWeight: '800', letterSpacing: 1.5 }}>{tier.label}</Text>
-                    </View>
-                    {tier.items.map((item, j) => (
-                      <View key={j} style={styles.tierRow}>
-                        <View style={styles.tierDot} />
-                        <Text style={styles.tierText}>{item}</Text>
+                  <Animated.View key={i} entering={FadeInUp.delay(i * 70).duration(320)} style={{ marginBottom: 10 }}>
+                    <LinearGradient
+                      colors={tier.grad}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.tierCard, { borderColor: tier.border }]}
+                    >
+                      <Text style={[styles.tierRankWatermark, { color: tier.accent }]}>{tier.rank}</Text>
+                      <View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: `${tier.accent}50`, backgroundColor: `${tier.accent}15`, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 30, marginBottom: 14 }}>
+                        <Text style={{ color: tier.accent, fontSize: 10, fontWeight: '900', letterSpacing: 1.5 }}>{tier.label}</Text>
+                      </View>
+                      {tier.items.map((item, j) => (
+                        <View key={j} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: j < tier.items.length - 1 ? 8 : 0 }}>
+                          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: `${tier.accent}20`, borderWidth: 1, borderColor: `${tier.accent}45`, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                            <Check size={11} color={tier.accent} />
+                          </View>
+                          <Text style={{ color: '#FBFBFB', fontSize: 13, fontWeight: '600', flex: 1, lineHeight: 20 }}>{item}</Text>
+                        </View>
+                      ))}
+                    </LinearGradient>
+                  </Animated.View>
+                ))}
+
+                <Animated.View entering={FadeInUp.delay(240).duration(320)} style={{ marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                    <Text style={[styles.smallSectionLabel, { marginBottom: 0 }]}>Extras</Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                  </View>
+                  <View style={[styles.glassCard, { padding: 16, gap: 12 }]}>
+                    {[
+                      { text: 'Puedes decorar tu espacio' },
+                      { text: 'Puedes traer tu propia torta' },
+                    ].map((item, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,49,216,0.1)', borderWidth: 1, borderColor: 'rgba(255,49,216,0.25)', alignItems: 'center', justifyContent: 'center' }}>
+                          {i === 0 ? <Sparkles size={16} color={ACCENT2} /> : <Gift size={16} color={ACCENT2} />}
+                        </View>
+                        <Text style={{ color: '#FBFBFB', fontSize: 14, fontWeight: '600', flex: 1 }}>{item.text}</Text>
                       </View>
                     ))}
                   </View>
-                ))}
+                </Animated.View>
 
-                <Text style={[styles.smallSectionLabel, { marginTop: 20 }]}>Extras</Text>
-
-                <View style={[styles.glassCard, { padding: 16, gap: 10 }]}>
-                  {['Puedes decorar tu espacio', 'Puedes traer tu propia torta'].map((item, i) => (
-                    <View key={i} style={styles.tierRow}>
-                      <View style={styles.tierDot} />
-                      <Text style={styles.tierText}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <Text style={styles.modalNote}>
-                  La promoción de pisco o espumante válido solo de lunes a jueves.
-                </Text>
-
-                {/* CTA */}
-                <TouchableOpacity
-                  style={[styles.duoBtn, { borderColor: `${ACCENT2}60`, overflow: 'hidden', marginTop: 28, paddingVertical: 16 }]}
-                  activeOpacity={0.8}
-                  onPress={() => setShowBdayModal(false)}
-                >
-                  <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: `${ACCENT2}30`, borderRadius: 30 }]} />
-                  <Gift size={16} color="#FBFBFB" />
-                  <Text style={[styles.duoBtnText, { color: '#FBFBFB', fontSize: 14 }]}>Reservar mi cumpleaños</Text>
-                  <ChevronRight size={15} color="#FBFBFB" />
-                </TouchableOpacity>
+                <Animated.View entering={FadeInUp.delay(310).duration(320)} style={{ marginTop: 16, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                  <View style={{ marginTop: 1 }}>
+                    <Info size={14} color="rgba(255,255,255,0.4)" />
+                  </View>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, flex: 1, lineHeight: 17, fontStyle: 'italic' }}>
+                    La promoción de pisco o espumante válido solo de lunes a jueves.
+                  </Text>
+                </Animated.View>
 
               </View>
             </ScrollView>
@@ -564,9 +617,9 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     shadowColor: ACCENT2,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 22,
-    elevation: 12,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
   },
   bannerImageCard: { width: '100%', aspectRatio: 16 / 9, borderRadius: 28, overflow: 'hidden', backgroundColor: '#0a0a0a', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
   bannerImage: { width: '100%', height: '100%' },
@@ -630,6 +683,8 @@ const styles = StyleSheet.create({
   modalVenueName: { color: ACCENT2, fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 2 },
   modalHeroTitle: { color: '#FBFBFB', fontSize: 42, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1, lineHeight: 46 },
   tierDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: ACCENT2, marginTop: 7 },
+  tierCard: { borderRadius: 20, padding: 16, borderWidth: 1, overflow: 'hidden' },
+  tierRankWatermark: { position: 'absolute', right: 14, top: 6, fontSize: 56, fontWeight: '900', fontStyle: 'italic', opacity: 0.13, letterSpacing: -2 },
   // Location card (event-detail style)
   glassCard: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)' },
   mapContainer: { width: '100%', borderRadius: 32, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 10 },

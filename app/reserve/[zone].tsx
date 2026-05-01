@@ -2,16 +2,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { useNavRouter as useRouter } from '../../hooks/useNavRouter';
 import {
-  AlertCircle, Check, ChevronLeft, ChevronRight,
-  Clock, Minus, Plus, Users,
+  AlertCircle, ArrowLeft, Check, ChevronLeft, ChevronRight,
+  Clock, Info, Minus, Plus, Users,
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
+  Animated as RNAnimated,
   KeyboardAvoidingView, Platform, ScrollView,
-  StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavBar, useNavBarPaddingTop } from '../../components/NavBar';
+import { useNavBarPaddingTop } from '../../components/NavBar';
+import { BlurView } from '../../components/BlurSurface';
 import { supabase } from '../../lib/supabase';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 
@@ -66,14 +68,14 @@ function MiniCalendar({ selected, onSelect }: { selected: string; onSelect: (d: 
       </View>
       <View style={{ flexDirection:'row', flexWrap:'wrap' }}>
         {cells.map((day, i) => {
-          if (!day) return <View key={`e-${i}`} style={{ width:'14.28%', height:44 }} />;
+          if (!day) return <View key={`e-${i}`} style={{ width:'14.28%', height:38 }} />;
           const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
           const isSel = selected === dateStr;
           const isToday = dateStr === todayStr;
           const isPast = dateStr < todayStr;
           return (
             <TouchableOpacity key={dateStr} disabled={isPast} onPress={() => onSelect(dateStr)}
-              style={{ width:'14.28%', height:44, alignItems:'center', justifyContent:'center' }}>
+              style={{ width:'14.28%', height:38, alignItems:'center', justifyContent:'center' }}>
               <View style={{
                 width:36, height:36, borderRadius:18,
                 backgroundColor: isSel ? PINK : 'transparent',
@@ -94,25 +96,25 @@ function MiniCalendar({ selected, onSelect }: { selected: string; onSelect: (d: 
 }
 
 // ─── Time Picker ──────────────────────────────────────────────────────────────
-function TimePicker({ label, value, onChange }: { label: string; value: string; onChange: (t: string) => void }) {
+function TimePicker({ label, value, onChange, compact = false }: { label: string; value: string; onChange: (t: string) => void; compact?: boolean }) {
   const idx = TIMES.indexOf(value);
   const atStart = idx === 0;
   const atEnd = idx === TIMES.length - 1;
   return (
-    <View style={styles.timePickerWrap}>
+    <View style={[styles.timePickerWrap, compact && { gap: 8 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Clock size={11} color={PINK} />
+        <Clock size={10} color={PINK} />
         <Text style={styles.timeLabel}>{label}</Text>
       </View>
-      <View style={styles.timeRow}>
-        <TouchableOpacity onPress={() => !atStart && onChange(TIMES[idx - 1])} style={[styles.timeArrow, atStart && { opacity: 0.25 }]}>
-          <ChevronLeft size={20} color="#FBFBFB" strokeWidth={2.5} />
+      <View style={[styles.timeRow, compact && { gap: 6 }]}>
+        <TouchableOpacity onPress={() => !atStart && onChange(TIMES[idx - 1])} style={[styles.timeArrow, compact && { width: 36, height: 36, borderRadius: 18 }, atStart && { opacity: 0.25 }]}>
+          <ChevronLeft size={compact ? 16 : 20} color="#FBFBFB" strokeWidth={2.5} />
         </TouchableOpacity>
-        <View style={styles.timeValueBox}>
-          <Text style={styles.timeValue}>{value}</Text>
+        <View style={[styles.timeValueBox, compact && { paddingVertical: 10 }]}>
+          <Text style={[styles.timeValue, compact && { fontSize: 22 }]}>{value}</Text>
         </View>
-        <TouchableOpacity onPress={() => !atEnd && onChange(TIMES[idx + 1])} style={[styles.timeArrow, atEnd && { opacity: 0.25 }]}>
-          <ChevronRight size={20} color="#FBFBFB" strokeWidth={2.5} />
+        <TouchableOpacity onPress={() => !atEnd && onChange(TIMES[idx + 1])} style={[styles.timeArrow, compact && { width: 36, height: 36, borderRadius: 18 }, atEnd && { opacity: 0.25 }]}>
+          <ChevronRight size={compact ? 16 : 20} color="#FBFBFB" strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
     </View>
@@ -126,7 +128,7 @@ function StepBar({ step }: { step: Step }) {
   const idx = steps.indexOf(step);
   if (step === 'success') return null;
   return (
-    <View style={{ flexDirection:'row', alignItems:'center', marginBottom:24 }}>
+    <View style={{ flexDirection:'row', alignItems:'center', marginBottom:16 }}>
       {steps.map((s, i) => (
         <React.Fragment key={s}>
           <View style={{ alignItems:'center' }}>
@@ -179,6 +181,14 @@ export default function ZoneScreen() {
   const [confirmCode, setConfirmCode] = useState('');
 
   useEffect(() => {
+    const arrIdx = TIMES.indexOf(arrivalTime);
+    const endIdx = TIMES.indexOf(endTime);
+    if (endIdx <= arrIdx) {
+      setEndTime(TIMES[Math.min(arrIdx + 2, TIMES.length - 1)]);
+    }
+  }, [arrivalTime]);
+
+  useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       const { data } = await supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle();
@@ -187,11 +197,27 @@ export default function ZoneScreen() {
     });
   }, []);
 
+  const ageNum = parseInt(age);
+  const ageInvalid = age.length > 0 && (isNaN(ageNum) || ageNum < 18);
+  const phoneDigits = phone.replace(/\D/g, '').length;
+
   const canAdvance = () => {
     if (step === 'datetime') return !!selectedDate;
     if (step === 'people') return partySize >= 1 && !!reunionType && (reunionType !== 'otra' || reunionTypeOther.trim().length >= 2);
-    if (step === 'form') return fullName.trim().length >= 3 && age.trim().length >= 1 && phone.trim().length >= 8;
+    if (step === 'form') return fullName.trim().length >= 3 && !isNaN(ageNum) && ageNum >= 18 && phoneDigits >= 11;
     return false;
+  };
+
+  const handleAgeChange = (text: string) => setAge(text.replace(/\D/g, '').slice(0, 3));
+  const handlePhoneChange = (text: string) => {
+    const digits = text.replace(/\D/g, '');
+    let local = digits.startsWith('56') ? digits.slice(2) : digits;
+    local = local.slice(0, 9);
+    if (local.length === 0) { setPhone(''); return; }
+    let formatted = local[0];
+    if (local.length > 1) formatted += ' ' + local.slice(1, 5);
+    if (local.length > 5) formatted += ' ' + local.slice(5, 9);
+    setPhone('+56 ' + formatted);
   };
 
   const advance = () => {
@@ -228,6 +254,11 @@ export default function ZoneScreen() {
   };
 
   const navTop = useNavBarPaddingTop();
+  const { height: windowHeight } = useWindowDimensions();
+  const headerBgAnim = React.useRef(new RNAnimated.Value(1)).current;
+  const AnimatedBlurView = React.useMemo(() => RNAnimated.createAnimatedComponent(BlurView), []);
+  const ctaBarHeight = 12 + 54 + 16 + insets.bottom;
+  const step1ContentHeight = windowHeight - ctaBarHeight - (insets.top + 72) - 64;
 
   const handleBack = () => {
     if (step === 'datetime') router.back();
@@ -246,54 +277,111 @@ export default function ZoneScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background glow */}
-      <LinearGradient
-        colors={['rgba(255,49,216,0.12)', 'transparent']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient colors={['rgba(255,49,216,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['transparent', 'rgba(255,49,216,0.12)']} start={{ x: 0.4, y: 0.5 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      </View>
 
-      {/* NavBar flotante con blur */}
+      {/* Header flotante */}
       {step !== 'success' && (
-        <NavBar title={zoneName} onBack={handleBack} />
+        <View style={[styles.fixedHeader, { top: insets.top + 8 }]}>
+          <AnimatedBlurView intensity={50} tint="dark" style={[styles.pillBg, { opacity: headerBgAnim }]} />
+          <TouchableOpacity style={styles.iconBtn} onPress={handleBack} activeOpacity={0.75}>
+            <ArrowLeft size={20} color="#FBFBFB" />
+          </TouchableOpacity>
+        </View>
       )}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            step !== 'success' ? { paddingTop: navTop } : { paddingTop: insets.top + 24 },
+            step !== 'success'
+              ? { paddingTop: insets.top + 72, paddingBottom: 16 }
+              : { paddingTop: insets.top + 24 },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={() => {}}
         >
           {step !== 'success' && <StepBar step={step} />}
 
           {/* ── Step 1: Fecha & Hora ── */}
           {step === 'datetime' && (
             <Animated.View entering={FadeIn.duration(300)}>
+            <View style={{ minHeight: step1ContentHeight, justifyContent: 'space-between' }}>
 
-              <Text style={styles.stepTitle}>¿Cuándo vendrás?</Text>
-              <Text style={styles.stepHint}>Elige el día que quieres reservar tu mesa.</Text>
-
-              <View style={styles.card}>
-                <MiniCalendar selected={selectedDate} onSelect={setSelectedDate} />
+              <View>
+                <Text style={styles.stepTitle}>¿Cuándo vendrás?</Text>
+                <View style={styles.card}>
+                  <MiniCalendar selected={selectedDate} onSelect={setSelectedDate} />
+                </View>
               </View>
 
-              <Text style={[styles.stepTitle, { marginTop: 24 }]}>Horario</Text>
-              <Text style={styles.stepHint}>Indica desde qué hora llegarás y hasta cuándo estarás. Ej: desde las 18:00 hasta las 22:00.</Text>
-              <View style={styles.card}>
-                <TimePicker label="Llegada" value={arrivalTime} onChange={setArrivalTime} />
-                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginVertical: 16 }} />
-                <TimePicker label="Hasta" value={endTime} onChange={setEndTime} />
+              <View style={{ marginTop: 20 }}>
+                <Text style={styles.stepTitle}>Horario</Text>
+                <View style={[styles.card, { flexDirection: 'row', padding: 0, overflow: 'hidden' }]}>
+                  {/* Llegada */}
+                  <View style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Clock size={10} color={PINK} />
+                      <Text style={styles.timeLabel}>LLEGADA</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => { const i = TIMES.indexOf(arrivalTime); if (i > 0) setArrivalTime(TIMES[i - 1]); }}
+                        style={[styles.timeArrowSm, TIMES.indexOf(arrivalTime) === 0 && { opacity: 0.25 }]}
+                      >
+                        <ChevronLeft size={16} color="#FBFBFB" strokeWidth={2.5} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValSm}>{arrivalTime}</Text>
+                      <TouchableOpacity
+                        onPress={() => { const i = TIMES.indexOf(arrivalTime); if (i < TIMES.length - 1) setArrivalTime(TIMES[i + 1]); }}
+                        style={[styles.timeArrowSm, TIMES.indexOf(arrivalTime) === TIMES.length - 1 && { opacity: 0.25 }]}
+                      >
+                        <ChevronRight size={16} color="#FBFBFB" strokeWidth={2.5} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 12 }} />
+
+                  {/* Hasta */}
+                  <View style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Clock size={10} color={PINK} />
+                      <Text style={styles.timeLabel}>HASTA</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => { const arrIdx = TIMES.indexOf(arrivalTime); const i = TIMES.indexOf(endTime); if (i > arrIdx + 1) setEndTime(TIMES[i - 1]); }}
+                        style={[styles.timeArrowSm, TIMES.indexOf(endTime) <= TIMES.indexOf(arrivalTime) + 1 && { opacity: 0.25 }]}
+                      >
+                        <ChevronLeft size={16} color="#FBFBFB" strokeWidth={2.5} />
+                      </TouchableOpacity>
+                      <Text style={styles.timeValSm}>{endTime}</Text>
+                      <TouchableOpacity
+                        onPress={() => { const i = TIMES.indexOf(endTime); if (i < TIMES.length - 1) setEndTime(TIMES[i + 1]); }}
+                        style={[styles.timeArrowSm, TIMES.indexOf(endTime) === TIMES.length - 1 && { opacity: 0.25 }]}
+                      >
+                        <ChevronRight size={16} color="#FBFBFB" strokeWidth={2.5} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.warningCard}>
-                <AlertCircle size={16} color="#f59e0b" />
-                <Text style={[styles.warningText, { flex: 1 }]}>
-                  Después de las 21:00, <Text style={{ fontWeight: '800' }}>menores solo con adulto responsable mayor de 22</Text>, cumpliendo la Ley de Alcoholes (19.925, Art. 25).
+              <View style={styles.infoCard}>
+                <View style={{ marginTop: 1 }}>
+                  <Info size={14} color="rgba(255,255,255,0.4)" />
+                </View>
+                <Text style={styles.infoCardText}>
+                  Después de las 21:00, <Text style={{ fontWeight: '800', color: 'rgba(255,255,255,0.65)' }}>menores solo con adulto mayor de 22</Text> (Ley 19.925, Art. 25).
                 </Text>
               </View>
+
+            </View>
             </Animated.View>
           )}
 
@@ -375,66 +463,80 @@ export default function ZoneScreen() {
           {/* ── Step 3: Tus Datos ── */}
           {step === 'form' && (
             <Animated.View entering={FadeIn.duration(300)}>
-              <Text style={styles.stepTitle}>Tus datos</Text>
+              <View>
 
-              <View style={styles.card}>
-                <View style={styles.inputWrap}>
-                  <Text style={styles.inputLabel}>Nombre y Apellido</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ej: Juan Pérez"
-                    placeholderTextColor="rgba(255,255,255,0.2)"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    autoCapitalize="words"
-                  />
-                </View>
-                <View style={styles.inputDivider} />
-                <View style={{ flexDirection: 'row', gap: 16 }}>
-                  <View style={[styles.inputWrap, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Edad</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ej: 25"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      value={age}
-                      onChangeText={setAge}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
+                <View>
+                  <Text style={styles.stepTitle}>Tus datos</Text>
+                  <View style={styles.card}>
+                    <View style={styles.inputWrap}>
+                      <Text style={styles.inputLabel}>Nombre y Apellido</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Ej: Juan Pérez"
+                        placeholderTextColor="rgba(255,255,255,0.2)"
+                        value={fullName}
+                        onChangeText={setFullName}
+                        autoCapitalize="words"
+                        returnKeyType="next"
+                      />
+                    </View>
+                    <View style={styles.inputDivider} />
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                      <View style={[styles.inputWrap, { flex: 1 }]}>
+                        <Text style={[styles.inputLabel, ageInvalid && { color: '#f87171' }]}>Edad</Text>
+                        <TextInput
+                          style={[styles.input, ageInvalid && { color: '#f87171' }]}
+                          placeholder="Ej: 25"
+                          placeholderTextColor="rgba(255,255,255,0.2)"
+                          value={age}
+                          onChangeText={handleAgeChange}
+                          keyboardType="number-pad"
+                          maxLength={3}
+                        />
+                        {ageInvalid && (
+                          <Text style={{ color: '#f87171', fontSize: 10, fontWeight: '700', marginTop: 2 }}>
+                            Debes ser mayor de 18
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.inputWrap, { flex: 2 }]}>
+                        <Text style={styles.inputLabel}>Teléfono</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="+56 9 XXXX XXXX"
+                          placeholderTextColor="rgba(255,255,255,0.2)"
+                          value={phone}
+                          onChangeText={handlePhoneChange}
+                          keyboardType="phone-pad"
+                          maxLength={16}
+                        />
+                      </View>
+                    </View>
                   </View>
-                  <View style={[styles.inputWrap, { flex: 2 }]}>
-                    <Text style={styles.inputLabel}>Teléfono</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="+56 9 XXXX XXXX"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      value={phone}
-                      onChangeText={setPhone}
-                      keyboardType="phone-pad"
-                    />
+                </View>
+
+                {/* Warnings */}
+                <View style={{ marginTop: 24 }}>
+                  <View style={styles.warningCard}>
+                    <AlertCircle size={16} color="#f59e0b" />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text style={styles.warningText}>
+                        Por normativas del club, <Text style={{ fontWeight: '800' }}>traer carnet físico</Text>. Quien presente identidad falsa o editada tendrá prohibido el ingreso.
+                      </Text>
+                      <Text style={styles.warningText}>
+                        No vendemos <Text style={{ fontWeight: '800' }}>alcohol a menores de edad</Text>.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.warningCard, { borderColor: `${PINK}30`, backgroundColor: `${PINK}08` }]}>
+                    <AlertCircle size={16} color={PINK} />
+                    <Text style={[styles.warningText, { flex: 1 }]}>
+                      <Text style={{ fontWeight: '800' }}>Te esperamos 15 minutos</Text> después de tu hora de llegada. Pasado ese tiempo liberaremos la reserva.
+                    </Text>
                   </View>
                 </View>
-              </View>
 
-              {/* Warnings */}
-              <View style={styles.warningCard}>
-                <AlertCircle size={16} color="#f59e0b" />
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={styles.warningText}>
-                    Por normativas del club, <Text style={{ fontWeight: '800' }}>traer carnet físico</Text>. Quien presente identidad falsa o editada tendrá prohibido el ingreso.
-                  </Text>
-                  <Text style={styles.warningText}>
-                    No vendemos <Text style={{ fontWeight: '800' }}>alcohol a menores de edad</Text>.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.warningCard, { borderColor: `${PINK}30`, backgroundColor: `${PINK}08` }]}>
-                <AlertCircle size={16} color={PINK} />
-                <Text style={[styles.warningText, { flex: 1 }]}>
-                  <Text style={{ fontWeight: '800' }}>Te esperamos 15 minutos</Text> después de tu hora de llegada. Pasado ese tiempo liberaremos la reserva.
-                </Text>
               </View>
             </Animated.View>
           )}
@@ -502,24 +604,20 @@ export default function ZoneScreen() {
 
         {/* Bottom CTA */}
         {step !== 'success' && (
-          <Animated.View
-            entering={FadeInUp.duration(300)}
-            style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}
-          >
-            <TouchableOpacity
-              style={[styles.ctaBtn, !canAdvance() && { opacity: 0.4 }]}
-              disabled={!canAdvance() || loading}
-              onPress={advance}
-            >
-              <LinearGradient
-                colors={[PINK, '#c020aa']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFill}
-              />
-              <Text style={styles.ctaBtnText}>
-                {loading ? 'Confirmando...' : step === 'form' ? 'Confirmar reserva' : 'Continuar'}
-              </Text>
-            </TouchableOpacity>
+          <Animated.View entering={FadeInUp.duration(300)} style={styles.bottomBar}>
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 16 }}>
+              <TouchableOpacity
+                style={[styles.ctaBtn, !canAdvance() && styles.ctaBtnDisabled]}
+                disabled={!canAdvance() || loading}
+                onPress={advance}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.ctaBtnText, !canAdvance() && { color: 'rgba(255,255,255,0.3)' }]}>
+                  {loading ? 'Confirmando...' : step === 'form' ? 'Confirmar reserva' : 'Continuar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         )}
       </KeyboardAvoidingView>
@@ -529,9 +627,14 @@ export default function ZoneScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#030303' },
-  scroll: { paddingHorizontal: 16, paddingBottom: 120 },
-  stepTitle: { color: '#FBFBFB', fontSize: 18, fontWeight: '900', marginBottom: 12 },
-  card: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 18 },
+  scroll: { paddingHorizontal: 16 },
+  fixedHeader: { position: 'absolute', left: 16, right: 16, zIndex: 20, flexDirection: 'row', alignItems: 'center', height: 50, paddingHorizontal: 6 },
+  pillBg: { overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 30, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  stepTitle: { color: '#FBFBFB', fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5, marginBottom: 14 },
+  card: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 18 },
+  infoCard: { flexDirection: 'row', gap: 10, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', borderRadius: 16, padding: 14, marginTop: 14, alignItems: 'flex-start' },
+  infoCardText: { color: 'rgba(255,255,255,0.4)', fontSize: 12, lineHeight: 18, flex: 1 },
 
   // Calendar
   calBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
@@ -541,8 +644,10 @@ const styles = StyleSheet.create({
   timeLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   timeArrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  timeValueBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,49,216,0.1)', borderWidth: 1.5, borderColor: 'rgba(255,49,216,0.3)', paddingVertical: 12, borderRadius: 16 },
-  timeValue: { color: '#FBFBFB', fontSize: 28, fontWeight: '900', letterSpacing: 1 },
+  timeValueBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 16 },
+  timeValue: { color: '#FBFBFB', fontSize: 28, fontWeight: '900' },
+  timeArrowSm: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  timeValSm: { color: '#FBFBFB', fontSize: 22, fontWeight: '900', minWidth: 56, textAlign: 'center' },
 
   // Step bar
   stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
@@ -570,9 +675,10 @@ const styles = StyleSheet.create({
   warningText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, lineHeight: 18 },
 
   // Bottom CTA
-  bottomBar: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(3,3,3,0.95)', borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  ctaBtn: { height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  ctaBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.3 },
+  bottomBar: { borderTopWidth: 1, borderTopColor: 'rgba(251,251,251,0.15)', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' },
+  ctaBtn: { height: 58, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderColor: 'rgba(255,49,216,0.35)', backgroundColor: 'rgba(255,49,216,0.15)' },
+  ctaBtnDisabled: { borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  ctaBtnText: { color: PINK, fontSize: 16, fontWeight: '900', letterSpacing: 0.3 },
 
   // Success
   successCheck: { width: 100, height: 100, borderRadius: 50, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginTop: 20, marginBottom: 20, overflow: 'hidden', borderWidth: 2, borderColor: `${PINK}40` },
